@@ -35,7 +35,7 @@ then move.
 |---|---|
 | **Complete** | **A1–A4 (all of Person A's Block A)** · 48 of 526 hours |
 | **Partial** | B1, B3, B5, B10 (started early for the demo moment) |
-| **Tests** | 332 passing, offline, no API key · `python -m eval.run` passes |
+| **Tests** | 355 passing, offline, no API key · `python -m eval.run` passes |
 | **Next (Sarvesh)** | **B3** — the mess: scans, invoice formats, tracker, parsers |
 | **Next (Jenil)** | **A5** — Compose, Postgres schema, the four DB roles |
 
@@ -69,7 +69,7 @@ stands on.*
 |---|---|---|---|---|---|---|
 | **B1** | Lease changes & resolver | 34 | A+B | P2 g5, g9 | A variance finds its cause, ranks sources, routes to the right person | **Partial** — modification + trust done |
 | **B2** | Company at scale | 26 | A | P2 g2 | 30 clinics, 3 entities, 2025 history, held-out company from another seed | **DONE** — 57 errors / 21 types / 821 charges |
-| **B3** | The mess | 36 | A | P2 g3, g4 | Scans, 3 invoice formats, the previous accountant's spreadsheet, all parsed | **Partial** — emails done |
+| **B3** | The mess | 36 | A | P2 g3, g4 | Scans, 3 invoice formats, the previous accountant's spreadsheet, all parsed | **Partial** — emails, 3 formats, parser, name resolution done; scans, tracker, replies, classifier left |
 | **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | **Partial** — CAM engine + shared pool done ($169,200 caught); CPI left |
 | **B5** | ASC 842 & close | 26 | A | P2 g8 | Subledger ties to GL to the cent; the month closes and locks | **DONE** |
 | **B6** | Policies | 24 | B | P2 g10 | A policy is learned, backtested, approved, and cited on a later decision | — |
