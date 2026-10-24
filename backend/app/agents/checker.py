@@ -150,13 +150,13 @@ def check_month(
             findings.append(Finding(
                 next_id(), _rule_for(charge.charge_type), charge, APPROVE,
                 "Matches the lease.", charge.amount, supported,
-                rule.proof_for(_proof_key(charge.charge_type))))
+                rule.proof_for(_proof_key(charge, rule, supported))))
             continue
 
         findings.append(Finding(
             next_id(), _rule_for(charge.charge_type), charge, HOLD,
             _explain(charge, supported, rule), charge.amount, supported,
-            rule.proof_for(_proof_key(charge.charge_type))))
+            rule.proof_for(_proof_key(charge, rule, supported))))
 
     return findings
 
@@ -188,8 +188,29 @@ def _rule_for(charge_type: str) -> str:
     return RULE_OPERATING_EXPENSE if charge_type == "cam_estimate" else RULE_AMOUNT
 
 
-def _proof_key(charge_type: str) -> str:
-    return "cam_estimate" if charge_type == "cam_estimate" else "base_rent"
+def _proof_key(charge, rule: LeaseRule, supported: float) -> str:
+    """Which clause actually proves this finding.
+
+    A rent variance is not always about the rent clause. When the billed figure
+    is the rent from a *different* year of the schedule, the landlord applied
+    the escalation at the wrong time or compounded it too often — and the
+    sentence that proves that is the escalation clause, not the one stating
+    the initial rent. Citing 3.1 for an escalation error holds the right money
+    and shows the manager the wrong evidence.
+    """
+    if charge.charge_type == "cam_estimate":
+        return "cam_estimate"
+    if _matches_another_year(charge.amount, rule, supported):
+        return "escalation"
+    return "base_rent"
+
+
+def _matches_another_year(amount: float, rule: LeaseRule, supported: float) -> bool:
+    return any(
+        abs(amount - step.monthly_rent) <= 0.01
+        and abs(step.monthly_rent - supported) > 0.01
+        for step in rule.steps
+    )
 
 
 def _label(charge_type: str) -> str:
