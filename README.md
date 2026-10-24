@@ -113,15 +113,30 @@ Months already closed on the stale schedule get a rent-expense catch-up.
 | `leasedesk/cli.py` | The demo |
 | `data/` | Sample lease, payment history, and the inbox the amendment hides in |
 
-## Running it
+## Getting started
+
+**Python 3.11 or newer.** macOS ships 3.9, which ReportLab will not run on.
 
 ```bash
-pip install -r requirements.txt
-python -m leasedesk.cli      # the demo
-python -m pytest tests -q    # 16 tests, no API key needed
+git clone https://github.com/sarvesh172000/lease-desk.git
+cd lease-desk
+python3.13 -m venv .venv          # or python3.11 / python3.12
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/python -m pytest      # 205 tests, ~5s, no API key needed
 ```
 
-The demo and the whole test suite run offline. Only `--live` calls the API.
+Then generate the world and score a run:
+
+```bash
+./.venv/bin/python -m datagen.build    # 5 leases, a billing month, 2025, the mailbox
+./.venv/bin/python -m eval.run         # scores the run against the answer key
+```
+
+Everything runs offline. Only the `--live` paths call the Claude API, and they
+are the only thing that needs `ANTHROPIC_API_KEY`.
+
+**Start here:** [`docs/PLAN.md`](docs/PLAN.md) — 27 chunks, who owns each, and
+what counts as done.
 
 ## Design docs
 

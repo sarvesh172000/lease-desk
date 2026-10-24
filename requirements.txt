@@ -1,3 +1,6 @@
+# Requires Python 3.11 or newer. macOS system Python is 3.9 and will not work:
+#     python3.13 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+
 anthropic>=1.0.0
 pydantic>=2.0
 pytest>=8.0
@@ -5,5 +8,5 @@ pytest>=8.0
 # documents
 pymupdf>=1.24          # page text, word boxes, page images
 pdfplumber>=0.11       # table fallback
-reportlab>=4.0         # lease and invoice PDF generation
+reportlab>=4.0         # lease and invoice PDF generation (needs Python 3.10+)
 faker>=20.0
