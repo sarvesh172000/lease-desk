@@ -132,6 +132,33 @@ def test_second_identical_call_is_a_cache_hit(tmp_path):
     assert len(llm._client.messages.calls) == 1, "cache hit must not call the API"
 
 
+def test_a_call_with_documents_is_a_cache_hit_the_second_time(tmp_path):
+    """The fence's nonce is random per call; it must not leak into the key."""
+    llm = build(tmp_path)
+    kwargs = {"variables": {"company": "Northbay"}, "documents": [("lease.pdf", "Base rent is $17,400.")]}
+    llm.structured("lease_abstraction", Extracted, **kwargs)
+    _, meta = llm.structured("lease_abstraction", Extracted, **kwargs)
+    assert meta.cache_hit is True
+    assert len(llm._client.messages.calls) == 1
+
+
+def test_the_nonce_is_still_fresh_on_every_call_that_reaches_the_model(tmp_path):
+    llm = build(tmp_path)
+    for text in ("Base rent is $17,400.", "Base rent is $19,626.65."):
+        llm.structured("lease_abstraction", Extracted, variables={"company": "N"}, documents=[("lease.pdf", text)])
+    first, second = (c["messages"][0]["content"] for c in llm._client.messages.calls)
+    nonce = lambda s: s.split('nonce="', 1)[1].split('"', 1)[0]  # noqa: E731
+    assert nonce(first) != nonce(second)
+
+
+def test_different_documents_are_a_miss(tmp_path):
+    llm = build(tmp_path)
+    for text in ("Base rent is $17,400.", "Base rent is $19,626.65."):
+        _, meta = llm.structured("lease_abstraction", Extracted, variables={"company": "N"},
+                                 documents=[("lease.pdf", text)])
+        assert meta.cache_hit is False
+
+
 def test_cache_hit_is_still_logged(tmp_path):
     llm = build(tmp_path)
     llm.structured("lease_abstraction", Extracted, variables={"company": "N"})

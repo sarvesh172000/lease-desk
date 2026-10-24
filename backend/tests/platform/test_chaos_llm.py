@@ -296,10 +296,9 @@ def _warm_then_read_while_down(seeded, generated, cache_dir):
 def test_a_cached_answer_is_served_while_the_provider_is_down(seeded, generated, tmp_path,
                                                               monkeypatch):
     """The breaker guards the client, behind the cache: an answer already
-    cached never meets it. (The LLM layer fences documents under a random
-    nonce that is part of the cache key, so today a call with documents never
-    hits the cache at all; see the xfail below. A fixed nonce stands in for
-    the fix here, so this test is about the breaker, not that bug.)"""
+    cached never meets it. (A fixed nonce keeps this test about the breaker;
+    the test below shows a call with documents hits the cache with the real,
+    random nonce too.)"""
     from app.llm import client as llm_client
     from app.llm import untrusted
 
@@ -311,9 +310,6 @@ def test_a_cached_answer_is_served_while_the_provider_is_down(seeded, generated,
         == {True}
 
 
-@pytest.mark.xfail(reason="app/llm (teammate's, read-only here): fence_all() draws a random nonce "
-                          "per call and the nonce is inside the cache key, so a structured call "
-                          "with documents is never a cache hit", raises=Exception)
 def test_the_response_cache_hits_for_a_call_with_documents_as_is(seeded, generated, tmp_path):
     result, down, guard = _warm_then_read_while_down(seeded, generated, tmp_path / "cache")
     assert down.calls == 0
