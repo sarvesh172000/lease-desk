@@ -1,100 +1,167 @@
 # Lease Desk
 
-**Cal Hacks 13.0**
+**Cal Hacks 13.0** · autonomous lease accounting for multi-location businesses
 
-A lease desk for a multi-location business. It abstracts leases out of PDFs and
-email, builds the ASC 842 schedules, checks every rent payment against the
-schedule, and when something doesn't match, goes looking for why.
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
+![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
 
-## The problem
-
-Any company with stores, clinics or warehouses has dozens of leases, each a PDF
-with escalations, renewal options and amendments buried in email. KPMG found the
-top implementation challenges include abstracting leases into a system and
-setting the right borrowing rate — and after implementation, *identifying lease
-changes* stayed a persistent problem, with many companies only reacting after
-the fact.
-
-That last part is the gap. The schedule is only correct until someone signs an
-amendment, and nobody tells accounting.
-
-## The seats
-
-The lease accountant, and the AP person paying rent.
-
-## End to end
-
-```
-Lease PDFs ─┐
-Amendments ─┤
-Invoices   ─┼──▶  extract  ──▶  schedule  ──▶  reconcile  ──▶  remeasure
-Bank feed  ─┘    (Claude)      (ASC 842)       (cash vs.      (+ proposed
-                                                schedule)       entries)
-```
-
-1. **Extract** — Claude reads the lease and returns structured terms, with the
-   sentence it relied on and an explicit list of what it couldn't determine.
-2. **Schedule** — plain arithmetic builds the liability and ROU amortization.
-3. **Reconcile** — every payment is checked against the month it belongs to.
-4. **Remeasure** — a variance triggers a search of the mailbox; a found
-   amendment is applied and the adjusting entries are proposed for sign-off.
+Lease Desk fills the **lease accountant's** seat, and checks every rent bill
+before the **AP clerk** pays it. It reads each lease, builds the ASC 842
+schedules, checks every landlord charge against what the lease actually says,
+holds only the money that is wrong, and when something doesn't match, goes
+looking in the mailbox for why. It never pays and never signs off: a person
+approves, under role checks, and every action is written to a hash-chained
+audit trail.
 
 ## The moment
 
-Store 14's rent payments stopped matching the schedule in July. The system finds
-an amendment in an email thread that extended the lease three years and cut the
-rent, recalculates the lease, proposes the adjusting entries, and asks the
-controller to sign off.
+> **$443,255.70 was missing from the balance sheet.** CLINIC-01's lease was
+> amended in June: three more years, lower rent. The amendment went to
+> facilities and never reached accounting. In July the landlord billed the new
+> rent, and the books kept running the old schedule.
 
-```bash
-python -m leasedesk.cli
-```
+This runs live in the app, from `make demo-data`:
 
-```
-2. Reconciling cash against the schedule
-  ! STORE-14 Jul 2026: expected $19,626.65, paid $17,400.00 (underpaid $2,226.65)
-  ! STORE-14 Aug 2026: expected $19,626.65, paid $17,400.00 (underpaid $2,226.65)
-  ! STORE-14 Sep 2026: expected $19,626.65, paid $17,400.00 (underpaid $2,226.65)
+1. **The break.** July's rent is billed **$17,400.00**; the schedule says
+   **$19,626.65**. The checker holds the $2,226.65 difference and cites the
+   lease clause it rests on.
+2. **The search.** *Run investigation* searches the mailbox (10 documents) and
+   finds the amendment email from the landlord, trust rank 1: *"Base rent
+   reduced to $17,400 per month effective July 1, 2026."*
+3. **The proof.** The engine remeasures the lease: liability
+   **$559,665.35 → $1,002,921.05 (+$443,255.70)**, ROU asset +$443,255.70.
+4. **The entries.** Four adjusting entries, **balanced**, proposed for the
+   controller's sign-off. Nothing posts until a person approves.
 
-4. Remeasuring the lease
-Liability  $  559,665.35  ->  $1,002,921.05   (+443,255.70)
-ROU asset  $  538,771.19  ->  $  982,026.89   (+443,255.70)
+| Account | Debit | Credit |
+|---|---:|---:|
+| Lease liability | | 443,255.70 |
+| ROU asset | 443,255.70 | |
+| ROU asset | 4,624.74 | |
+| Rent expense | | 4,624.74 |
+| | **447,880.44** | **447,880.44** |
 
-5. Proposed adjusting entries — awaiting controller sign-off
-  Account                           Debit         Credit
-  Lease liability                             443,255.70
-  ROU asset                    443,255.70
-  ROU asset                      4,624.74
-  Rent expense                                  4,624.74
-                               447,880.44     447,880.44
-  Balanced.
-```
+The model's answers behind this are committed (`data/reference/llm_cache`), so
+the whole story replays with **no API key and no network**, and
+`backend/tests/platform/test_the_moment.py` proves it on every push.
 
-Add `--live` to have Claude recover the amendment from the raw `.eml` files in
-`data/inbox/` instead of reading the stored one. Needs `ANTHROPIC_API_KEY`.
-
-## The split that makes this trustworthy
+## The split that makes it trustworthy
 
 The model decides **what the lease says**. The code decides **what the lease
-costs**. No balance, no journal entry and no schedule row is ever produced by a
-language model — `schedule.py` and `remeasure.py` are ordinary arithmetic with
-tests. That's what makes a wrong extraction a *reviewable* error instead of a
-silently wrong balance sheet.
+costs**. Claude reads lease PDFs and email; every balance, schedule row and
+journal entry is plain arithmetic with tests. Everything the model returns
+carries the exact sentence it relied on, checked against the page before any
+number reaches a schedule, and a list of what it wasn't sure about, which goes
+to a person.
 
-Everything the model produces carries the quote it came from and a list of what
-it wasn't sure about, and nothing posts without the controller clicking sign-off.
+## How we know it works
+
+Measured against things we did not write: a generated company with planted
+errors and an answer key, a held-out company from a seed never used in
+development, and adversarial documents. `python -m eval.run --extraction`,
+24 Oct 2026, with Claude (`claude-opus-5-5`):
+
+| Section | Result |
+|---|---|
+| Checking | **5 / 5 planted errors held, 0 false holds**; $25,736.36 flagged, exactly the expected amount |
+| Citations | 5 / 5 holds cite the lease clause that proves them |
+| Extraction | **65 / 65 lease fields correct** across the 5 leases, every one cited to its page |
+| Investigation | The July variance settled to the amendment, confidence 100% |
+| Safety | 4 / 4: 3 / 3 unauthorized sources refused (instructions planted in documents are not followed) |
+| Held-out company | 18 clinics from an unseen seed, 4 / 4 invariants hold |
+| Tests | 1,100+ in CI, 1,000+ of them against a real Postgres 16 |
+
+**Real vs simulated.** The company, its leases, invoices and mailbox are
+generated (deterministically, from a seed), so there is an answer key to score
+against. The ASC 842 engine, the database, the permissions, the agents and the
+model calls are real. Reference data is real: three SEC EDGAR lease exhibits
+with 33 hand-verified labels, and 184 BLS CPI observations for escalations.
+
+## Who can do what
+
+The system runs as four database roles, and the limits are grants, not policy:
+
+| Role | For |
+|---|---|
+| `lease_agent` | The worker and agents: reads records, writes ingestion, drafts and work. Cannot touch the ledger, outbox or golden tables |
+| `lease_gateway` | The only writer back to records: golden tables, the journal, the outbox, period status |
+| `lease_api` | Serves the UI: writes events and work items, never the ledger |
+| `lease_reader` | The auditor: read-only on everything |
+
+Nobody, the owner included, can rewrite or delete `audit_event`. A regional
+manager cannot approve another region's item, and nobody approves their own
+proposal; refusals are recorded in the audit trail too.
+
+## Sponsor technology
+
+| | Where | What it does |
+|---|---|---|
+| **Anthropic Claude** | `backend/app/agents`, `backend/app/llm` | Reads lease PDFs (structured outputs, per-claim citations), searches the mailbox for what explains a variance. Untrusted documents are fenced; answers are cached and replayable |
+| **Fetch.ai / ASI:One** | [`agents_fetch/`](agents_fetch/README.md) | Four uAgents on Agentverse. The whole workflow inside an ASI:One chat, as yourself (one-time pairing code), under the same permissions as the web app |
+| **SpacetimeDB** | [`spacetime/`](spacetime/README.md), `backend/app/work/live.py` | Every committed approval is mirrored live (`desk_status`), so other screens update with no refresh; agents publish each step (`agent_step`). Postgres stays the system of record |
+| **Hyphenate** | the product | Lease accounting is the module an autonomous office of the CFO is missing, and the one whose source of truth is in somebody's inbox |
+
+### Fetch.ai agents
+
+| Agent | Name | Address |
+|---|---|---|
+| Front desk | `Northbay Lease Desk` | `agent1qg2tetdj6qf5wnf744mvvtz66rzfrmvqkx5dcejzpg78q3prt9aa58j2g0g` |
+| Rulebook | `lease_desk_rulebook` | `agent1qtqqwygy3z7uc2ypu4qsc2dklqmuadvgy23mwpl54wqccl02sp3ag4pn3ud` |
+| Investigation | `lease_desk_investigation` | `agent1q2mr89mwmdn0l8wj5t5uyzpd09fhfq8mvs037zf44wsvlt0znamqqkmg0l9` |
+| Approvals | `lease_desk_approvals` | `agent1qgfyhfmc2ngygsck8f3xllf9mqr7plc8dv82czjjn9f3gh4psjcrjczh4dg` |
+
+Setup, pairing and what to say: [`agents_fetch/README.md`](agents_fetch/README.md).
+
+## Run the demo
+
+**Prerequisites:** Python 3.11+ (macOS ships 3.9, which ReportLab will not run
+on), Node 20+, and Docker with Compose v2.
+
+```bash
+git clone https://github.com/sarvesh172000/lease-desk.git && cd lease-desk
+python3.13 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+docker compose up -d db                # Postgres 16 on host port 5433
+make demo                              # database, January and July, API :8000, web app :3000
+```
+
+Open http://localhost:3000, sign in as `priya.raghunathan@northbaypt.example`
+(password `demo`, the controller), and open the July hold on LEASE-01. Demo
+mode has a switcher for every role. `make demo-data` alone builds the data;
+`DEMO_MOMENT=` stops at January.
+
+No API key is needed: the model's answers the demo uses are committed. With
+`ANTHROPIC_API_KEY` set, anything not cached calls Claude.
+
+## Develop
+
+```bash
+make up migrate seed      # Postgres, api and worker; schema and roles; the company
+make prove-roles          # each role tries a forbidden write; the database refuses
+make test                 # the whole suite (database tests run when Postgres is up)
+make eval                 # generate the world and score a run against the answer key
+make lint                 # ruff on the scope in ruff.toml
+make ci                   # lint, the suite with database tests required, the eval
+```
+
+Compose publishes Postgres on host port **5433** so it never collides with a
+local one. Every setting has a default, so `.env` is optional (copy
+`.env.example`). Platform tests migrate a throwaway database and drop it;
+CI loads `ci/require_db.py`, which turns any skipped database test into a
+failure. GitHub Actions runs lint, the suite and the eval against Postgres 16,
+`make migrate seed prove-roles` on a fresh database, and the frontend's lint,
+build and tests.
 
 ## The accounting
 
 Operating lease under ASC 842, payments in advance:
 
 ```
-liability₀   = PV of all payments at the IBR
-rou₀         = liability₀ + prepaid − incentives
-straight_line= total payments / term months
-interestₜ    = (liabilityₜ − paymentₜ) × (IBR / 12)
-liabilityₜ₊₁ = liabilityₜ − paymentₜ + interestₜ
-rou_amortₜ   = straight_line − interestₜ
+liability₀    = PV of all payments at the IBR
+rou₀          = liability₀ + prepaid − incentives
+straight_line = total payments / term months
+interestₜ     = (liabilityₜ − paymentₜ) × (IBR / 12)
+liabilityₜ₊₁  = liabilityₜ − paymentₜ + interestₜ
+rou_amortₜ    = straight_line − interestₜ
 ```
 
 A modification that isn't a separate contract remeasures the liability at the
@@ -105,103 +172,30 @@ Months already closed on the stale schedule get a rent-expense catch-up.
 
 | Path | What's in it |
 |---|---|
-| `leasedesk/models.py` | Lease, rent steps, amendments, and applying them as of a date |
-| `leasedesk/schedule.py` | ASC 842 amortization — the deterministic core |
-| `leasedesk/reconcile.py` | Cash vs. schedule, variance detection |
-| `leasedesk/remeasure.py` | Remeasurement on amendment + journal entries |
-| `leasedesk/extract.py` | Claude-powered lease and amendment extraction |
-| `leasedesk/cli.py` | The demo |
-| `data/` | Sample lease, payment history, and the inbox the amendment hides in |
-
-## Run it
-
-**Prerequisites:** Python 3.11 or newer (macOS ships 3.9, which ReportLab will
-not run on) and Docker with Compose v2.
-
-```bash
-git clone https://github.com/sarvesh172000/lease-desk.git
-cd lease-desk
-python3.13 -m venv .venv          # or python3.11 / python3.12
-./.venv/bin/pip install -r requirements.txt
-
-make up migrate seed              # Postgres, api and worker; schema and roles; the company
-make prove-roles                  # each role tries a forbidden write; the database refuses
-make test                         # the whole suite
-make api                          # the API on the host with reload, http://localhost:8000
-```
-
-The Makefile uses `.venv/bin/python` when it exists. Compose publishes
-Postgres on host port **5433** so it never collides with a local Postgres;
-containers reach it as `db:5432`. Every setting has a default, so `.env` is
-optional (copy `.env.example` to override). The worker restarts until
-`make migrate` has created its role, then settles.
-
-**Database roles.** `make migrate` runs as the owner (`leasedesk`) and creates
-four logins. Each process connects as exactly one:
-
-| Role | For |
-|---|---|
-| `lease_agent` | The worker and agents: reads records, writes ingestion, drafts and work; cannot touch the ledger, outbox or golden tables |
-| `lease_gateway` | The only writer back to records: golden tables, the journal, the outbox, period status |
-| `lease_api` | Serves the UI: writes events and work items, never the ledger |
-| `lease_reader` | The auditor: read-only on everything |
-
-Nobody, the owner included, can rewrite or delete `audit_event`.
-
-**Tests without Postgres.** `backend/tests/platform` migrates a throwaway
-database from empty for each run and drops it afterwards. When no Postgres is
-reachable those tests skip and everything else still runs offline, with no API
-key. Point them elsewhere with `LEASEDESK_DB_HOST` / `LEASEDESK_DB_PORT` (e.g.
-`LEASEDESK_DB_PORT=5432` for a local Postgres 16 whose owner can create
-databases and roles). CI loads `ci/require_db.py`, which turns any such skip
-into a failure.
-
-**The eval.** Generate the world and score a run against the answer key:
-
-```bash
-make eval                         # python -m datagen.build, then python -m eval.run
-```
-
-Only the `--live` paths call the Claude API and need `ANTHROPIC_API_KEY`.
-
-**Lint and CI.**
-
-```bash
-./.venv/bin/pip install ruff pre-commit && ./.venv/bin/pre-commit install
-make lint                         # ruff on the platform scope in ruff.toml
-make ci                           # lint, the suite with database tests required, the eval
-```
-
-GitHub Actions (`.github/workflows/ci.yml`) runs lint; migrations from empty,
-pytest and the eval against a Postgres 16 service; `make migrate seed
-prove-roles` on a fresh database; and the frontend's lint, build and tests once
-`frontend/` exists. Behind a TLS-intercepting proxy, `docker compose build`
-fails at `pip install` with `CERTIFICATE_VERIFY_FAILED`; the image itself is
-fine, the build container just does not trust the proxy's CA.
-
-**Start here:** [`docs/PLAN.md`](docs/PLAN.md) — 27 chunks, who owns each, and
-what counts as done.
-
-## Design docs
-
-| Document | What's in it |
-|---|---|
-| **[docs/PLAN.md](docs/PLAN.md)** | **The plan.** Three phases, 526 hours, live status board |
-| [docs/DESIGN.md](docs/DESIGN.md) | How it works: trust model, agents, accounting, diagrams, API |
-| [docs/SECURITY.md](docs/SECURITY.md) | Audit findings, what was fixed, what is still open |
-| [docs/SPONSORS.md](docs/SPONSORS.md) | Five sponsor targets and where each lands in the plan |
-| [docs/phases/](docs/phases/) | Phase 1, 2 and 3 in full — the task detail |
+| `backend/app/` | FastAPI API, the work layer (states, transitions, gateway), agents, LLM layer, engine, jobs |
+| `frontend/` | Next.js 15 web app: dashboard, the money screen, leases, audit trail |
+| `agents_fetch/` | The Fetch.ai / ASI:One agents |
+| `spacetime/` | The SpacetimeDB module for the live mirror and agent feed |
+| `datagen/` | The generated company, its documents and the answer key |
+| `eval/` | Scores a run against the answer key |
+| `leasedesk/` | The original engine package (schedule, reconcile, remeasure) |
+| `data/reference/` | SEC EDGAR exhibits, BLS CPI, and the committed model answers |
+| `docs/` | Design, plan, security review, sponsor notes, handoff |
 
 ## Status
 
+**Built and tested:** abstraction, the ASC 842 engine, checking, the
+investigation and remeasurement, approvals through the gateway, the
+hash-chained audit, policies, disputes, obligations, the web app, the ASI:One
+agents and the SpacetimeDB mirror.
 
-Hackathon project — the schedule engine, reconciliation, remeasurement and
-entry proposal are implemented and tested. Lease abstraction from PDFs is
-wired to Claude but the demo ships with pre-abstracted sample data.
+**Not yet:** a hosted deployment (Azure, in progress), extraction scored on
+the real SEC exhibits (the schema needs optional fields first, so a lease that
+is silent on a term isn't forced to answer), finance-lease classification,
+and variable or percentage rent.
 
-### Not built yet
+Design notes: [`docs/DESIGN.md`](docs/DESIGN.md) · security review:
+[`docs/SECURITY.md`](docs/SECURITY.md) · plan and status:
+[`docs/PLAN.md`](docs/PLAN.md).
 
-- PDF text extraction (the extractor takes text; a real run needs a PDF step)
-- Multi-lease portfolio view and the web UI (`web/` is a placeholder)
-- Finance-lease classification — everything here assumes operating
-- Variable/percentage rent, CPI escalations, impairment
+Built at Cal Hacks 13.0 by Sarvesh Waghmare and Jenil.
