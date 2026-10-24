@@ -122,3 +122,12 @@ lint:              ## ruff on the platform scope set in ruff.toml (pip install r
 ci: lint           ## what CI runs, locally: lint, the suite with database tests required, the eval
 	$(PY) -m pytest -rs -p ci.require_db
 	$(MAKE) eval
+
+# B10 (not part of the frozen list): the demo's "Limits" beat, live. The agent
+# tries to approve, a manager tries to approve their own answer, and a raw SQL
+# INSERT INTO journal_entry as lease_agent: all three refused, printed from the
+# audit timeline, then verify_chain(). Uses a throwaway LIMITS_DEMO item that a
+# controller rejects and closes; nothing else in the database changes.
+.PHONY: prove-limits
+prove-limits:      ## three forbidden actions refused and on record (needs LEASEDESK_DEMO_MODE=1)
+	$(PY) -m app.work.limits
