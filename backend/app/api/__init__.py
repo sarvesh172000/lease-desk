@@ -21,6 +21,7 @@ from .exceptions import router as exceptions_router
 from .items import router as items_router
 from .leases import router as leases_router
 from .obligations import router as obligations_router
+from .pairing import router as pairing_router
 from .policies import router as policies_router
 from .resolver import router as resolver_router
 from .summary import router as summary_router
@@ -28,4 +29,5 @@ from .why import router as why_router
 
 ROUTERS = (leases_router, exceptions_router, audit_router, documents_router, items_router,
            batches_router, summary_router, why_router, evidence_pack_router,
-           resolver_router, disputes_router, obligations_router, policies_router)
+           resolver_router, disputes_router, obligations_router, policies_router,
+           pairing_router)

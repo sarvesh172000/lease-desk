@@ -116,6 +116,18 @@ BEGIN
     END IF;
 END $$;
 
+-- ----------------------------------------------------------- pairing
+-- Chat pairing (migration 0007). The API mints codes, claims them and
+-- revokes pairings; nothing else writes here, and the worker cannot even
+-- read it. The reader and the gateway keep the SELECT that ALL TABLES gave
+-- them: only hashes are stored.
+DO $$
+BEGIN
+    IF to_regclass('public.pairing') IS NOT NULL THEN
+        GRANT INSERT, UPDATE ON pairing TO lease_api;
+    END IF;
+END $$;
+
 -- Sequences behind serial columns. Identity columns need no grant for a
 -- plain INSERT.
 GRANT USAGE ON SEQUENCE audit_event_seq_seq TO lease_agent, lease_gateway, lease_api;

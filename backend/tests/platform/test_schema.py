@@ -18,7 +18,8 @@ FROZEN_TABLES = {
     "outbox", "audit_event",
 }
 ADDED_TABLES = {"actor",                  # not in the frozen list; added for can() and login
-                "dispute", "obligation"}  # Phase 2 groups 11 and 12 (migration 0006)
+                "dispute", "obligation",  # Phase 2 groups 11 and 12 (migration 0006)
+                "pairing"}                # migration 0007: ASI:One chat pairing (PHASE_3 group 9)
 
 
 def test_every_frozen_table_exists_and_nothing_else(engines):

@@ -37,6 +37,12 @@ SIGN_IN = {
     "/api/auth/login": "the door a session comes from; it cannot require one",
     "/api/auth/logout": "clears the caller's own cookie; touches no data",
     "/api/auth/demo-switch": "demo-mode sign-in (404 when demo mode is off)",
+    # Chat pairing (C8) manages a person's own chat session, like login and
+    # logout; tests/platform/test_pairing.py covers who may call each one.
+    "/api/pairing/codes": "mints a code for the caller's own chat; any signed-in person",
+    "/api/pairing/{pairing_id}/revoke": "ends one of the caller's own pairings",
+    "/api/pairing/claim": "the door a chat pairing comes from: a one-time code, not a session",
+    "/api/pairing/me/revoke": "a paired chat ending its own pairing (bearer token, not a cookie)",
 }
 READ_ONLY = {
     "/api/exceptions/{exc_id}/investigate": "streams evidence already on the item; writes nothing",
@@ -48,7 +54,7 @@ READ_ONLY = {
 # parameter (the queue's {action}) is expanded to every value it allows.
 ITEM = 1
 PARAMS = {"item_id": str(ITEM), "exc_id": "exc_%d" % ITEM, "period": "2026-01",
-          "lease_id": "LEASE-01", "dispute_id": "DSP-000001", "policy_id": "1"}
+          "lease_id": "LEASE-01", "dispute_id": "DSP-000001", "policy_id": "1", "pairing_id": "1"}
 
 
 def _write_routes():
