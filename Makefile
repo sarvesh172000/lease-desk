@@ -48,6 +48,9 @@ prove-roles:
 export-ledger:     ## the books as Beancount, read as lease_reader, for Fava (profile ledger)
 	$(PY) -m app.ledger.export_beancount --out data/ledger/leasedesk.beancount
 
+replay:            ## rebuild work_item and question from audit_event; fail if they differ
+	$(PY) -m app.work.replay
+
 api:               ## the API on the host, with reload, against the Compose database
 	cd backend && $(PY) -m uvicorn app.main:app --reload --port 8000
 
@@ -55,12 +58,6 @@ run-month:         ## M=2026-01: enqueue ingest, abstraction, checking; run the 
 	@test -n "$(M)" || { echo "usage: make run-month M=YYYY-MM" >&2; exit 2; }
 	$(PY) -m app.jobs.monthly --period $(M)
 	$(PY) -m app.jobs.worker --once
-
-# Frozen names whose work lands in later chunks. They fail loudly rather than
-# pretend to succeed.
-
-replay:
-	@echo "replay: projections rebuilt from audit_event land in A6" && exit 1
 
 # Not part of `seed`: a known password is a dev convenience, never a default.
 # Run after `make seed` to sign in as any seeded person with password `demo`

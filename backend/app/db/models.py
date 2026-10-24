@@ -220,7 +220,9 @@ actor = Table(
     Column("active", Boolean),
 )
 
-ACTOR_ROLES = ("regional_manager", "ap_clerk", "controller", "auditor", "agent")
+# 'system' is the gateway (system:gateway, migration 0003): the only actor
+# that may post.
+ACTOR_ROLES = ("regional_manager", "ap_clerk", "controller", "auditor", "agent", "system")
 
 # The eight work states, frozen. work/transitions.py owns the transitions.
 WORK_STATES = (
