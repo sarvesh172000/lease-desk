@@ -92,7 +92,7 @@ holds.
 
 | # | Chunk | h | Owner | Covers | Gate | Status |
 |---|---|---|---|---|---|---|
-| **C1** | Product polish | 22 | B | P3 g1 | Every screen readable on a projector at 1280 wide, Today screen per role | — |
+| **C1** | Product polish | 22 | B | P3 g1 | Every screen readable on a projector at 1280 wide, Today screen per role | **Planned** — [`frontend/UI_PLAN.md`](../frontend/UI_PLAN.md), 34 h incl. a landing page |
 | **C2** | Demo & studio | 24 | B | P3 g2, g3 | `make demo-reset` in under 30 s; 10 judge scenarios behave | — |
 | **C3** | Reliability & chaos | 14 | A+B | P3 g4 | Kill the worker mid-run: it finishes with identical results | — |
 | **C4** | Performance & QA | 20 | A+B | P3 g5, g6 | Cold month under 3 min, warm under 20 s; e2e and contract tests green | — |
