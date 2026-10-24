@@ -22,11 +22,13 @@ import type {
   ExceptionSummary,
   InvestigationEvent,
   ItemAction,
+  ItemSources,
   LeaseSummary,
   LeaseVersion,
   MonthMetricName,
   MonthSummary,
   MonthSummaryRow,
+  Questions,
   Schedule,
   Status,
   Summary,
@@ -600,6 +602,45 @@ export function getAllowedActions(exceptionId: string): Promise<AllowedActions> 
   return call(
     () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemIdFor(exceptionId))}/allowed-actions`),
     () => ({ actions: fxAllowed(exceptionId) }),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EXTENSION: the resolver
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/items/{id}/sources → the sources weighed, the trust decision and its
+ * explanation, confidence with its reasons, the route and any open question.
+ * Takes a work item id or an exception id (`exc_42`). Fixtures carry no sources.
+ */
+export function getItemSources(itemOrExceptionId: number | string): Promise<ItemSources> {
+  const id = itemIdFor(String(itemOrExceptionId));
+  return call(
+    () => http<ItemSources>(`/api/items/${encodeURIComponent(id)}/sources`),
+    () => ({
+      item_id: Number(id) || 0,
+      kind: "CHARGE_CHECK",
+      state: "PROPOSED",
+      sources: [],
+      decision: null,
+      explanation: null,
+      confidence: null,
+      confidence_reasons: [],
+      route: null,
+      asked_to: null,
+      payment_due: null,
+      question: null,
+      computed: false,
+    }),
+  );
+}
+
+/** GET /api/questions[?mine=1] → open questions with due dates and dollars at stake (Today screen). */
+export function getQuestions(mine = true): Promise<Questions> {
+  return call(
+    () => http<Questions>(`/api/questions${mine ? "?mine=1" : ""}`),
+    () => ({ business_date: new Date().toISOString().slice(0, 10), total: 0, questions: [] }),
   );
 }
 

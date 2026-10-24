@@ -19,11 +19,13 @@ import {
   getDocumentPages,
   getException,
   getExceptions,
+  getItemSources,
   getLeaseVersions,
   getLeases,
   getMe,
   getMonthSummary,
   getMonthSummaryItems,
+  getQuestions,
   getSchedule,
   getSummary,
   holdException,
@@ -170,4 +172,18 @@ export function useDemoReset() {
     mutationFn: () => resetDemo(),
     onSettled: () => void qc.invalidateQueries(),
   });
+}
+
+/** The resolver's view of one item: sources, trust explanation, confidence, route. */
+export function useItemSources(itemOrExceptionId?: number | string | null) {
+  return useQuery({
+    queryKey: ["item-sources", itemOrExceptionId ?? null],
+    queryFn: () => getItemSources(itemOrExceptionId!),
+    enabled: itemOrExceptionId != null && itemOrExceptionId !== "",
+  });
+}
+
+/** Open questions waiting on me (or, mine=false, everything in my scope). */
+export function useQuestions(mine = true) {
+  return useQuery({ queryKey: ["questions", mine], queryFn: () => getQuestions(mine) });
 }
