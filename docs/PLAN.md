@@ -35,8 +35,8 @@ then move.
 |---|---|
 | **Complete** | **A1–A4 (all of Person A's Block A)** · 48 of 526 hours |
 | **Partial** | B1, B3, B5, B10 (started early for the demo moment) |
-| **Tests** | 254 passing, offline, no API key · `python -m eval.run` passes |
-| **Next (Sarvesh)** | **B2** — error catalog v2 (~60 errors) and the 2026 year |
+| **Tests** | 280 passing, offline, no API key · `python -m eval.run` passes |
+| **Next (Sarvesh)** | **B2** — error catalog v2 (~60 errors) and the 2026 year, then B3 |
 | **Next (Jenil)** | **A5** — Compose, Postgres schema, the four DB roles |
 
 **Jenil is the critical path.** A1–A4 are backend no judge can see until A5–A8
@@ -68,13 +68,13 @@ stands on.*
 | # | Chunk | h | Owner | Covers | Gate | Status |
 |---|---|---|---|---|---|---|
 | **B1** | Lease changes & resolver | 34 | A+B | P2 g5, g9 | A variance finds its cause, ranks sources, routes to the right person | **Partial** — modification + trust done |
-| **B2** | Company at scale | 26 | A | P2 g2 | 30 clinics, 3 entities, 2025 history, held-out company from another seed | **Partial** — structure + held-out done; error catalog v2 and full 2026 left |
+| **B2** | Company at scale | 26 | A | P2 g2 | 30 clinics, 3 entities, 2025 history, held-out company from another seed | **Partial** — structure, held-out, CAM pools done; error catalog v2 and full 2026 left |
 | **B3** | The mess | 36 | A | P2 g3, g4 | Scans, 3 invoice formats, the previous accountant's spreadsheet, all parsed | **Partial** — emails done |
-| **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | — |
+| **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | **Partial** — CAM engine + shared pool done ($169,200 caught); CPI left |
 | **B5** | ASC 842 & close | 26 | A | P2 g8 | Subledger ties to GL to the cent; the month closes and locks | **Partial** — remeasurement done |
 | **B6** | Policies | 24 | B | P2 g10 | A policy is learned, backtested, approved, and cited on a later decision | — |
 | **B7** | Disputes & obligations | 20 | B | P2 g11, g12 | A dispute letter goes out, a credit memo clears it, a renewal date fires | — |
-| **B8** | Proof | 28 | A | P2 g1, g16 | Real EDGAR leases scored separately; held-out company scored next to dev | — |
+| **B8** | Proof | 28 | A | P2 g1, g16 | Real EDGAR leases scored separately; held-out company scored next to dev | **Partial** — held-out scored in eval; EDGAR and counterfactual left |
 | **B9** | Personas & explainability | 20 | A+B | P2 g13, g14 | A year runs unattended; "why was this held?" answers with rows | — |
 | **B10** | Safety | 8 | B | P2 g15 | Every adversarial case produces zero unauthorized state change | **Partial** — fencing + 4 tests |
 

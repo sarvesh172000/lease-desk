@@ -159,3 +159,35 @@ def test_sections_needing_a_model_are_skipped_not_failed(tmp_path, monkeypatch):
     assert report["sections"]["investigation"]["skipped"]
     assert report["sections"]["extraction"]["skipped"]
     assert report["passed"], "a skipped section must not fail the run"
+
+
+# --- the held-out company (chunk B8) ---------------------------------------
+
+def test_the_engines_hold_up_on_a_company_never_seen():
+    from eval.run import score_heldout
+
+    section = score_heldout()
+    assert section.ok, section.detail
+    assert all(section.detail["checks"].values())
+
+
+def test_the_held_out_section_names_the_other_company():
+    from datagen.company import FULL, build_company
+    from eval.run import score_heldout
+
+    section = score_heldout()
+    assert section.detail["seed"] != build_company(FULL).seed
+    assert "Stonebridge" in section.detail["company"]
+
+
+def test_held_out_appears_in_the_report(tmp_path):
+    import json
+
+    from datagen.answer_key import write
+    from eval.run import main
+
+    key_path = write(tmp_path / "answer_key.json")
+    out = tmp_path / "report.json"
+    main(["--key", str(key_path), "--out", str(out), "--history", str(tmp_path / "h.csv")])
+    report = json.loads(out.read_text())
+    assert report["sections"]["held_out"]["ok"]
