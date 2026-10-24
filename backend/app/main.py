@@ -10,11 +10,13 @@ questions an orchestrator asks: is the process up, and can it reach its data.
 from fastapi import FastAPI, Response, status
 from sqlalchemy import text
 
+from .auth.routes import router as auth_router
 from .db.engine import engine
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Lease Desk", version="0.1.0")
+    app.include_router(auth_router)
 
     @app.get("/health")
     def health() -> dict:
