@@ -123,7 +123,17 @@ python -m pytest tests -q    # 16 tests, no API key needed
 
 The demo and the whole test suite run offline. Only `--live` calls the API.
 
+## Design docs
+
+| Document | What's in it |
+|---|---|
+| [docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md) | Final system design: trust model, agents, accounting, failure modes |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | High and low level diagrams, API surface, frontend structure |
+| [docs/SPONSORS.md](docs/SPONSORS.md) | Sponsor integration strategy |
+| [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Stage-by-stage build plan for two people |
+
 ## Status
+
 
 Hackathon project — the schedule engine, reconciliation, remeasurement and
 entry proposal are implemented and tested. Lease abstraction from PDFs is
