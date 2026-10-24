@@ -17,6 +17,7 @@ import type {
   ChargeCheck,
   DemoResetResult,
   DocumentPages,
+  EvidencePackSubject,
   ExceptionDetail,
   ExceptionSummary,
   InvestigationEvent,
@@ -29,6 +30,7 @@ import type {
   Schedule,
   Status,
   Summary,
+  WhyAnswer,
 } from "./types";
 import {
   FIXTURE_ACTORS,
@@ -710,4 +712,51 @@ export function resetDemo(): Promise<DemoResetResult> {
       throw new ApiError(501, "501 demo reset needs the live API");
     },
   );
+}
+
+/** EXTENSION (B9): POST /api/items/{id}/why — two or three sentences plus the rows used. */
+export function askWhy(itemId: number | string, question?: string): Promise<WhyAnswer> {
+  return call(
+    () =>
+      http<WhyAnswer>(`/api/items/${encodeURIComponent(String(itemId))}/why`, {
+        method: "POST",
+        body: JSON.stringify(question ? { question } : {}),
+      }),
+    () => {
+      throw new ApiError(501, "501 Why? needs the live API");
+    },
+  );
+}
+
+/** EXTENSION (B9): POST /api/evidence-packs — the PDF (auditor or controller). */
+export async function requestEvidencePack(
+  subject: EvidencePackSubject,
+): Promise<{ pdf: Blob; chainVerified: boolean | null; brokenSeq: number | null }> {
+  if (source === "fixtures") throw new ApiError(501, "501 evidence packs need the live API");
+  const res = await fetch(`${API_URL}/api/evidence-packs`, {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/pdf", "Content-Type": "application/json" },
+    body: JSON.stringify({ subject }),
+  });
+  if (res.status === 401) redirectToLogin();
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = typeof body?.detail === "string" ? body.detail : JSON.stringify(body);
+    } catch {
+      /* not json */
+    }
+    throw new ApiError(res.status, `${res.status} ${detail}`);
+  }
+  // The stamp is always in the PDF; these headers are only readable cross-origin
+  // if the API exposes them (CORS expose_headers), so null means "see the PDF".
+  const verified = res.headers.get("X-Chain-Verified");
+  const broken = res.headers.get("X-Chain-Broken-Seq");
+  return {
+    pdf: await res.blob(),
+    chainVerified: verified === null ? null : verified === "true",
+    brokenSeq: broken ? Number(broken) : null,
+  };
 }

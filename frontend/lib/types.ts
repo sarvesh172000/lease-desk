@@ -376,3 +376,29 @@ export interface DemoResetResult {
   /** The audit event recording who reset the demo. */
   event_seq: number;
 }
+
+/** EXTENSION (B9): one row a "Why?" answer rests on. `tool` names the fixed
+ *  query that produced it; the other keys depend on the tool (events carry
+ *  seq/actor_id/action/allowed/reason, sources carry source/rank/claims). */
+export interface WhyRow {
+  tool: "timeline_for" | "decisions_by_policy" | "sources_for" | "denied_attempts" | "as_known_on";
+  [key: string]: unknown;
+}
+
+/** EXTENSION (B9): POST /api/items/{id}/why */
+export interface WhyAnswer {
+  answer: string;
+  rows: WhyRow[];
+  tools_used: string[];
+  /** "template", or "llm:<model_ref>" when a model phrased the same rows. */
+  path: string;
+  item_id: number;
+  notes: string[];
+}
+
+/** EXTENSION (B9): what an evidence pack is for. A string works too:
+ *  "work_item:42", "journal_entry:7", "lease:LEASE-01:2026-01". */
+export type EvidencePackSubject =
+  | string
+  | { type: "work_item" | "journal_entry"; id: number }
+  | { type: "lease_period"; lease_id: string; period: string };
