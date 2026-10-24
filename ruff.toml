@@ -36,6 +36,7 @@ extend-exclude = [
     "backend/app/docs",
     "backend/app/engine",
     "backend/app/llm",
+    "backend/app/ledger/close.py",   # Sarvesh's (B5); in ledger/ but not ours to reformat
     # backend/tests/*.py cannot be listed here: globs cross "/" and would
     # also drop backend/tests/platform. The pre-commit `files:` regex
     # scopes explicit test paths instead.
