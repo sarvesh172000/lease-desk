@@ -10,6 +10,17 @@ gateway, and policies, disputes, obligations, questions, the month summary,
 "why", evidence packs, chat pairing, chaos recovery and demo reset all exist
 with tests (1,569 passing).
 
+## Status, 24 Oct evening (Sarvesh's tasks)
+
+| # | State |
+|---|---|
+| S5 | **Done**, #6. The cache key covers the documents, not the fenced text; the xfail is gone. |
+| — | **The moment, live**, #7. `make demo-data` also runs July 2026: LEASE-01's rent is held at $2,226.65, and *Run investigation* finds the amendment and remeasures (+$443,255.70, 4 balanced entries), replayed from committed answers (`data/reference/llm_cache`) with no key. Claude now reads the demo leases (`abstraction:llm`), and its reading reproduces the answer key. The API's business date reads the clock (July). |
+| S1 | **In review**, #8. Backend mirror after commit (`backend/app/work/live.py`), `useLiveStatus()` / `useAgentSteps()` in `frontend/lib/live.ts`. The two-window Playwright gate is written but not run. |
+| S2 | **In review.** One front door: `agents_fetch/` (pairing, grammar, cards) plus asi1 reading, an investigation specialist, the step feed, `run.py` / `connect.py`; `fetch/` deleted. Same four registered addresses. Live registration and the Desert-manager gate need K3's actor. |
+| S3 | Open. |
+| S4 | Open. Note: extraction on the real EDGAR exhibits can't be scored fairly yet: every `AbstractedLease` field is required, so a lease that is silent on a term is forced to answer. Optional fields first. |
+
 ## Who does what
 
 | # | Task | Owner | Size |
