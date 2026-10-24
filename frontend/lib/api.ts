@@ -15,6 +15,7 @@ import type {
   AllowedActions,
   AuditResponse,
   ChargeCheck,
+  DemoResetResult,
   DocumentPages,
   ExceptionDetail,
   ExceptionSummary,
@@ -22,6 +23,9 @@ import type {
   ItemAction,
   LeaseSummary,
   LeaseVersion,
+  MonthMetricName,
+  MonthSummary,
+  MonthSummaryRow,
   Schedule,
   Status,
   Summary,
@@ -662,6 +666,48 @@ export function demoSwitch(actorId: string): Promise<Actor> {
       if (!a) throw new ApiError(404, `404 actor ${actorId}`);
       fx.actor = a;
       return clone(a);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Demo: run summary and reset (C2)
+// ---------------------------------------------------------------------------
+
+/**
+ * EXTENSION: GET /api/summary/month?period=YYYY-MM&entity= — the month's run
+ * summary ("January 2026, ...: 5 clinics, 12 charges checked, ..."), every
+ * number with its drill-down. Blank entity = every entity. Live API only.
+ */
+export function getMonthSummary(period: string, entity?: string): Promise<MonthSummary> {
+  const q = new URLSearchParams({ period, entity: entity ?? "" });
+  return call(
+    () => http<MonthSummary>(`/api/summary/month?${q.toString()}`),
+    () => {
+      throw new ApiError(501, "501 the month summary needs the live API");
+    },
+  );
+}
+
+/** EXTENSION: GET /api/summary/month/items — exactly the rows behind one number of the month summary. */
+export function getMonthSummaryItems(period: string, metric: MonthMetricName, entity?: string): Promise<MonthSummaryRow[]> {
+  const q = new URLSearchParams({ period, metric, entity: entity ?? "" });
+  return call(
+    () => http<MonthSummaryRow[]>(`/api/summary/month/items?${q.toString()}`),
+    () => [],
+  );
+}
+
+/**
+ * EXTENSION: POST /api/demo/reset — restore the demo snapshot (controller
+ * only; 403 for anyone else, recorded as a denied event; 404 when demo mode
+ * is off). Replaces the audit trail with the snapshot's.
+ */
+export function resetDemo(): Promise<DemoResetResult> {
+  return call(
+    () => http<DemoResetResult>("/api/demo/reset", { method: "POST" }),
+    () => {
+      throw new ApiError(501, "501 demo reset needs the live API");
     },
   );
 }

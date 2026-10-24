@@ -314,3 +314,65 @@ export interface LeaseVersion {
   work_item: { id: number; state: string; proposal: string | null; allowed_actions: string[] } | null;
   terms: LeaseTerm[];
 }
+
+/** EXTENSION: where one number of the month summary drills down to: `endpoint` + `params` returns exactly its rows. */
+export interface MonthSummaryDrill {
+  endpoint: string;
+  params: { period: string; entity: string; metric: MonthMetricName };
+  /** The same set, declaratively (kind, state, proposal, ...), for labels and links. */
+  filter: Record<string, unknown>;
+}
+
+export type MonthMetricName = "clinics" | "checked" | "approved" | "held" | "disputes" | "questions" | "batch";
+
+export interface MonthMetric {
+  value: number | boolean;
+  label: string;
+  /** Only on `held`: the over-bills held, in dollars. */
+  amount?: number;
+  drill: MonthSummaryDrill;
+}
+
+/** EXTENSION: GET /api/summary/month?period=YYYY-MM&entity= — the stepper's run summary. */
+export interface MonthSummary {
+  period: string;
+  month: string;
+  entity_id: string | null;
+  entity_name: string;
+  headline: string;
+  metrics: Record<MonthMetricName, MonthMetric>;
+  batch: {
+    ready: boolean;
+    released: boolean;
+    awaiting_decision: number;
+    releasable: number;
+    releasable_total: number;
+  };
+}
+
+/** EXTENSION: one row behind a month-summary number (GET /api/summary/month/items); `type` says which kind. */
+export type MonthSummaryRow =
+  | { type: "charge_check"; item_id: number; exception_id: string; state: string; proposal: string | null; clinic_id: string | null; title: string; amount: number | null; variance: number | null }
+  | { type: "clinic"; clinic_id: string; name: string; charges: number }
+  | { type: "dispute"; item_id: number; state: string; clinic_id: string | null; title: string; amount: number | null }
+  | { type: "question"; question_id: number; item_id: number; exception_id: string | null; kind: string; asked_to: string; asked_by: string; body: string; asked_at: string; due_at: string | null }
+  | { type: "payable"; item_id: number; exception_id: string; clinic_id: string; charge_type: string; landlord_name: string; billed: number; amount: number };
+
+/** EXTENSION: POST /api/demo/reset — controller only, demo mode only (404 otherwise). */
+export interface DemoResetResult {
+  status: "reset";
+  database: string;
+  seconds: number;
+  restore_seconds: number;
+  budget_seconds: number;
+  within_budget: boolean;
+  verified: boolean;
+  chain_ok: boolean;
+  counts_match: boolean;
+  head_match: boolean;
+  judge_provided_cleared: number;
+  snapshot: { file: string; created_at: string | null; git_sha: string | null; chain_head: { seq: number; hash: string } | null; alembic_version: string | null };
+  mismatches: Record<string, unknown>;
+  /** The audit event recording who reset the demo. */
+  event_seq: number;
+}

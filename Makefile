@@ -111,6 +111,31 @@ demo: demo-data    ## demo-data, then the API on :8000 and the web app on :3000 
 	  (cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev) & \
 	  wait
 
+# Demo snapshots (C2; not part of the frozen list). See ops/snapshots/README.md.
+#
+#   LEASEDESK_DB_PORT=5432 LEASEDESK_DB_NAME=leasedesk_demo make demo-reset   # host Postgres
+#   make demo-reset                                                            # Compose (:5433)
+#
+# demo-snapshot builds the demo-data state in a scratch database of its own
+# (<db>_snapshot, dropped afterwards) and pg_dumps it to DEMO_SNAPSHOT with a
+# manifest. demo-reset restores it over LEASEDESK_DB_NAME in one transaction,
+# re-applies the role grants, verifies the chain and the row counts against
+# the manifest and prints the time; it builds the snapshot first when it is
+# missing or stale. A reset REPLACES audit_event: demo database, demo mode only.
+.PHONY: demo-snapshot demo-reset
+DEMO_SNAPSHOT ?= ops/snapshots/demo.dump
+DEMO_SNAPSHOT_DB ?= $(or $(LEASEDESK_DB_NAME),leasedesk)_snapshot
+
+demo-snapshot:     ## build demo-data in a scratch db, pg_dump it to DEMO_SNAPSHOT (+ manifest)
+	$(PY) -m app.demo.snapshot fresh-db $(DEMO_SNAPSHOT_DB)
+	$(MAKE) demo-data LEASEDESK_DB_NAME=$(DEMO_SNAPSHOT_DB) DEMO_CONFIRM=1
+	$(PY) -m app.demo.snapshot dump --database $(DEMO_SNAPSHOT_DB) --out "$(DEMO_SNAPSHOT)"
+	$(PY) -m app.demo.snapshot drop-db $(DEMO_SNAPSHOT_DB)
+
+demo-reset:        ## restore DEMO_SNAPSHOT over the demo database in under 30 s (builds it if missing)
+	@$(PY) -m app.demo.reset --check --snapshot "$(DEMO_SNAPSHOT)" || $(MAKE) demo-snapshot
+	$(PY) -m app.demo.reset --snapshot "$(DEMO_SNAPSHOT)"
+
 # Developer tooling (not part of the frozen list).
 .PHONY: lint ci
 
