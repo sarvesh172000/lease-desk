@@ -75,3 +75,12 @@ GRANT INSERT ON audit_event TO lease_gateway;
 
 -- Sequences behind serial columns. Identity columns need no grant.
 GRANT USAGE ON SEQUENCE audit_event_seq_seq TO lease_agent, lease_gateway, lease_api;
+
+-- Migration bookkeeping is nobody's business but the owner's. ALL TABLES
+-- above sweeps it in, so take it back out.
+DO $$
+BEGIN
+    IF to_regclass('public.alembic_version') IS NOT NULL THEN
+        REVOKE ALL ON alembic_version FROM lease_agent, lease_gateway, lease_api, lease_reader;
+    END IF;
+END $$;

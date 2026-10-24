@@ -137,6 +137,12 @@ def _read_rows(path: Path, raw: bytes, spec: CsvSource) -> Iterable[Dict]:
         raise IngestError("%s is missing column(s) %s" % (path.name, ", ".join(missing)))
     seen: Dict[str, int] = {}
     for line, row in enumerate(reader, start=2):
+        # A stray comma (an unquoted "19,626.65") shifts every field after it.
+        # csv puts the overflow under the key None; a short row fills None values.
+        if None in row or None in row.values():
+            raise IngestError("%s line %d has %s fields than the header; every value after "
+                              "the mismatch would land in the wrong column"
+                              % (path.name, line, "more" if None in row else "fewer"))
         blank = [c for c in spec.required if not (row.get(c) or "").strip()]
         if blank:
             raise IngestError("%s line %d: empty %s" % (path.name, line, ", ".join(blank)))
