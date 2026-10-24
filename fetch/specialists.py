@@ -17,7 +17,7 @@ feed as they do it: the investigation frame by frame while it streams, the
 approval the moment Lease Desk answers. That is what makes the feed show
 several agents working, not one agent narrating after the fact.
 
-agents.py wraps `handle` in uAgents; tests/test_fetch_agents.py drives it directly.
+agents.py wraps `handle` in uAgents; tests/test_fetch_specialists.py drives it directly.
 """
 
 from typing import Any, Dict
