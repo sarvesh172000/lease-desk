@@ -10,11 +10,16 @@ as `lease_agent`, so even a bug in an agent cannot write the ledger.
 """
 
 import os
+import warnings
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict
 
 DB_ROLES = ("lease_agent", "lease_gateway", "lease_api", "lease_reader")
+
+# Signs the login cookie (app/auth/sessions.py). Anyone who knows it can mint
+# a session for any actor, so it is only acceptable on a laptop.
+DEV_SESSION_SECRET = "leasedesk-dev-session-secret-not-for-production"
 
 
 @dataclass(frozen=True)
@@ -27,6 +32,8 @@ class Settings:
     role_passwords: Dict[str, str]
     data_dir: str
     demo_mode: bool
+    session_secret: str = DEV_SESSION_SECRET
+    cookie_secure: bool = False     # True behind HTTPS; browsers then refuse it over http
 
     def db_url(self, role: str, database: str = "") -> str:
         """SQLAlchemy URL for one role. `role="owner"` is for migrations."""
@@ -43,7 +50,7 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     env = os.environ.get
-    return Settings(
+    settings = Settings(
         db_host=env("LEASEDESK_DB_HOST", "localhost"),
         db_port=int(env("LEASEDESK_DB_PORT", "5433")),
         db_name=env("LEASEDESK_DB_NAME", "leasedesk"),
@@ -56,4 +63,13 @@ def get_settings() -> Settings:
         },
         data_dir=env("LEASEDESK_DATA_DIR", "data/generated"),
         demo_mode=env("LEASEDESK_DEMO_MODE", "1") == "1",
+        session_secret=env("LEASEDESK_SESSION_SECRET", DEV_SESSION_SECRET),
+        cookie_secure=env("LEASEDESK_COOKIE_SECURE", "0") == "1",
     )
+    if settings.session_secret == DEV_SESSION_SECRET and not settings.demo_mode:
+        warnings.warn(
+            "LEASEDESK_SESSION_SECRET is the committed development default while "
+            "LEASEDESK_DEMO_MODE is off: anyone who has read the repo can forge a "
+            "login. Set a long random LEASEDESK_SESSION_SECRET.",
+            RuntimeWarning, stacklevel=2)
+    return settings

@@ -59,3 +59,9 @@ run-month:
 replay:
 	@echo "replay: projections rebuilt from audit_event land in A6" && exit 1
 
+# Not part of `seed`: a known password is a dev convenience, never a default.
+# Run after `make seed` to sign in as any seeded person with password `demo`
+# (agents never log in). Refuses unless LEASEDESK_DEMO_MODE=1.
+.PHONY: dev-passwords
+dev-passwords:     ## give every seeded person the password `demo` (as lease_gateway)
+	$(PY) -m app.auth.passwords set-dev-passwords
