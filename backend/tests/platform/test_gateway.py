@@ -11,6 +11,7 @@ from decimal import Decimal
 
 import ledger_world as w
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 
 from app.work.events import events_for, verify_chain
@@ -19,6 +20,7 @@ from app.work.gateway import (
     PeriodClosed,
     PostingError,
     WrongState,
+    post_approved,
     post_approved_charge,
     post_journal,
 )
@@ -256,4 +258,98 @@ def test_charges_the_engine_cannot_post_are_refused(world, charge, kind, subject
     with pytest.raises((PostingError, GatewayError), match=message):
         with world["lease_gateway"].begin() as conn:
             post_approved_charge(conn, item)
+    assert entries(world) == 0
+
+
+# ------------------------------------------------ the work layer's post
+
+def test_post_is_a_work_layer_transition_by_the_gateway_actor(world):
+    """The gateway's actor is created if the actor table lacks it, and the
+    move to POSTED is the work layer's own `post` transition."""
+    item = w.item(world["owner"], w.RENT)
+    assert w.scalar(world["lease_reader"],
+                    "SELECT count(*) FROM actor WHERE id = 'system:gateway'") == 0
+    post(world, item)
+    assert w.scalar(world["lease_reader"],
+                    "SELECT role FROM actor WHERE id = 'system:gateway'") == "system"
+
+
+def test_a_deactivated_gateway_actor_cannot_post(world):
+    from app.work.roles import UnknownActor
+
+    with world["owner"].begin() as conn:
+        conn.execute(text("INSERT INTO actor (id, name, role, active) "
+                          "VALUES ('system:gateway', 'Gateway', 'system', false)"))
+    item = w.item(world["owner"], w.RENT)
+    with pytest.raises(UnknownActor, match="system:gateway"):
+        post(world, item)
+    assert entries(world) == 0 and state(world, item) == "APPROVED"
+
+
+def test_a_concurrently_moved_item_is_not_posted(world):
+    """post_journal() checks APPROVED after locking; transition() checks the
+    machine again, so an item that is not APPROVED can never become POSTED."""
+    from app.work.roles import ensure_gateway_actor
+    from app.work.transitions import IllegalTransition, transition
+
+    item = w.item(world["owner"], w.RENT, state="HELD")
+    with pytest.raises(IllegalTransition):
+        with world["lease_gateway"].begin() as conn:
+            transition(conn, ensure_gateway_actor(conn), item, "post")
+    assert state(world, item) == "HELD"
+
+
+# ------------------------------------------------------- post_approved
+
+def test_post_approved_posts_the_periods_approved_charges_once(world):
+    rent, cam = w.item(world["owner"], w.RENT), w.item(world["owner"], w.CAM)
+    held = w.item(world["owner"], w.LATE_FEE, state="HELD")
+    december = w.item(world["owner"], w.RENT_DEC, period="2025-12-01")
+    with world["lease_gateway"].begin() as conn:
+        posted = post_approved(conn, "ENT-CA", JAN)
+    assert [p.work_item_id for p in posted] == [rent, cam]
+    assert entries(world) == 2
+    assert (state(world, rent), state(world, cam)) == ("POSTED", "POSTED")
+    assert (state(world, held), state(world, december)) == ("HELD", "APPROVED")
+    assert w.scalar(world["lease_reader"], "SELECT sum(debit) FROM journal_line") == \
+        Decimal("21726.65")
+
+    with world["lease_gateway"].begin() as conn:
+        assert post_approved(conn, "ENT-CA", JAN) == []
+    assert entries(world) == 2
+
+
+def test_post_approved_for_another_entity_or_month_posts_nothing(world):
+    w.item(world["owner"], w.RENT)
+    with world["lease_gateway"].begin() as conn:
+        assert post_approved(conn, "ENT-NV", JAN) == []
+        assert post_approved(conn, "ENT-CA", date(2026, 2, 1)) == []
+    assert entries(world) == 0
+
+
+@pytest.mark.parametrize("entity,period,message", [
+    ("", JAN, "entity_id"),
+    ("ENT-CA", date(2026, 1, 15), "first of a month"),
+    ("ENT-CA", "2026-01", "first of a month"),
+])
+def test_post_approved_refuses_bad_arguments(world, entity, period, message):
+    with pytest.raises((PostingError, GatewayError), match=message):
+        with world["lease_gateway"].begin() as conn:
+            post_approved(conn, entity, period)
+
+
+def test_one_unpostable_charge_rolls_the_whole_call_back(world):
+    w.item(world["owner"], w.RENT)
+    w.item(world["owner"], w.LATE_FEE)              # approved, but no journal rule
+    with pytest.raises(PostingError, match="no journal rule"):
+        with world["lease_gateway"].begin() as conn:
+            post_approved(conn, "ENT-CA", JAN)
+    assert entries(world) == 0
+
+
+def test_the_agent_role_cannot_post_approved(world):
+    w.item(world["owner"], w.RENT)
+    with pytest.raises(ProgrammingError, match="permission denied"):
+        with world["lease_agent"].begin() as conn:
+            post_approved(conn, "ENT-CA", JAN)
     assert entries(world) == 0

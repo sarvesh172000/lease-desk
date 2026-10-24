@@ -59,6 +59,13 @@ run-month:         ## M=2026-01: enqueue ingest, abstraction, checking; run the 
 	$(PY) -m app.jobs.monthly --period $(M)
 	$(PY) -m app.jobs.worker --once
 
+# Added after the frozen list: the gateway's half of the month, run after a
+# person approves. Idempotent, so running it again posts nothing.
+.PHONY: post
+post:              ## M=2026-01: post every APPROVED charge check of the month (as lease_gateway)
+	@test -n "$(M)" || { echo "usage: make post M=YYYY-MM" >&2; exit 2; }
+	$(PY) -m app.work.gateway --period $(M)
+
 # Not part of `seed`: a known password is a dev convenience, never a default.
 # Run after `make seed` to sign in as any seeded person with password `demo`
 # (agents never log in). Refuses unless LEASEDESK_DEMO_MODE=1.

@@ -1,21 +1,21 @@
 """jobs/monthly.py and handlers.py: the month's three jobs, the bridge from
 generator charge ids to database ids, and findings becoming work items.
 
-The work layer (`app.work.transitions`) is built in parallel, so these tests
-inject a small fake under that name. It writes real `work_item` rows as
-lease_agent, which is what lets "January twice adds no items" mean something.
+Findings go through the real work layer (`app.work.transitions`) on the
+worker's own `lease_agent` connection, so these tests also prove that role's
+grants are enough to create and propose work, and that every item starts
+with a hash-chained event.
 """
 
 import subprocess
 import sys
-import types
 from datetime import date
 from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 
-from app.agents.checker import APPROVE, HOLD, Charge, Finding
+from app.agents.checker import APPROVE, Charge, Finding
 from app.engine.charges import Proof
 from app.jobs import handlers
 from app.jobs.handlers import ABSTRACTION_SKIPPED, HandlerError, ingest
@@ -32,6 +32,8 @@ from app.jobs.monthly import (
 from app.jobs.worker import drain
 from app.records.ingest import stable_id
 from app.records.seed import seed
+from app.work.events import events_for, verify_chain
+from app.work.roles import UnknownActor
 
 ROOT = Path(__file__).resolve().parents[3]
 JAN = date(2026, 1, 1)
@@ -57,49 +59,6 @@ def seeded(clean, generated):
 @pytest.fixture
 def agent(clean):
     return clean["lease_agent"]
-
-
-class FakeTransitions(types.ModuleType):
-    """Stands in for app.work.transitions: same call shapes, real rows."""
-
-    def __init__(self):
-        super().__init__("app.work.transitions")
-        self.calls = []
-
-    def load_actor(self, conn, actor_id):
-        row = conn.execute(text("SELECT id, role FROM actor WHERE id = :i"), {"i": actor_id}).one()
-        return types.SimpleNamespace(id=row.id, role=row.role)
-
-    def create_item(self, conn, actor, *, kind, subject_type, subject_id, **fields):
-        self.calls.append(("create", actor.id, kind, subject_type, subject_id))
-        return conn.execute(text("""
-            INSERT INTO work_item (kind, subject_type, subject_id, entity_id, region_id,
-                                   clinic_id, period, title, amount)
-            VALUES (:kind, :st, :sid, :entity_id, :region_id, :clinic_id, :period, :title, :amount)
-            RETURNING id
-        """), dict(kind=kind, st=subject_type, sid=subject_id, **fields)).scalar_one()
-
-    def transition(self, conn, actor, item_id, action, *, patch):
-        import json
-        self.calls.append(("transition", actor.id, item_id, action, patch["proposal"]))
-        conn.execute(text("""
-            UPDATE work_item SET state = 'PROPOSED', proposal = :p, reason = :r,
-                   evidence = CAST(:e AS jsonb), proposed_by = :a WHERE id = :i
-        """), dict(p=patch["proposal"], r=patch["reason"], e=json.dumps(patch["evidence"]),
-                   a=actor.id, i=item_id))
-
-
-@pytest.fixture
-def work(monkeypatch):
-    fake = FakeTransitions()
-    monkeypatch.setitem(sys.modules, "app.work.transitions", fake)
-    return fake
-
-
-@pytest.fixture
-def no_work_layer(monkeypatch):
-    """Make the import fail the way it does before the work layer lands."""
-    monkeypatch.setitem(sys.modules, "app.work.transitions", None)
 
 
 def q(eng, sql, **params):
@@ -201,23 +160,18 @@ def test_no_charges_for_another_entity_or_month(seeded):
 
 # ------------------------------------------------------ record_findings
 
-def test_record_findings_without_the_work_layer_says_what_is_missing(agent, no_work_layer):
-    finding = Finding("F001", "amount", _charge(), HOLD, "why", 100.0, 90.0)
-    with agent.begin() as conn, pytest.raises(NotImplementedError, match="app.work.transitions"):
-        record_findings(conn, [finding], JAN)
-
-
-def test_record_findings_proposes_one_item_per_charge_as_the_checker(seeded, work):
+def test_record_findings_proposes_one_item_per_charge_as_the_checker(seeded):
     agent = seeded["lease_agent"]
     with agent.begin() as conn:
         counts = check_period(conn, ENTITY, JAN)
     assert counts["charges"] == counts["findings"] == counts["created"] == 12
     assert counts["holds"] == 5
-    assert {c[1] for c in work.calls} == {"agent:checker"}
-    assert [c[3] for c in work.calls if c[0] == "transition"] == ["propose"] * 12
     assert q(agent, "SELECT count(*) FROM work_item WHERE state = 'PROPOSED' "
                     "AND kind = 'CHARGE_CHECK' AND subject_type = 'landlord_charge'") == 12
     assert q(agent, "SELECT count(*) FROM work_item WHERE proposal = 'hold'") == 5
+    assert q(agent, "SELECT count(*) FROM work_item WHERE proposal = 'approve'") == 7
+    assert q(agent, "SELECT count(DISTINCT proposed_by) FROM work_item") == 1
+    assert q(agent, "SELECT min(proposed_by) FROM work_item") == "agent:checker"
     orphans = q(agent, """SELECT count(*) FROM work_item w
                           LEFT JOIN landlord_charge c ON c.id = w.subject_id WHERE c.id IS NULL""")
     assert orphans == 0, "every item's subject is a real landlord_charge id"
@@ -225,7 +179,45 @@ def test_record_findings_proposes_one_item_per_charge_as_the_checker(seeded, wor
                     "OR entity_id IS NULL") == 0
 
 
-def test_a_duplicate_items_evidence_points_at_the_original_by_database_id(seeded, work):
+def test_every_item_is_made_by_events_create_then_propose(seeded):
+    agent = seeded["lease_agent"]
+    with agent.begin() as conn:
+        check_period(conn, ENTITY, JAN)
+    with agent.connect() as conn:
+        ids = list(conn.execute(text("SELECT id FROM work_item ORDER BY id")).scalars())
+        for item_id in ids:
+            events = events_for(conn, "work_item", item_id)
+            assert [(e.actor_id, e.action) for e in events] == [
+                ("agent:checker", "create"), ("agent:checker", "propose")]
+        assert verify_chain(conn) is None
+        last = conn.execute(text("SELECT count(*) FROM work_item w WHERE w.last_event_seq = "
+                                 "(SELECT max(seq) FROM audit_event a WHERE a.subject_id = "
+                                 "w.id::text)")).scalar()
+    assert len(ids) == last == 12
+
+
+def test_evidence_has_the_shape_the_read_api_documents(seeded):
+    agent = seeded["lease_agent"]
+    with agent.begin() as conn:
+        check_period(conn, ENTITY, JAN)
+    with agent.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT w.subject_id, w.proposal, w.evidence, c.lease_id, c.charge_type, c.amount
+              FROM work_item w JOIN landlord_charge c ON c.id = w.subject_id
+        """)).mappings().all()
+    for r in rows:
+        ev = r["evidence"]
+        assert ev["charge_id"] == r["subject_id"] == ev["charge_ids"][0]
+        assert ev["lease_id"] == r["lease_id"] and ev["charge_type"] == r["charge_type"]
+        assert ev["billed"] == float(r["amount"])
+        assert isinstance(ev["supported"], (int, float))
+        assert ev["rule"] in {"premises", "duplicate", "amount", "operating_expense"}
+        assert ev["proof"]["section"] and ev["proof"]["quote"]
+        if r["proposal"] == "approve":
+            assert abs(ev["billed"] - ev["supported"]) < 1
+
+
+def test_a_duplicate_items_evidence_points_at_the_original_by_database_id(seeded):
     agent = seeded["lease_agent"]
     with agent.begin() as conn:
         check_period(conn, ENTITY, JAN)
@@ -238,7 +230,7 @@ def test_a_duplicate_items_evidence_points_at_the_original_by_database_id(seeded
     assert dup["charge_ref"].endswith(("-L1", "-L2", "-L3"))
 
 
-def test_record_findings_twice_adds_nothing(seeded, work):
+def test_record_findings_twice_adds_nothing(seeded):
     agent = seeded["lease_agent"]
     with agent.begin() as conn:
         check_period(conn, ENTITY, JAN)
@@ -246,14 +238,15 @@ def test_record_findings_twice_adds_nothing(seeded, work):
         again = check_period(conn, ENTITY, JAN)
     assert (again["created"], again["skipped"]) == (0, 12)
     assert q(agent, "SELECT count(*) FROM work_item") == 12
+    assert q(agent, "SELECT count(*) FROM audit_event") == 24
 
 
-def test_record_findings_with_nothing_to_record(agent, work):
+def test_record_findings_with_nothing_to_record(agent):
     with agent.begin() as conn:
         assert record_findings(conn, [], JAN) == {"created": 0, "skipped": 0}
 
 
-def test_a_finding_for_a_charge_the_database_never_saw_is_refused(seeded, work):
+def test_a_finding_for_a_charge_the_database_never_saw_is_refused(seeded):
     finding = Finding("F001", "amount", _charge("GHOST-L1"), APPROVE, "ok", 100.0, 100.0,
                       Proof("3.1", "quote"))
     with seeded["lease_agent"].begin() as conn, pytest.raises(MonthlyRunError, match="GHOST-L1"):
@@ -261,14 +254,12 @@ def test_a_finding_for_a_charge_the_database_never_saw_is_refused(seeded, work):
     assert q(seeded["lease_agent"], "SELECT count(*) FROM work_item") == 0
 
 
-def test_a_work_layer_without_load_actor_is_named(seeded, monkeypatch):
-    bare = types.ModuleType("app.work.transitions")
-    bare.create_item = bare.transition = lambda *a, **k: None
-    monkeypatch.setitem(sys.modules, "app.work.transitions", bare)
-    monkeypatch.setitem(sys.modules, "app.work.can", None)
-    with seeded["lease_agent"].begin() as conn, pytest.raises(NotImplementedError,
-                                                              match="load_actor"):
+def test_without_the_checker_actor_nothing_is_written(seeded):
+    with seeded["owner"].begin() as conn:
+        conn.execute(text("UPDATE actor SET active = false WHERE id = 'agent:checker'"))
+    with seeded["lease_agent"].begin() as conn, pytest.raises(UnknownActor, match="agent:checker"):
         check_period(conn, ENTITY, JAN)
+    assert q(seeded["lease_agent"], "SELECT count(*) FROM work_item") == 0
 
 
 # ------------------------------------------------------------- handlers
@@ -297,7 +288,7 @@ def _month(agent):
     return drain(agent, "test")
 
 
-def test_january_end_to_end_then_again_adds_no_jobs_and_no_items(seeded, work):
+def test_january_end_to_end_then_again_adds_no_jobs_and_no_items(seeded):
     agent = seeded["lease_agent"]
     outcomes = _month(agent)
     assert [(o.job.kind, o.status) for o in outcomes] == [
@@ -311,15 +302,18 @@ def test_january_end_to_end_then_again_adds_no_jobs_and_no_items(seeded, work):
     assert q(agent, "SELECT count(*) FROM job") == jobs == 3
 
 
-def test_without_the_work_layer_checking_fails_and_nothing_is_half_written(seeded, no_work_layer):
+def test_a_failing_checking_job_leaves_nothing_half_written(seeded):
     agent = seeded["lease_agent"]
+    with seeded["owner"].begin() as conn:
+        conn.execute(text("UPDATE actor SET active = false WHERE id = 'agent:checker'"))
     outcomes = _month(agent)
     assert [o.status for o in outcomes] == ["done", "done", "failed"]
-    assert "NotImplementedError" in outcomes[2].error
+    assert "UnknownActor" in outcomes[2].error
     assert q(agent, "SELECT count(*) FROM work_item") == 0
+    assert q(agent, "SELECT count(*) FROM audit_event") == 0
 
 
-def test_an_unseeded_month_dead_ends_at_ingest_and_never_checks(clean, monkeypatch, work):
+def test_an_unseeded_month_dead_ends_at_ingest_and_never_checks(clean, monkeypatch):
     agent = clean["lease_agent"]
     with clean["lease_gateway"].begin() as conn:
         conn.execute(text("INSERT INTO entity VALUES ('ENT-CA', 'Northbay', 'CA')"))
