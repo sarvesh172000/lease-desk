@@ -12,3 +12,4 @@ env/
 .cache/
 data/generated/
 *.beancount
+data/gen2/
