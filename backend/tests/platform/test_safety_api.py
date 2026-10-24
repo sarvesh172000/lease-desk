@@ -48,7 +48,7 @@ READ_ONLY = {
 # parameter (the queue's {action}) is expanded to every value it allows.
 ITEM = 1
 PARAMS = {"item_id": str(ITEM), "exc_id": "exc_%d" % ITEM, "period": "2026-01",
-          "lease_id": "LEASE-01", "dispute_id": "DSP-000001"}
+          "lease_id": "LEASE-01", "dispute_id": "DSP-000001", "policy_id": "1"}
 
 
 def _write_routes():

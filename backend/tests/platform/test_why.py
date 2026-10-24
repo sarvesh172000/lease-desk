@@ -146,7 +146,9 @@ def test_why_a_held_january_item_names_the_sources_who_acted_and_the_refusal(jan
     by_tool = {}
     for r in result.rows:
         by_tool.setdefault(r["tool"], []).append(r)
-    sources = by_tool["sources_for"]
+    # The two it was checked against, then what the resolver recorded.
+    sources = [s for s in by_tool["sources_for"] if not s["recorded"]]
+    assert any(s["recorded"] for s in by_tool["sources_for"])
     assert [s["source"] for s in sources] == ["lease_version", "landlord_invoice"]  # by rank
     assert sources[0]["claims"] == "%.2f" % ev["supported"]
     assert sources[1]["claims"] == "%.2f" % ev["billed"]

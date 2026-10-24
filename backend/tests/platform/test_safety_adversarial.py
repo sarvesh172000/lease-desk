@@ -78,7 +78,8 @@ BANKISH = re.compile(r"bank|routing|iban|swift|remit|account_n(o|umber)|acct|\ba
 # Everything lease_agent may write: ingestion, drafts, its own work. Nothing
 # here is money, a payee or the books.
 AGENT_WRITABLE = {"source_document", "raw_row", "sync_cursor", "lease_version", "lease_term",
-                  "work_item", "question", "agent_run", "tool_call", "job", "audit_event"}
+                  "work_item", "question", "agent_run", "tool_call", "job", "audit_event",
+                  "policy", "dispute", "obligation"}
 
 
 # --------------------------------------------------------------------- world

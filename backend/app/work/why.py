@@ -128,9 +128,9 @@ def sources_for(conn: Connection, item: Mapping) -> List[Dict[str, Any]]:
     """The sources an item weighed, highest authority first.
 
     When the resolver recorded them (evidence.sources, chunk B1) those are
-    the answer. Otherwise a charge check has exactly two: the landlord's
-    invoice line, and the confirmed lease version the checker read, with
-    the clause it cited."""
+    the answer, ranked; a charge check also keeps the two it was checked
+    against, read fresh from the database: the landlord's invoice line, and
+    the confirmed lease version the checker read, with the clause it cited."""
     evidence = item.get("evidence") if isinstance(item.get("evidence"), Mapping) else {}
     recorded = evidence.get("sources")
     if isinstance(recorded, list) and recorded:
@@ -141,8 +141,13 @@ def sources_for(conn: Connection, item: Mapping) -> List[Dict[str, Any]]:
             row.setdefault("rank_name", RANK_NAMES.get(rank) if isinstance(rank, int) else None)
             row.update(tool="sources_for", recorded=True, order=i)
             rows.append(row)
-        return sorted(rows, key=lambda r: (_rank_key(_first(r, "trust_rank", "rank")), r["order"]))
+        rows.sort(key=lambda r: (_rank_key(_first(r, "trust_rank", "rank")), r["order"]))
+        return _checked_against(conn, item, evidence) + rows
+    return _checked_against(conn, item, evidence)
 
+
+def _checked_against(conn: Connection, item: Mapping, evidence: Mapping) -> List[Dict[str, Any]]:
+    """A charge check's invoice line and confirmed lease version, if it names them."""
     rows = []
     charge_id = evidence.get("charge_id") or (
         item.get("subject_id") if item.get("subject_type") == "landlord_charge" else None)
@@ -299,15 +304,6 @@ def _why_state(item: Mapping, ev: Mapping, sources: List[Mapping]) -> str:
     head = "Item %s (%s) is %s" % (item["id"], what, item["state"])
     lease = next((s for s in sources if s.get("source") == "lease_version"), None)
     invoice = next((s for s in sources if s.get("source") == "landlord_invoice"), None)
-    recorded = [s for s in sources if s.get("recorded")]
-    if recorded:
-        top, others = recorded[0], recorded[1:]
-        parts = ["%s claims %s" % (_source_name(s), _show(_first(s, "claims", "value", "claim")))
-                 for s in recorded[:3]]
-        trusted = next((s for s in recorded if s.get("trusted")), top)
-        return "%s because its sources disagree: %s; the resolver trusted %s%s." % (
-            head, "; ".join(parts), _source_name(trusted),
-            "" if not others else " as the highest-ranked source")
     if item.get("kind") == "CHARGE_CHECK" and invoice is not None:
         billed = ev.get("billed", invoice.get("claims"))
         bill = "landlord invoice %s billed %s" % (invoice.get("invoice_id"), _money(billed))
@@ -330,6 +326,15 @@ def _why_state(item: Mapping, ev: Mapping, sources: List[Mapping]) -> str:
                                                                        held))
         return "%s: %s and the confirmed %s %s, so the two sources agree." % (
             head, bill, cite, supports)
+    recorded = [s for s in sources if s.get("recorded")]
+    if recorded:
+        top, others = recorded[0], recorded[1:]
+        parts = ["%s claims %s" % (_source_name(s), _show(_first(s, "claims", "value", "claim")))
+                 for s in recorded[:3]]
+        trusted = next((s for s in recorded if s.get("trusted")), top)
+        return "%s because its sources disagree: %s; the resolver trusted %s%s." % (
+            head, "; ".join(parts), _source_name(trusted),
+            "" if not others else " as the highest-ranked source")
     reason = item.get("reason")
     return "%s%s." % (head, "; the reason on record is: %s" % reason.rstrip(".") if reason else "")
 

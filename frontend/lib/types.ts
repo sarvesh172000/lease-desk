@@ -653,3 +653,147 @@ export interface ObligationList {
   total: number;
   obligations: Obligation[];
 }
+
+export type PolicyStatus = "proposed" | "approved" | "rejected" | "retired";
+export type PolicyAction = "approve" | "hold" | "dispute";
+
+export interface PolicyScope {
+  entity_id: string | null;
+  landlord_id: string | null;
+  lease_id: string | null;
+  clinic_id: string | null;
+}
+
+/** The rule as stored (work/policies.py): money bounds are decimal strings. */
+export interface PolicyRule {
+  name: string;
+  version: number;
+  description: string;
+  origin: "onboarding" | "answer" | "manual";
+  scope: PolicyScope;
+  when: {
+    charge_types: string[];
+    same_as_prior_paid: boolean | null;
+    matches_lease: boolean | null;
+    min_amount: string | null;
+    max_amount: string | null;
+    min_variance: string | null;
+    max_variance: string | null;
+    checker_rules: string[];
+    description_contains: string | null;
+  };
+  then: { action: PolicyAction | null; account: string | null; trust_source: string | null };
+  effective_from: string | null;
+  effective_to: string | null;
+  evidence_ids: string[];
+}
+
+export interface BacktestChange {
+  charge_id: string;
+  charge_ref: string;
+  period: string;
+  lease_id: string | null;
+  clinic_id: string | null;
+  charge_type: string;
+  amount: number;
+  current: string;
+  decided_by: string | null;
+  policy: PolicyAction;
+  dollars: number;
+  direction: "released" | "withheld" | "none";
+}
+
+export interface BacktestConflict {
+  policy_id: number;
+  version: number;
+  name: string;
+  action: PolicyAction | null;
+  charges: number;
+  examples: string[];
+  /** Which decides the overlap under evaluation's tie-breaks. */
+  winner: "this" | "existing";
+}
+
+export interface Backtest {
+  policy: { id: number | null; name: string; version: number; fingerprint: string };
+  periods: { first: string | null; last: string | null; count: number };
+  charges_scanned: number;
+  matched: number;
+  unknown: number;
+  unchanged: number;
+  new_decisions: number;
+  changed: number;
+  dollars: number;
+  released: number;
+  withheld: number;
+  changes: BacktestChange[];
+  conflicts: BacktestConflict[];
+  effective_dates_ignored: boolean;
+  digest: string;
+}
+
+export interface BacktestSummary {
+  matched: number;
+  changed: number;
+  dollars: number;
+  released: number;
+  withheld: number;
+  unknown: number;
+  digest: string;
+  conflicts: number;
+}
+
+export interface PolicySummary {
+  id: number;
+  name: string;
+  version: number;
+  status: PolicyStatus;
+  /** `policy:<id>@v<version>`, as cited in audit events' policy_ref. */
+  ref: string;
+  origin: string | null;
+  description: string | null;
+  scope: PolicyScope;
+  action: PolicyAction | null;
+  charge_types: string[];
+  effective_from: string | null;
+  effective_to: string | null;
+  precedent_count: number | null;
+  /** Approve / reject this work item (POST /api/items/{id}/actions/...) to decide the policy. */
+  work_item_id: number | null;
+  work_item_state: string | null;
+  backtest: BacktestSummary | null;
+  created_at: string;
+}
+
+export interface PolicyList {
+  counts: Record<PolicyStatus, number>;
+  policies: PolicySummary[];
+}
+
+export interface PolicyCitation {
+  seq: number;
+  at: string;
+  actor_id: string;
+  action: string;
+  subject_type: string;
+  subject_id: string;
+  reason: string | null;
+}
+
+export interface PolicyDetail {
+  policy: PolicySummary;
+  rule: PolicyRule;
+  versions: { id: number; version: number; status: PolicyStatus; created_at: string; work_item_id: number | null }[];
+  /** Precedents, linked decisions, the question and answer it came from. */
+  evidence: Record<string, unknown>;
+  backtest: Backtest | null;
+  rejection: { by: string; at: string; reason: string | null } | null;
+  cited_by: PolicyCitation[];
+}
+
+export interface BacktestRun {
+  policy_id: number;
+  status: PolicyStatus;
+  backtest: Backtest;
+  refresh_job_id: number | null;
+}

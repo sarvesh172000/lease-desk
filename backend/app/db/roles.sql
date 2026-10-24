@@ -52,6 +52,14 @@ GRANT INSERT ON source_document, raw_row TO lease_agent;           -- ingestion
 GRANT INSERT, UPDATE ON sync_cursor TO lease_agent;
 GRANT INSERT ON lease_version, lease_term TO lease_agent;          -- drafts; a person confirms
 GRANT INSERT, UPDATE ON work_item, question, agent_run, tool_call, job TO lease_agent;
+-- The policy learner proposes policies. Nobody updates one: its status follows
+-- its POLICY work item, by trigger (sql/006_policies.sql).
+DO $$
+BEGIN
+    IF to_regprocedure('policy_follow_work_item()') IS NOT NULL THEN
+        GRANT INSERT ON policy TO lease_agent;
+    END IF;
+END $$;
 GRANT INSERT ON audit_event TO lease_agent;
 
 -- --------------------------------------------------------------- api

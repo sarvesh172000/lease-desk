@@ -37,6 +37,9 @@ import type {
   Status,
   Summary,
   WhyAnswer,
+  BacktestRun,
+  PolicyDetail,
+  PolicyList,
 } from "./types";
 import {
   FIXTURE_ACTORS,
@@ -900,5 +903,61 @@ export function getObligations(
       total: 0,
       obligations: [],
     }),
+  );
+}
+
+/** GET /api/policies */
+export function getPolicies(): Promise<PolicyList> {
+  return call(
+    () => http<PolicyList>("/api/policies"),
+    () => ({ counts: { proposed: 0, approved: 0, rejected: 0, retired: 0 }, policies: [] }),
+  );
+}
+
+/** GET /api/policies/{id} */
+export function getPolicy(id: number): Promise<PolicyDetail> {
+  return call(
+    () => http<PolicyDetail>(`/api/policies/${id}`),
+    () => {
+      throw new ApiError(404, `404 no policy ${id} in fixtures mode`);
+    },
+  );
+}
+
+/** POST /api/policies/{id}/backtest */
+export function backtestPolicy(id: number): Promise<BacktestRun> {
+  return call(
+    () => http<BacktestRun>(`/api/policies/${id}/backtest`, { method: "POST" }),
+    () => {
+      throw new ApiError(409, "409 backtests need the live API");
+    },
+  );
+}
+
+/** Approve or reject a policy = that action on its POLICY work item; can() decides. */
+export function decidePolicy(workItemId: number, action: "approve" | "reject", reason?: string): Promise<{ state: string }> {
+  return call(
+    () =>
+      http<{ state: string }>(`/api/items/${workItemId}/actions/${action}`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      }),
+    () => {
+      throw new ApiError(409, "409 policies cannot be decided in fixtures mode");
+    },
+  );
+}
+
+/** POST /api/policies/onboard (controller): queue the learner over a year's history. */
+export function onboardPolicies(entityId: string, year = 2025): Promise<{ job_id: number; entity_id: string; year: number }> {
+  return call(
+    () =>
+      http<{ job_id: number; entity_id: string; year: number }>("/api/policies/onboard", {
+        method: "POST",
+        body: JSON.stringify({ entity_id: entityId, year }),
+      }),
+    () => {
+      throw new ApiError(409, "409 onboarding needs the live API");
+    },
   );
 }
