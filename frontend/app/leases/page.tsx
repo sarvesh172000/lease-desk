@@ -149,9 +149,9 @@ export default function LeasesPage() {
               <col className="w-40" />
               <col className="w-32" />
             </colgroup>
-            <thead>
+            <thead className="sticky top-0 z-10">
               {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="table-head">
+                <tr key={hg.id} className="table-head [&>th]:bg-sunken [&>th]:backdrop-blur-sm">
                   {hg.headers.map((h, i) => {
                     const num = (h.column.columnDef.meta as { num?: boolean } | undefined)?.num;
                     const sorted = h.column.getIsSorted();

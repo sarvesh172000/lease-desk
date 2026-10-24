@@ -8,9 +8,11 @@ import { ScheduleDiff } from "@/components/ScheduleDiff";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingBlock, Skeleton } from "@/components/ui/States";
-import { ApiError, approveException, getAllowedActions, getException, getSchedule, holdException } from "@/lib/api";
+import { ApiError, approveException, getAllowedActions, getException, getSchedule, performAction } from "@/lib/api";
 import { day, humanize, money, period, signedMoney, STATUS_LABEL } from "@/lib/format";
+import { journalTotals } from "@/lib/journal";
 import type { Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -257,16 +259,19 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
-const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold" };
+const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold", reject: "Reject" };
+const ACTION_DONE: Record<string, string> = { approve: "Approved", hold: "Held", reject: "Rejected", resume: "Resumed", close: "Closed" };
 
 function ActionBar({ ex }: { ex: ExceptionDetail }) {
   const qc = useQueryClient();
   const allowed = useQuery({ queryKey: ["allowed-actions", ex.exception_id], queryFn: () => getAllowedActions(ex.exception_id) });
   const [done, setDone] = useState<string | null>(null);
   const m = useMutation({
-    mutationFn: (action: ItemAction) => (action === "approve" ? approveException(ex.exception_id) : holdException(ex.exception_id)),
+    mutationFn: (action: ItemAction) =>
+      action === "approve" ? approveException(ex.exception_id) : performAction(ex.exception_id, action),
     onSuccess: (res, action) => {
-      setDone(`${action === "approve" ? "Approved" : "Held"} \u00b7 now ${STATUS_LABEL[res.status] ?? res.status}`);
+      setConfirming(null);
+      setDone(`${ACTION_DONE[action] ?? humanize(action)} \u00b7 now ${STATUS_LABEL[res.status] ?? res.status}`);
     },
     onSettled: () => {
       for (const k of ["exception", "exceptions", "leases", "audit", "allowed-actions"]) void qc.invalidateQueries({ queryKey: [k] });
@@ -274,6 +279,12 @@ function ActionBar({ ex }: { ex: ExceptionDetail }) {
   });
   const inv = ex.investigation;
   const blockApprove = !!inv && (!inv.balanced || !inv.explains_variance);
+  // Approve posts entries and Reject closes the item: both restate the money
+  // first. Hold only parks it, so it acts straight away.
+  const [confirming, setConfirming] = useState<ItemAction | null>(null);
+  const needsConfirming = (a: ItemAction) => a === "approve" || a === "reject";
+  const act = (a: ItemAction) => (needsConfirming(a) ? setConfirming(a) : m.mutate(a));
+  const totals = inv ? journalTotals(inv.entries) : null;
 
   return (
     <div className="sticky bottom-0 z-20 -mx-6 mt-1 border-t border-line bg-surface/92 px-6 py-3 backdrop-blur-md">
@@ -318,7 +329,7 @@ function ActionBar({ ex }: { ex: ExceptionDetail }) {
                 loading={m.isPending && m.variables === a}
                 disabled={m.isPending}
                 disabledReason={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
-                onClick={() => m.mutate(a)}
+                onClick={() => act(a)}
               >
                 {ACTION_LABEL[a] ?? humanize(a)}
               </Button>
@@ -330,6 +341,39 @@ function ActionBar({ ex }: { ex: ExceptionDetail }) {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={confirming === "reject" ? "Reject this charge?" : "Approve and post?"}
+        confirmLabel={confirming === "reject" ? "Reject" : "Approve"}
+        tone={confirming === "reject" ? "danger" : "primary"}
+        loading={m.isPending}
+        onConfirm={() => {
+          if (confirming) m.mutate(confirming);
+        }}
+      >
+        {confirming === "reject" ? (
+          <p>
+            This closes <span className="font-mono">{ex.exception_id}</span> against the billed{" "}
+            <span className="num font-semibold text-ink">{money(ex.actual)}</span>. Nothing posts to the ledger.
+          </p>
+        ) : totals && inv && inv.entries.length ? (
+          <p>
+            This posts <strong>{inv.entries.length} entries</strong> totalling{" "}
+            <span className="num font-semibold text-ink">{money(totals.debit)}</span> on each side, against a billed{" "}
+            <span className="num font-semibold text-ink">{money(ex.actual)}</span> and a variance of{" "}
+            <span className="num font-semibold text-ink">{signedMoney(ex.delta)}</span>.
+          </p>
+        ) : (
+          <p>
+            This accepts the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span> — a variance of{" "}
+            <span className="num font-semibold text-ink">{signedMoney(ex.delta)}</span> — with no proposed entries, so
+            nothing is posted to correct it.
+          </p>
+        )}
+        <p className="mt-2 text-ink-muted">Recorded in the audit trail under your name, and not reversible from this screen.</p>
+      </ConfirmDialog>
     </div>
   );
 }

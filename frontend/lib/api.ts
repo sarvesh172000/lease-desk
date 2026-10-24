@@ -220,12 +220,48 @@ export function approveException(id: string): Promise<ActionResult> {
   );
 }
 
-/** EXTENSION: POST /api/exceptions/{id}/hold — not in §16. */
-export function holdException(id: string): Promise<ActionResult> {
+/**
+ * Work states to the four statuses the exception screen knows.
+ *
+ * Mirrors STATUS_BY_STATE in the exceptions router. The item action route
+ * answers with the work state; §16's approve route already maps it.
+ */
+const STATUS_BY_STATE: Record<string, Status> = {
+  NEW: "exception",
+  PROPOSED: "pending_review",
+  NEEDS_INFO: "escalated",
+  HELD: "escalated",
+  APPROVED: "balanced",
+  POSTED: "balanced",
+  CLOSED: "balanced",
+  REJECTED: "balanced",
+};
+
+/**
+ * Any action other than approve: POST /api/items/{item_id}/actions/{action}.
+ *
+ * There is no /api/exceptions/{id}/hold — holding through that path 404s and
+ * leaves the button dead. The queue's own action route takes every human
+ * action the state machine has (hold, resume, reject, close), as the same
+ * `perform()` the approve route uses, so the answer allowed-actions gave the
+ * button is the answer the press gets.
+ */
+export function performAction(exceptionId: string, action: ItemAction): Promise<ActionResult> {
   return call(
-    () => http<ActionResult>(`/api/exceptions/${encodeURIComponent(id)}/hold`, { method: "POST" }),
-    () => fxAct(id, "hold"),
+    async () => {
+      const res = await http<{ state: string }>(
+        `/api/items/${encodeURIComponent(itemIdOf(exceptionId))}/actions/${encodeURIComponent(action)}`,
+        { method: "POST" },
+      );
+      return { exception_id: exceptionId, status: STATUS_BY_STATE[res.state] ?? "pending_review" };
+    },
+    () => fxAct(exceptionId, action),
   );
+}
+
+/** Hold, through the item action route. */
+export function holdException(id: string): Promise<ActionResult> {
+  return performAction(id, "hold");
 }
 
 /**
