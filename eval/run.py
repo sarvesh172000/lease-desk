@@ -82,21 +82,31 @@ def score_checking(key: dict) -> Section:
     company = build_company()
     leases = build_leases(company)
     rules = rules_from_terms(leases, company)
-    charges = charges_from_invoices(build_month(JANUARY, company, leases))
-    findings = check_month(charges, rules, JANUARY)
+    invoices = build_month(JANUARY, company, leases)
+    billed = [c for i in invoices for c in i.charges]
+    findings = check_month(charges_from_invoices(invoices), rules, JANUARY)
 
-    held = {(f.charge.clinic_id, f.charge.charge_type) for f in holds(findings)}
+    # Scored per charge, not per clinic: CLINIC-01 has two rent lines, and
+    # holding the genuine one while paying the duplicate is not a catch.
+    held = {f.charge.charge_id: f for f in holds(findings)}
     section = Section("checking")
     caught, missed, false_holds = [], [], []
+    citations: Dict[str, Dict] = {}
 
     for entry in key["errors"]:
-        hit = (entry["clinic_id"], entry["charge_type"]) in held
+        targets = _charges_for(entry, billed)
+        hits = [held[c.charge_id] for c in targets if c.charge_id in held]
         if entry["is_error"]:
-            (caught if hit else missed).append(entry["error_id"])
-            section.passed += hit
-            section.failed += not hit
+            (caught if hits else missed).append(entry["error_id"])
+            section.passed += bool(hits)
+            section.failed += not hits
+            if hits:
+                cited = hits[0].proof.section if hits[0].proof else None
+                citations[entry["error_id"]] = {
+                    "cited": cited, "expected": entry["lease_section"],
+                    "correct": cited == entry["lease_section"]}
         else:
-            if hit:
+            if hits:
                 false_holds.append(entry["error_id"])
                 section.failed += 1
             else:
@@ -111,6 +121,10 @@ def score_checking(key: dict) -> Section:
         "dollars_flagged": total_held(findings),
         "dollars_expected": key["totals"]["overbilled"],
         "dollars_match": total_held(findings) == key["totals"]["overbilled"],
+        # Reported, not scored yet: a hold citing the wrong clause still holds
+        # the right money, but the evidence shown to the manager is weaker.
+        "citations": citations,
+        "citations_correct": sum(c["correct"] for c in citations.values()),
     }
     if not section.detail["dollars_match"]:
         section.failed += 1
@@ -119,6 +133,18 @@ def score_checking(key: dict) -> Section:
     section.note = "%d/%d planted errors held, %d false holds" % (
         len(caught), key["totals"]["to_hold"], len(false_holds))
     return section
+
+
+def _charges_for(entry: dict, billed) -> list:
+    """The billed lines an answer-key entry is about. A planted error is the
+    line tagged with it. The correct-but-odd entry has no tag (it is the
+    absence of an error), so it is every untagged line for that clinic and
+    charge type."""
+    if entry["is_error"]:
+        return [c for c in billed if c.error_id == entry["error_id"]]
+    return [c for c in billed if c.error_id is None
+            and c.clinic_id == entry["clinic_id"]
+            and c.charge_type == entry["charge_type"]]
 
 
 def score_investigation(key: dict, llm_factory) -> Section:
@@ -388,6 +414,11 @@ def _print(report: dict, sections: List[Section]) -> None:
         print("  MISSED: %s" % ", ".join(d["missed"]))
     if d["false_holds"]:
         print("  FALSE HOLDS: %s" % ", ".join(d["false_holds"]))
+    print("  %d/%d holds cite the clause that proves them"
+          % (d["citations_correct"], len(d["citations"])))
+    for error_id, c in sorted(d["citations"].items()):
+        if not c["correct"]:
+            print("    %s cites %s, proof is %s" % (error_id, c["cited"], c["expected"]))
     print("=" * 68)
     print("  %s" % ("PASSED" if report["passed"] else "FAILED"))
 
