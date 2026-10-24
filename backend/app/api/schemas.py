@@ -86,6 +86,13 @@ class ExceptionDetail(BaseModel):
     investigation: Investigation
 
 
+# --- POST /api/exceptions/{id}/approve ----------------------------------------
+
+class ApproveResult(BaseModel):
+    """§16 #4 returns the new status, one of STATUSES."""
+    status: str
+
+
 # --- GET /api/leases/{id}/schedule (no fixture in §16) -------------------------
 
 class ScheduleRow(BaseModel):

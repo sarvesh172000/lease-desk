@@ -17,11 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from ..auth.deps import current_actor
 from ..work.events import verify_chain
-from .deps import get_engine, require_reader
+from .deps import get_engine
 from .schemas import AuditEvent, AuditTrail
 
-router = APIRouter(prefix="/api", tags=["audit"], dependencies=[Depends(require_reader)])
+router = APIRouter(prefix="/api", tags=["audit"], dependencies=[Depends(current_actor)])
 
 _COLUMNS = "seq, at, actor_id, action, subject_type, subject_id, allowed, reason"
 

@@ -2,26 +2,37 @@
 
     uvicorn app.main:app --reload            (from backend/, or via `make api`)
 
-It connects as `lease_api` only. The routes in docs/DESIGN.md §16 arrive with
-the work layer and the thin slice (A6–A8); for now it answers the two
-questions an orchestrator asks: is the process up, and can it reach its data.
+It serves as `lease_api`, and holds a `lease_gateway` engine only for the
+gateway calls an approval or a batch release makes (api/deps.py). Besides the
+routes in api/ and auth/, it answers the two questions an orchestrator asks:
+is the process up, and can it reach its data.
+
+CORS lets the Next.js dev server (LEASEDESK_CORS_ORIGINS, default
+http://localhost:3000) call it with the session cookie.
 """
 
+from typing import Optional
+
 from fastapi import FastAPI, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from .api import audit_router, documents_router, exceptions_router, leases_router
+from .api import ROUTERS
 from .auth.routes import router as auth_router
 from .db.engine import engine
+from .settings import Settings, get_settings
 
 
-def create_app() -> FastAPI:
+def create_app(settings: Optional[Settings] = None) -> FastAPI:
+    settings = settings or get_settings()
     app = FastAPI(title="Lease Desk", version="0.1.0")
+    if settings.cors_origins:
+        app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins),
+                           allow_credentials=True, allow_methods=["GET", "POST"],
+                           allow_headers=["Content-Type"])
     app.include_router(auth_router)
-    app.include_router(leases_router)
-    app.include_router(exceptions_router)
-    app.include_router(audit_router)
-    app.include_router(documents_router)
+    for router in ROUTERS:
+        app.include_router(router)
 
     @app.get("/health")
     def health() -> dict:

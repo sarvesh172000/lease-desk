@@ -13,7 +13,7 @@ import os
 import warnings
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict
+from typing import Dict, Tuple
 
 DB_ROLES = ("lease_agent", "lease_gateway", "lease_api", "lease_reader")
 
@@ -34,6 +34,8 @@ class Settings:
     demo_mode: bool
     session_secret: str = DEV_SESSION_SECRET
     cookie_secure: bool = False     # True behind HTTPS; browsers then refuse it over http
+    # Browser origins allowed to call the API with the session cookie (CORS).
+    cors_origins: Tuple[str, ...] = ("http://localhost:3000",)
 
     def db_url(self, role: str, database: str = "") -> str:
         """SQLAlchemy URL for one role. `role="owner"` is for migrations."""
@@ -45,6 +47,16 @@ class Settings:
             raise ValueError("unknown database role %r" % role)
         return "postgresql+psycopg://%s:%s@%s:%d/%s" % (
             user, password, self.db_host, self.db_port, database or self.db_name)
+
+
+def parse_origins(raw: str) -> Tuple[str, ...]:
+    """Comma-separated origins, blanks dropped. "*" is refused: a wildcard
+    cannot be combined with credentials, and the cookie is the whole point."""
+    origins = tuple(o.strip().rstrip("/") for o in raw.split(",") if o.strip())
+    if "*" in origins:
+        raise ValueError("LEASEDESK_CORS_ORIGINS cannot be '*' when cookies are sent; "
+                         "list the origins")
+    return origins
 
 
 @lru_cache(maxsize=1)
@@ -65,6 +77,7 @@ def get_settings() -> Settings:
         demo_mode=env("LEASEDESK_DEMO_MODE", "1") == "1",
         session_secret=env("LEASEDESK_SESSION_SECRET", DEV_SESSION_SECRET),
         cookie_secure=env("LEASEDESK_COOKIE_SECURE", "0") == "1",
+        cors_origins=parse_origins(env("LEASEDESK_CORS_ORIGINS", "http://localhost:3000")),
     )
     if settings.session_secret == DEV_SESSION_SECRET and not settings.demo_mode:
         warnings.warn(
