@@ -2,6 +2,7 @@
 
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+import eval.run as eval_run
+from app.agents.checker import APPROVE, HOLD, check_month
 from datagen.answer_key import build_answer_key, write
+from datagen.month import build_month
 from eval.run import main, score_checking, score_safety
 
 
@@ -52,15 +56,52 @@ def test_a_tampered_answer_key_makes_the_eval_fail(key):
     assert "E99" in section.detail["missed"]
 
 
-def test_a_false_hold_fails_the_eval(key):
-    """Flip the correct-but-odd charge to one the checker does hold."""
-    broken = json.loads(json.dumps(key))
-    odd = next(e for e in broken["errors"] if not e["is_error"])
-    odd["clinic_id"] = "CLINIC-03"          # a clinic that IS held
-    odd["charge_type"] = "base_rent"
-    section = score_checking(broken)
+def _checker_that(flip):
+    """The real checker, with its proposal flipped on the lines `flip` picks."""
+    def check(charges, rules, period):
+        findings = check_month(charges, rules, period)
+        for f in findings:
+            if flip(f.charge):
+                f.proposal = APPROVE if f.is_hold else HOLD
+        return findings
+    return check
+
+
+def test_a_false_hold_fails_the_eval(key, monkeypatch):
+    """Make the checker hold CLINIC-04's $400 step, which is correct."""
+    monkeypatch.setattr(eval_run, "check_month", _checker_that(
+        lambda c: c.clinic_id == "CLINIC-04" and c.charge_type == "base_rent"))
+    section = score_checking(key)
     assert not section.ok
-    assert odd["error_id"] in section.detail["false_holds"]
+    assert section.detail["false_holds"] == ["E6"]
+
+
+def test_holding_the_right_clinic_on_the_wrong_line_is_not_a_catch(key, monkeypatch):
+    """CLINIC-01 has two rent lines. Holding the genuine one and paying the
+    duplicate must score E2 as missed, not caught."""
+    monkeypatch.setattr(eval_run, "check_month", _checker_that(
+        lambda c: c.clinic_id == "CLINIC-01" and c.charge_type == "base_rent"))
+    section = score_checking(key)
+    assert not section.ok
+    assert section.detail["missed"] == ["E2"]
+
+
+def test_charge_ids_are_unique():
+    """E3's stray Suite 118 line shares an invoice and charge type with
+    CLINIC-02's real rent. Ingestion and per-charge scoring key on the id."""
+    ids = [c.charge_id for i in build_month(date(2026, 1, 1)) for c in i.charges]
+    assert len(ids) == len(set(ids))
+
+
+def test_citations_are_reported_per_caught_error(key):
+    """Known gap, pinned so a fix shows up: the escalation errors E4 and E5
+    cite the initial-rent clause 3.1 instead of the escalation clause 3.3."""
+    section = score_checking(key)
+    citations = section.detail["citations"]
+    assert set(citations) == {"E1", "E2", "E3", "E4", "E5"}
+    assert [e for e, c in sorted(citations.items()) if not c["correct"]] == ["E4", "E5"]
+    assert section.detail["citations_correct"] == 3
+    assert section.ok, "a weak citation is reported, not yet failed"
 
 
 def test_end_to_end_run_writes_a_report(tmp_path):

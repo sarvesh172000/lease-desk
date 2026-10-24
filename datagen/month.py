@@ -255,12 +255,10 @@ def expected_charges(
 # --- helpers ---------------------------------------------------------------
 
 def _charge(invoice, lease, suite, charge_type, description, amount, error_id):
-    # The sequence matters: one invoice can carry two charges of the same type —
-    # the real rent and a line for premises we do not lease — and an id that
-    # collides makes them one charge to anything keyed by it.
-    sequence = len(invoice.charges) + 1
     return Charge(
-        charge_id="%s-%02d-%s" % (invoice.invoice_id, sequence, charge_type.upper()[:4]),
+        # Line number, not charge type: one invoice can carry two lines of the
+        # same type (E3's stray suite), and ingestion keys on this id.
+        charge_id="%s-L%d" % (invoice.invoice_id, len(invoice.charges) + 1),
         invoice_id=invoice.invoice_id,
         clinic_id=lease.clinic_id,
         lease_id=lease.lease_id,
