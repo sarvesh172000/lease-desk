@@ -67,6 +67,11 @@ class Desk:
     def end(self, sender: str) -> None:
         self.conversations.pop(sender, None)
 
+    def _delegates(self) -> bool:
+        """True when the API is the specialist agents (remote.RemoteDesk), which
+        record their own steps on the live feed."""
+        return getattr(self.api, "delegates", False)
+
     def handle(self, sender: str, text: str, progress: Optional[Callable[[str], None]] = None) -> str:
         """The reply to one message. `progress` gets interim lines for a long step
         (the investigation), so the chat shows work happening."""
@@ -161,10 +166,20 @@ class Desk:
         remeasured: Optional[Dict[str, Any]] = None
         complete: Optional[Dict[str, Any]] = None
         errors: List[str] = []
-        for frame in self.api.investigate(exc_id):
+        delegated = self._delegates()
+        if delegated:
+            # The investigation agent records its own frames as they stream;
+            # here they arrive all at once when it is done.
+            if progress:
+                progress("🔎 Handed to the Investigation agent: it's searching the mailbox…")
+            frames = self.api.investigate(exc_id, run_id=run.run_id)
+        else:
+            frames = self.api.investigate(exc_id)
+        for frame in frames:
             stage = frame.get("stage")
-            run.say("investigation", stage or "frame", _frame_line(frame), exc_id)
-            if stage == "searching" and progress:
+            if not delegated:
+                run.say("investigation", stage or "frame", frame_line(frame), exc_id)
+            if stage == "searching" and progress and not delegated:
                 progress("🔎 %s" % frame.get("message", "Searching the mailbox…"))
             elif stage == "found":
                 found.append(frame)
@@ -221,11 +236,16 @@ class Desk:
         if p is None:
             return "Nothing is waiting on a yes. " + _short_help()
         act = self.api.approve if p["action"] == "approve" else self.api.hold
-        result = act(p["exception_id"], p.get("reason"))
-        who = (self.api.actor or {}).get("name", "you")
         done = "Approved" if p["action"] == "approve" else "Put on hold"
-        run.say("coordinator", "action", "%s by %s: %s" % (done, who, result.get("state")), p["exception_id"])
-        self.live.status(p["item"], result.get("status") or "", who)
+        if self._delegates():
+            # The approvals agent records the action and the new status itself.
+            result = act(p["exception_id"], p.get("reason"), run_id=run.run_id, item=p["item"])
+            who = (self.api.actor or {}).get("name", "you")
+        else:
+            result = act(p["exception_id"], p.get("reason"))
+            who = (self.api.actor or {}).get("name", "you")
+            run.say("coordinator", "action", "%s by %s: %s" % (done, who, result.get("state")), p["exception_id"])
+            self.live.status(p["item"], result.get("status") or "", who)
         return "✅ %s %s as %s. Work state: **%s**.%s It's on the audit trail." % (
             done, p["exception_id"], who, result.get("state"), _posting(result.get("posting")))
 
@@ -261,7 +281,7 @@ def _clip(s: str, n: int = 280) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
-def _frame_line(f: Dict[str, Any]) -> str:
+def frame_line(f: Dict[str, Any]) -> str:
     """One investigation frame as a line on the live feed."""
     stage = f.get("stage")
     if stage == "found":

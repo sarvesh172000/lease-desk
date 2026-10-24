@@ -59,7 +59,7 @@ LeaseDesk Coordinator  ── asi1 model: work out what the user wants, plan the
                                                         (mailbox search, trust.py, remeasure)
 ```
 
-- **Coordinator** (`fetch/coordinator.py`): uses the ASI:One LLM
+- **Coordinator** (`fetch/agents.py`, run by `python -m fetch.run`): uses the ASI:One LLM
   (`https://api.asi1.ai/v1`, model `asi1`, OpenAI-compatible client) for
   intent and planning, which is the ASI:One usage the "Use of Fetch.ai" score
   looks for. It never computes money; it calls the other agents and relays
