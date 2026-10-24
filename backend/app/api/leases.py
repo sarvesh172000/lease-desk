@@ -70,7 +70,12 @@ def list_leases(
     data_dir: Path = Depends(get_data_dir),
     business_date: date = Depends(get_business_date),
 ) -> List[LeaseSummary]:
-    when = as_of or business_date
+    return portfolio(eng, data_dir, as_of or business_date)
+
+
+def portfolio(eng: Engine, data_dir: Path, when: date) -> List[LeaseSummary]:
+    """Every lease as of `when`, its numbers from the engine. Shared with
+    GET /api/summary, so the dashboard's liability is this list's sum."""
     with eng.connect() as conn:
         leases = conn.execute(text(_LEASES)).mappings().all()
         held = {e["lease_id"] for e in open_exceptions(conn) if e["status"] != "balanced"}
@@ -121,8 +126,9 @@ def lease_schedule(
         raise HTTPException(404, "no terms on file for %s" % lease_id)
 
     numbers = [1] + [v.number for v in later]
+    active = active_version(later, business_date)
     if version is None:
-        version = active_version(later, business_date)
+        version = active
     elif version not in numbers:
         raise HTTPException(404, "%s has no version %d (it has %s)"
                             % (lease_id, version, ", ".join(map(str, numbers))))
@@ -136,6 +142,7 @@ def lease_schedule(
         lease_id=lease_id, version=version, versions=numbers,
         effective_from=chosen.effective_from if chosen else lease.commencement,
         confirmed=chosen.confirmed if chosen else True,
+        active=version == active,
         discount_rate=lease.discount_rate,
         opening_liability=schedule.opening_liability,
         opening_rou=schedule.opening_rou,

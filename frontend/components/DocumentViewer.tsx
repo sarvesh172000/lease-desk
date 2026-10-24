@@ -1,9 +1,9 @@
 "use client";
 
-import { documentUrl, getDocumentPages } from "@/lib/api";
+import { documentNeedsCredentials, documentUrl } from "@/lib/api";
 import { isValidBox } from "@/lib/bbox";
+import { useDocumentPages } from "@/lib/hooks";
 import type { Box } from "@/lib/types";
-import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useState, type ReactNode } from "react";
 import { Skeleton } from "./ui/States";
@@ -50,12 +50,8 @@ export function DocumentViewer({
   toolbar?: ReactNode;
 }) {
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const pages = useQuery({
-    queryKey: ["document-pages", docId],
-    queryFn: () => getDocumentPages(docId!),
-    enabled: !!docId,
-    retry: false,
-  });
+  const pages = useDocumentPages(docId);
+  const withCredentials = documentNeedsCredentials();
   const pageNo = page ?? 1;
   const size = pages.data?.pages.find((p) => p.page === pageNo) ?? null;
   const validBox = isValidBox(box) ? box : null;
@@ -65,7 +61,7 @@ export function DocumentViewer({
     body = <Fallback reason="No document is attached to this side yet." text={fallbackText} />;
   } else if (pages.isError && !pdfError) {
     // page sizes unavailable: still try the PDF, which knows its own size
-    body = <PdfPage url={documentUrl(docId)} page={pageNo} box={validBox} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />;
+    body = <PdfPage url={documentUrl(docId)} withCredentials={withCredentials} page={pageNo} box={validBox} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />;
   } else if (pdfError) {
     body = <Fallback reason={`Document ${docId} could not be opened (${pdfError}).`} text={fallbackText} />;
   } else if (pages.isLoading) {
@@ -77,7 +73,7 @@ export function DocumentViewer({
     );
   } else {
     body = (
-      <PdfPage url={documentUrl(docId)} page={pageNo} box={validBox} pageSize={size} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />
+      <PdfPage url={documentUrl(docId)} withCredentials={withCredentials} page={pageNo} box={validBox} pageSize={size} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />
     );
   }
 

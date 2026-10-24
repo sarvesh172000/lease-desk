@@ -3,11 +3,10 @@
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
-import { getLeases } from "@/lib/api";
 import { day, money, STATUS_LABEL } from "@/lib/format";
+import { useLeases } from "@/lib/hooks";
 import type { LeaseSummary, Status } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import {
   createColumnHelper,
   flexRender,
@@ -56,7 +55,7 @@ const columns = [
 ];
 
 export default function LeasesPage() {
-  const q = useQuery({ queryKey: ["leases"], queryFn: getLeases });
+  const q = useLeases();
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
   const [filters, setFilters] = useState<ColumnFiltersState>([]);

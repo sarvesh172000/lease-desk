@@ -73,6 +73,31 @@ post:              ## M=2026-01: post every APPROVED charge check of the month (
 dev-passwords:     ## give every seeded person the password `demo` (as lease_gateway)
 	$(PY) -m app.auth.passwords set-dev-passwords
 
+# The judge-ready local stack (A8; not part of the frozen list). Point it at a
+# database of its own so it never touches your working one, e.g.
+#
+#   LEASEDESK_DB_PORT=5432 LEASEDESK_DB_NAME=leasedesk_demo make demo
+#
+# demo-data creates the database if missing, migrates, seeds, sets the dev
+# passwords and runs January; all of it is idempotent, so running it again
+# changes nothing. demo then serves the API on :8000 and the web app on :3000
+# (live mode against the API) until Ctrl-C, which stops both.
+.PHONY: demo demo-data
+DEMO_MONTH ?= 2026-01
+
+demo-data:         ## database (created if missing), migrate, seed, dev passwords, run DEMO_MONTH
+	$(PY) -m app.db.ensure_database
+	$(MAKE) migrate seed dev-passwords
+	$(MAKE) run-month M=$(DEMO_MONTH)
+
+demo: demo-data    ## demo-data, then the API on :8000 and the web app on :3000 until Ctrl-C
+	@test -d frontend/node_modules || (cd frontend && npm ci)
+	@echo "Lease Desk: http://localhost:3000  (sign in as dana.whitfield@northbaypt.example / demo)"
+	@trap 'kill 0' INT TERM EXIT; \
+	  (cd backend && $(PY) -m uvicorn app.main:app --port 8000) & \
+	  (cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev) & \
+	  wait
+
 # Developer tooling (not part of the frozen list).
 .PHONY: lint ci
 

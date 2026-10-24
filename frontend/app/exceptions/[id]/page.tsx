@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckerFindingCard } from "@/components/CheckerFindingCard";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { ConfidenceMeter, EvidenceCard } from "@/components/EvidenceCard";
 import { InvestigationTimeline } from "@/components/InvestigationTimeline";
@@ -9,11 +10,12 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock, Skeleton } from "@/components/ui/States";
-import { ApiError, approveException, getAllowedActions, getException, getSchedule, holdException } from "@/lib/api";
+import { WorkStateBadge } from "@/components/WorkStateBadge";
+import { ApiError } from "@/lib/api";
 import { day, humanize, money, period, signedMoney, STATUS_LABEL } from "@/lib/format";
-import type { Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
+import { useAllowedActions, useException, useExceptionAction, useSchedule } from "@/lib/hooks";
+import type { ActionResult, Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -21,7 +23,7 @@ import { useState } from "react";
 export default function ExceptionPage() {
   const { id } = useParams<{ id: string }>();
   const exceptionId = decodeURIComponent(id);
-  const q = useQuery({ queryKey: ["exception", exceptionId], queryFn: () => getException(exceptionId) });
+  const q = useException(exceptionId);
 
   if (q.isLoading) return <MoneyScreenSkeleton />;
   if (q.isError) {
@@ -53,8 +55,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   const [remeasured, setRemeasured] = useState<Extract<InvestigationEvent, { stage: "remeasured" }> | null>(null);
   const hasEntries = !!inv?.entries.length;
 
-  const before = useQuery({ queryKey: ["schedule", ex.lease_id, 1], queryFn: () => getSchedule(ex.lease_id, 1), enabled: hasEntries, retry: false });
-  const after = useQuery({ queryKey: ["schedule", ex.lease_id, 2], queryFn: () => getSchedule(ex.lease_id, 2), enabled: hasEntries, retry: false });
+  const before = useSchedule(ex.lease_id, 1, hasEntries);
+  const after = useSchedule(ex.lease_id, 2, hasEntries);
 
   // right-hand pane: each evidence document, then the lease clause
   type Source = { key: string; tab: string; eyebrow: string; title: string; docId: string; page: number; box: Box; text: string };
@@ -73,7 +75,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
       ? [{
           key: "lease",
           tab: "Lease clause",
-          eyebrow: "Lease · what the schedule expects",
+          eyebrow: "Lease · what the lease supports",
           title: ex.lease_citation.label,
           docId: ex.lease_citation.doc_id,
           page: ex.lease_citation.page,
@@ -96,6 +98,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               {ex.charge_type ? humanize(ex.charge_type) : "Variance"} · {period(ex.period)}
             </h1>
             <StatusBadge status={ex.status} size="lg" />
+            {ex.state ? <WorkStateBadge state={ex.state} /> : null}
           </div>
           <p className="mt-0.5 text-ink-muted">
             <Link href={`/leases/${encodeURIComponent(ex.lease_id)}`} className="hover:text-accent hover:underline">
@@ -109,8 +112,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
 
       {/* the calculation */}
       <div className="grid grid-cols-[1fr_1fr_1fr_1.4fr] overflow-hidden rounded-md border border-line bg-surface shadow-card">
-        <Figure label="Expected · schedule" value={money(ex.expected)} />
-        <Figure label="Actual · received" value={money(ex.actual)} />
+        <Figure label="Expected · lease supports" value={money(ex.expected)} />
+        <Figure label="Actual · billed" value={money(ex.actual)} />
         <Figure label="Variance" value={signedMoney(ex.delta)} tone={ex.delta === 0 ? undefined : "bad"} />
         <div className="border-l border-line px-5 py-3.5">
           <div className="eyebrow">Explanation</div>
@@ -123,6 +126,16 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                 </div>
               </div>
               <ConfidenceMeter value={inv.confidence} />
+            </div>
+          ) : ex.reason ? (
+            <div className="mt-1.5">
+              <div className="font-semibold">
+                {humanize(ex.rule)} · checker proposes{" "}
+                <span className={ex.proposal === "hold" ? "text-bad" : "text-ok"}>{ex.proposal ?? "—"}</span>
+              </div>
+              <div className="line-clamp-2 text-sm text-ink-soft" title={ex.reason}>
+                {ex.reason}
+              </div>
             </div>
           ) : (
             <div className="mt-1.5 text-ink-muted">No investigation on record yet.</div>
@@ -193,6 +206,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                 onSelect={() => setSourceKey(`ev${i}`)}
               />
             ))
+          ) : ex.reason || ex.lease_citation ? (
+            <CheckerFindingCard ex={ex} selected={source?.key === "lease"} onSelect={() => setSourceKey("lease")} />
           ) : (
             <EmptyState title="No evidence attached.">
               {inv ? "The investigation found nothing that explains this variance." : "Run the investigation to search the document corpus."}
@@ -209,12 +224,18 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
         <div className="space-y-5">
           <Card>
             <CardHeader
-              eyebrow="Proposed · not posted"
+              eyebrow={inv ? "Proposed · not posted" : "Adjusting entries"}
               title="Journal entries"
               actions={inv ? <span className="text-sm text-ink-muted">{inv.entries.length} lines</span> : null}
             />
             <CardBody>
-              <JournalEntryTable entries={inv?.entries ?? []} balanced={inv?.balanced} />
+              {inv ? (
+                <JournalEntryTable entries={inv.entries} balanced={inv.balanced} />
+              ) : (
+                <EmptyState title="No entries proposed.">
+                  A charge check proposes no adjusting entries. Approving it posts the billed charge to the ledger through the gateway (Dr lease cost, Cr accounts payable).
+                </EmptyState>
+              )}
             </CardBody>
           </Card>
           <Card>
@@ -226,7 +247,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                     diff={{
                       ...inv,
                       liability_delta: inv.liability_delta ?? remeasured?.liability_delta,
-                      rou_delta: inv.rou_delta ?? remeasured?.rou_delta,
+                      rou_delta: inv.rou_delta ?? remeasured?.rou_delta ?? undefined,
                     }}
                     before={before.data}
                     after={after.data}
@@ -256,46 +277,53 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
-const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold" };
+const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold", resume: "Resume", reject: "Reject" };
+// The money screen offers sign-off and hold; the rest of the queue's actions live elsewhere.
+const SCREEN_ACTIONS = new Set(["approve", "hold"]);
+
+function outcome(action: ItemAction, res: ActionResult): string {
+  const did = action === "approve" ? "Approved" : "Held";
+  const state = res.state ? ` · ${res.state}` : ` · now ${STATUS_LABEL[res.status] ?? res.status}`;
+  if (res.posting?.status === "posted") return `${did} · posted to the ledger (journal entry #${res.posting.journal_entry_id})${state}`;
+  if (res.posting?.status === "pending") return `${did} · posting pending${res.posting.error ? ` (${res.posting.error})` : ""}${state}`;
+  return `${did}${state}`;
+}
 
 function Actions({ ex }: { ex: ExceptionDetail }) {
-  const qc = useQueryClient();
-  const allowed = useQuery({ queryKey: ["allowed-actions", ex.exception_id], queryFn: () => getAllowedActions(ex.exception_id) });
+  const allowed = useAllowedActions(ex.exception_id);
+  const m = useExceptionAction(ex.exception_id);
   const [done, setDone] = useState<string | null>(null);
-  const m = useMutation({
-    mutationFn: (action: ItemAction) => (action === "approve" ? approveException(ex.exception_id) : holdException(ex.exception_id)),
-    onSuccess: (res, action) => {
-      setDone(`${action === "approve" ? "Approved" : "Held"} · now ${STATUS_LABEL[res.status] ?? res.status}`);
-    },
-    onSettled: () => {
-      for (const k of ["exception", "exceptions", "leases", "audit", "allowed-actions"]) void qc.invalidateQueries({ queryKey: [k] });
-    },
-  });
+  const actions = (allowed.data?.actions ?? []).filter((a) => SCREEN_ACTIONS.has(a));
   const blockApprove = !!ex.investigation && (!ex.investigation.balanced || !ex.investigation.explains_variance);
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1.5 pt-5">
+    <div className="flex shrink-0 flex-col items-end gap-1.5 pt-5" data-testid="actions">
       <div className="flex items-center gap-2">
         {allowed.isLoading ? (
           <Skeleton className="h-11 w-56" />
         ) : allowed.isError ? (
           <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
-        ) : allowed.data?.actions.length ? (
-          allowed.data.actions.map((a) => (
+        ) : actions.length ? (
+          actions.map((a) => (
             <Button
               key={a}
               size="lg"
               variant={a === "approve" ? "primary" : "secondary"}
               disabled={m.isPending || (a === "approve" && blockApprove)}
-              onClick={() => m.mutate(a)}
+              onClick={() =>
+                m.mutate(a, {
+                  onSuccess: (res) => setDone(outcome(a, res)),
+                  onError: () => setDone(null),
+                })
+              }
               title={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
             >
               {m.isPending && m.variables === a ? "Working…" : ACTION_LABEL[a] ?? humanize(a)}
             </Button>
           ))
         ) : (
-          <span className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
-            {ex.status === "balanced" ? "Approved — nothing to do" : "No actions available to your role"}
+          <span data-testid="no-actions" className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
+            {ex.status === "balanced" ? `${ex.state ? humanize(ex.state.toLowerCase()) : "Approved"} — nothing to do` : "No actions available to your role"}
           </span>
         )}
       </div>
@@ -304,11 +332,11 @@ function Actions({ ex }: { ex: ExceptionDetail }) {
           {(m.error as Error).message}
         </span>
       ) : done ? (
-        <span role="status" className="text-sm font-medium text-ok">
+        <span role="status" data-testid="action-result" className="text-sm font-medium text-ok">
           {done}
         </span>
       ) : (
-        <span className="text-xs text-ink-muted">Approval is recorded in the audit trail.</span>
+        <span className="text-xs text-ink-muted">Every action, allowed or refused, is recorded in the audit trail.</span>
       )}
     </div>
   );

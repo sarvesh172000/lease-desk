@@ -50,7 +50,7 @@ def test_pages_reports_count_and_size_in_points(client, lease_sha, generated):
     body = client.get("/api/documents/%s/pages" % lease_sha).json()
     with pymupdf.open(LocalStorage(generated / "documents")._path(lease_sha)) as doc:
         assert body["page_count"] == doc.page_count == 8
-        assert body["pages"][0] == {"number": 1, "width": round(doc[0].rect.width, 2),
+        assert body["pages"][0] == {"number": 1, "page": 1, "width": round(doc[0].rect.width, 2),
                                     "height": round(doc[0].rect.height, 2)}
     assert body["sha256"] == lease_sha
     assert [p["number"] for p in body["pages"]] == list(range(1, 9))

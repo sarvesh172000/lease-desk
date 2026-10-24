@@ -85,6 +85,8 @@ export interface InvoiceLine extends DocCitation {
 export interface LeaseCitation extends DocCitation {
   label: string;
   quote: string;
+  /** How well the cited quote matched the printed words (docs.citations), 0..1. */
+  match_score?: number | null;
 }
 
 /** GET /api/exceptions/{id} — the money screen. */
@@ -98,26 +100,61 @@ export interface ExceptionDetail {
   status: Status;
   investigation: Investigation | null;
   /** EXTENSION (present on the list shape, absent from the §16 detail shape). */
-  clinic_id?: string;
-  charge_type?: string;
-  /** EXTENSION */
-  invoice_line?: InvoiceLine;
-  /** EXTENSION */
-  lease_citation?: LeaseCitation;
+  clinic_id?: string | null;
+  charge_type?: string | null;
+  /** EXTENSION: null when the billed line cannot be located on the invoice (never a made-up box). */
+  invoice_line?: InvoiceLine | null;
+  /** EXTENSION: null when the cited clause cannot be located on the lease. */
+  lease_citation?: LeaseCitation | null;
+  /** EXTENSION: the work item behind `exc_<item_id>`. */
+  item_id?: number | null;
+  /** EXTENSION: the work state behind `status` (PROPOSED, HELD, APPROVED, POSTED, ...). */
+  state?: string | null;
+  /** EXTENSION: what the checker proposed ("hold" | "approve"), why in words, and the rule. */
+  proposal?: string | null;
+  reason?: string | null;
+  rule?: string | null;
+  confidence?: number | null;
+}
+
+/** EXTENSION: what the gateway did after an approval. */
+export interface Posting {
+  status: "posted" | "pending";
+  journal_entry_id?: number | null;
+  error?: string | null;
 }
 
 /** POST /api/exceptions/{id}/approve (and EXTENSION /hold) */
 export interface ActionResult {
   exception_id: string;
   status: Status;
+  /** EXTENSION: the work state after the action (APPROVED, POSTED, HELD). */
+  state?: string | null;
+  /** EXTENSION: present after approving a postable charge. */
+  posting?: Posting | null;
 }
 
-/** SSE events from POST /api/exceptions/{id}/investigate */
+/**
+ * SSE events from POST /api/exceptions/{id}/investigate. The live API adds
+ * `not_found` and a few fields to the §16 four; `confidence`, `doc_id` and
+ * `balanced` are null where nothing on record says (a charge check states no
+ * confidence and proposes no entries).
+ */
 export type InvestigationEvent =
   | { stage: "searching"; message: string }
-  | { stage: "found"; doc_id: string; quote: string; confidence: number }
-  | { stage: "remeasured"; liability_delta: number; rou_delta: number }
-  | { stage: "complete"; entries: number; balanced: boolean };
+  | {
+      stage: "found";
+      doc_id: string | null;
+      quote: string;
+      confidence: number | null;
+      source?: string | null;
+      trust_rank?: number | null;
+      page?: number | null;
+      box?: Box | null;
+    }
+  | { stage: "not_found"; message: string }
+  | { stage: "remeasured"; liability_delta: number; rou_delta: number | null }
+  | { stage: "complete"; entries: number; balanced: boolean | null; message?: string };
 
 /** EXTENSION shape for GET /api/leases/{id}/schedule?version= (§16 says only "Schedule rows"). */
 export interface ScheduleRow {
@@ -138,6 +175,9 @@ export interface Schedule {
   version: number;
   effective_from: string;
   active: boolean;
+  /** EXTENSION (live API): every version the lease has, and whether this one is confirmed by a person. */
+  versions?: number[];
+  confirmed?: boolean;
   opening_liability: number;
   opening_rou: number;
   rows: ScheduleRow[];
@@ -165,6 +205,7 @@ export interface AuditResponse {
   chain_verified: boolean;
   /** EXTENSION: first broken sequence number when chain_verified is false. */
   broken_at?: number | null;
+  broken_seq?: number | null;
 }
 
 /** EXTENSION: GET /api/documents/{sha}/pages (§16 names the endpoint; this is the assumed shape). */
@@ -196,4 +237,29 @@ export type ItemAction = "approve" | "hold" | string;
 
 export interface AllowedActions {
   actions: ItemAction[];
+}
+
+/** EXTENSION: GET /api/summary — the dashboard tiles, summed by the API. */
+export interface Summary {
+  as_of: string;
+  active_leases: number;
+  open_exceptions: number;
+  pending_review: number;
+  /** Over-bills held: positive variances of open holds only. */
+  held_total: number;
+  held_count: number;
+  portfolio_liability: number;
+}
+
+/** EXTENSION: one charge check (GET /api/items?kind=CHARGE_CHECK), keyed for the money screen. */
+export interface ChargeCheck {
+  exception_id: string;
+  item_id: number | null;
+  state: string;
+  title: string;
+  clinic_id: string | null;
+  period: string | null;
+  amount: number | null;
+  proposal: string | null;
+  reason: string | null;
 }
