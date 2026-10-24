@@ -1,0 +1,35 @@
+{
+  "lease_id": "STORE-14",
+  "location": "Store 14 - Daly City, CA",
+  "lessor": "Serramonte Retail Partners LLC",
+  "commencement": "2024-01-01",
+  "end": "2028-12-31",
+  "discount_rate": 0.072,
+  "classification": "operating",
+  "prepaid": 0.0,
+  "incentives": 0.0,
+  "steps": [
+    { "start": "2024-01-01", "end": "2024-12-31", "monthly_rent": 18500.0 },
+    { "start": "2025-01-01", "end": "2025-12-31", "monthly_rent": 19055.0 },
+    { "start": "2026-01-01", "end": "2026-12-31", "monthly_rent": 19626.65 },
+    { "start": "2027-01-01", "end": "2027-12-31", "monthly_rent": 20215.45 },
+    { "start": "2028-01-01", "end": "2028-12-31", "monthly_rent": 20821.91 }
+  ],
+  "amendments": [
+    {
+      "amendment_id": "STORE-14-A2",
+      "effective": "2026-07-01",
+      "source": "inbox/2026-06-18-serramonte-amendment.eml",
+      "summary": "Second Amendment: term extended three years to 2031-12-31, rent reduced to $17,400/mo with 2.5% annual escalation, in exchange for the extension.",
+      "new_end": "2031-12-31",
+      "new_steps": [
+        { "start": "2026-07-01", "end": "2027-06-30", "monthly_rent": 17400.0 },
+        { "start": "2027-07-01", "end": "2028-06-30", "monthly_rent": 17835.0 },
+        { "start": "2028-07-01", "end": "2029-06-30", "monthly_rent": 18280.88 },
+        { "start": "2029-07-01", "end": "2030-06-30", "monthly_rent": 18737.90 },
+        { "start": "2030-07-01", "end": "2031-06-30", "monthly_rent": 19206.35 },
+        { "start": "2031-07-01", "end": "2031-12-31", "monthly_rent": 19686.51 }
+      ]
+    }
+  ]
+}
