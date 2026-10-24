@@ -46,8 +46,10 @@ export default function PdfPage({ url, page, box, pageSize, tone = "cited", labe
     const wrap = wrapRef.current;
     if (!rendered || !box || !size || !sc || !wrap) return;
     const px = scaleBox(box, size, wrap.clientWidth);
-    sc.scrollTop = Math.max(0, px.top - sc.clientHeight / 3);
-    sc.scrollLeft = Math.max(0, px.left + px.width / 2 - sc.clientWidth / 2);
+    // keep the page header in view when the box already fits; otherwise centre it
+    const fits = px.top + px.height + 48 <= sc.clientHeight;
+    sc.scrollTop = fits ? 0 : Math.max(0, px.top - sc.clientHeight / 3);
+    sc.scrollLeft = zoom === 1 ? 0 : Math.max(0, px.left + px.width / 2 - sc.clientWidth / 2);
   }, [rendered, box, size, zoom]);
 
   const color = tone === "billed" ? "border-bad bg-bad/10" : "border-mark bg-mark/20";
