@@ -111,8 +111,7 @@ def build_month(
 
         # Base rent: the lease amount unless an error overrides it.
         rent = lease.rent_for(period)
-        rent_error = _find(planted, "base_rent", override_kinds=(
-            "escalation_applied_early", "escalation_compounded_too_often"))
+        rent_error = _find(planted, "base_rent")
         if rent_error:
             rent = rent_error.billed
         invoice.charges.append(_charge(
@@ -122,8 +121,7 @@ def build_month(
 
         # Operating expense estimate.
         cam = lease.cam_estimate_monthly
-        cam_error = _find(planted, "cam_estimate",
-                          override_kinds=("cam_estimate_above_lease",))
+        cam_error = _find(planted, "cam_estimate")
         if cam_error:
             cam = cam_error.billed
         invoice.charges.append(_charge(
@@ -272,10 +270,25 @@ def _charge(invoice, lease, suite, charge_type, description, amount, error_id):
     )
 
 
-def _find(planted, charge_type, override_kinds):
+# Handled by their own branch below, not by overriding an existing line.
+_STRUCTURAL = ("charge_for_unleased_suite", "duplicate_rent_invoice")
+
+
+def _find(planted, charge_type):
+    """The error that changes this charge's amount, if any.
+
+    Matches on charge type rather than on a list of kinds, so an error type
+    added to the catalog applies without this function having to learn it.
+    """
     for err in planted:
-        if err.charge_type == charge_type and err.kind in override_kinds:
-            return err
+        if err.charge_type != charge_type or err.kind in _STRUCTURAL:
+            continue
+        # A correct-but-odd charge overrides nothing and must stay untagged:
+        # the eval identifies it as the untagged line for that clinic and type,
+        # and tagging it would make it look like a planted error.
+        if not err.is_error:
+            continue
+        return err
     return None
 
 
