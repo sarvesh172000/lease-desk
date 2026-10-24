@@ -483,6 +483,57 @@ Build in this order. The first four are the demo.
 | 8 | `POST` | `/api/ingest/payment` | Match result | Live payment demo |
 | 9 | `POST` | `/api/ingest/document` | Extracted terms | Live upload demo |
 
+### The contract — freeze this first
+
+**Person B builds every screen against these fixtures. Person A makes the API
+return this shape. Neither waits for the other.** Values below are real output
+from `datagen`, so the fixtures and the live API agree.
+
+`GET /api/leases`
+
+```json
+[{"lease_id": "LEASE-01", "clinic_id": "CLINIC-01",
+  "location": "Northbay PT — Daly City — Suite 210",
+  "lessor": "Serramonte Retail Partners LLC",
+  "status": "exception", "monthly_rent": 19626.65,
+  "liability": 559665.35, "end": "2028-12-31"}]
+```
+
+`GET /api/exceptions`
+
+```json
+[{"exception_id": "exc_01_jan_cam", "lease_id": "LEASE-01",
+  "clinic_id": "CLINIC-01", "period": "2026-01-01",
+  "charge_type": "cam_estimate", "expected": 5941.67, "actual": 6458.33,
+  "delta": 516.66, "status": "pending_review", "confidence": 0.94}]
+```
+
+`GET /api/exceptions/{id}` — the money screen. Status is one of
+`balanced`, `exception`, `pending_review`, `escalated`.
+
+```json
+{"exception_id": "exc_01_jul_amendment", "lease_id": "LEASE-01",
+ "period": "2026-07-01", "expected": 19626.65, "actual": 17400.00,
+ "delta": -2226.65, "status": "pending_review",
+ "investigation": {
+   "root_cause": "amendment", "confidence": 0.94, "explains_variance": true,
+   "evidence": [{"doc_id": "eml_20260618", "date": "2026-06-18",
+     "source": "dana.reyes@serramonteretail.example", "trust_rank": 1,
+     "quote": "Base rent reduced to $17,400 per month effective July 1, 2026.",
+     "page": 1, "box": [85.0, 125.3, 527.0, 152.1]}],
+   "liability_before": 559665.35, "liability_after": 1002921.05,
+   "rou_before": 538771.19, "rou_after": 982026.89,
+   "entries": [
+     {"account": "Lease liability", "debit": 0, "credit": 443255.70},
+     {"account": "ROU asset", "debit": 443255.70, "credit": 0},
+     {"account": "ROU asset", "debit": 4624.74, "credit": 0},
+     {"account": "Rent expense", "debit": 0, "credit": 4624.74}],
+   "balanced": true}}
+```
+
+`box` is `[x0, y0, x1, y1]` in PDF points, origin top-left. Scale it against
+the page's `width` and `height` from `GET /api/documents/{sha}/pages`.
+
 ### SSE event shape
 
 ```json
