@@ -1,0 +1,73 @@
+{
+  "source": "SEC EDGAR",
+  "note": "Labels located in the filed text, each carrying the sentence that supports it. Only fields whose quote actually proves the value are labelled; the rest need a person to read the exhibit and are listed in needs_human_label.",
+  "needs_human_label": [
+    "commencement",
+    "expiration",
+    "rentable_sf",
+    "annual_base_rent",
+    "escalation_kind",
+    "escalation_amount",
+    "pro_rata_share",
+    "cam_cap",
+    "cam_exclusions",
+    "management_fee_cap",
+    "audit_window",
+    "renewal_count",
+    "renewal_notice_days",
+    "security_deposit"
+  ],
+  "leases": {
+    "edgar-01-findwhat-com-inc": {
+      "company": "FINDWHAT COM INC  (CIK 0001094808)",
+      "cik": "0001094808",
+      "form": "10QSB",
+      "file_date": "2002-11-06",
+      "url": "https://www.sec.gov/Archives/edgar/data/1094808/000095015202008069/l96901aexv10w9.txt",
+      "fields": {
+        "monthly_base_rent": {
+          "value": null,
+          "quote": null
+        },
+        "cam_present": {
+          "value": "yes",
+          "quote": "(i) Additional Rent: Tenant's Pro Rata Share Common Area Maintenance Expenses (see Section 4."
+        }
+      }
+    },
+    "edgar-02-sportsmans-guide-inc": {
+      "company": "SPORTSMANS GUIDE INC  (CIK 0000791450)",
+      "cik": "0000791450",
+      "form": "10-K",
+      "file_date": "2005-03-17",
+      "url": "https://www.sec.gov/Archives/edgar/data/791450/000095013405005369/c93035exv10w5.txt",
+      "fields": {
+        "monthly_base_rent": {
+          "value": "11,910.00",
+          "quote": "00 annually in equal monthly installments of $11,910.00 per month."
+        },
+        "cam_present": {
+          "value": "yes",
+          "quote": "nt, Lessee shall pay its proportionate share of the cost of operation and maintenance of the common area (collectively \"common area maintenance costs\")."
+        }
+      }
+    },
+    "edgar-03-inuvo,-inc.": {
+      "company": "INUVO, INC.  (INUV)  (CIK 0000829323)",
+      "cik": "0000829323",
+      "form": "10-K",
+      "file_date": "2012-03-29",
+      "url": "https://www.sec.gov/Archives/edgar/data/829323/000135448812001498/inuv_ex106.htm",
+      "fields": {
+        "monthly_base_rent": {
+          "value": null,
+          "quote": null
+        },
+        "cam_present": {
+          "value": "yes",
+          "quote": "(i) Additional Rent: Tenant's Pro Rata Share Common Area Maintenance Expenses (see Section 4."
+        }
+      }
+    }
+  }
+}

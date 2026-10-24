@@ -35,8 +35,8 @@ then move.
 |---|---|
 | **Complete** | **A1–A4 (all of Person A's Block A)** · 48 of 526 hours |
 | **Partial** | B1, B3, B5, B10 (started early for the demo moment) |
-| **Tests** | 390 passing, offline, no API key · `python -m eval.run` passes |
-| **Next (Sarvesh)** | **B4** CPI, **B8** EDGAR, **B9** personas — or pair on A5–A8 |
+| **Tests** | 426 passing, offline, no API key · `python -m eval.run` passes |
+| **Next (Sarvesh)** | Block B is done bar human labelling. **Pair on A5–A8** — nothing is visible yet |
 | **Next (Jenil)** | **A5** — Compose, Postgres schema, the four DB roles |
 
 **Jenil is the critical path.** A1–A4 are backend no judge can see until A5–A8
@@ -70,12 +70,12 @@ stands on.*
 | **B1** | Lease changes & resolver | 34 | A+B | P2 g5, g9 | A variance finds its cause, ranks sources, routes to the right person | **Partial** — modification + trust done |
 | **B2** | Company at scale | 26 | A | P2 g2 | 30 clinics, 3 entities, 2025 history, held-out company from another seed | **DONE** — 57 errors / 21 types / 821 charges |
 | **B3** | The mess | 36 | A | P2 g3, g4 | Scans, 3 invoice formats, the previous accountant's spreadsheet, all parsed | **DONE** |
-| **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | **Partial** — CAM engine + shared pool done ($169,200 caught); CPI left |
+| **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | **DONE** — real BLS series, 184 observations |
 | **B5** | ASC 842 & close | 26 | A | P2 g8 | Subledger ties to GL to the cent; the month closes and locks | **DONE** |
 | **B6** | Policies | 24 | B | P2 g10 | A policy is learned, backtested, approved, and cited on a later decision | — |
 | **B7** | Disputes & obligations | 20 | B | P2 g11, g12 | A dispute letter goes out, a credit memo clears it, a renewal date fires | — |
-| **B8** | Proof | 28 | A | P2 g1, g16 | Real EDGAR leases scored separately; held-out company scored next to dev | **Partial** — held-out scored in eval; EDGAR and counterfactual left |
-| **B9** | Personas & explainability | 20 | A+B | P2 g13, g14 | A year runs unattended; "why was this held?" answers with rows | — |
+| **B8** | Proof | 28 | A | P2 g1, g16 | Real EDGAR leases scored separately; held-out company scored next to dev | **Partial** — held-out, counterfactual, 3 real SEC leases cached; 14 fields need human labelling |
+| **B9** | Personas & explainability | 20 | A+B | P2 g13, g14 | A year runs unattended; "why was this held?" answers with rows | **Partial** — personas done; why agent and evidence packs are B |
 | **B10** | Safety | 8 | B | P2 g15 | Every adversarial case produces zero unauthorized state change | **Partial** — fencing + 4 tests |
 
 **Block B gate:** all of 2026 runs month by month with no human at the keyboard,
