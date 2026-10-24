@@ -31,7 +31,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins),
                            allow_credentials=True, allow_methods=["GET", "POST"],
-                           allow_headers=["Content-Type"])
+                           allow_headers=["Content-Type"],
+                           # The evidence pack's chain verdict, readable by the browser.
+                           expose_headers=["X-Chain-Verified", "X-Chain-Broken-Seq",
+                                           "Content-Disposition"])
     app.include_router(auth_router)
     for router in ROUTERS:
         app.include_router(router)
