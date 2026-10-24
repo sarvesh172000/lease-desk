@@ -12,6 +12,16 @@ with INSERT on journal_* and outbox:
   send_outbox()    delivers pending outbox rows exactly once, even when two
                    senders run at the same time.
 
+post_approved() posts every APPROVED charge check of an entity and period
+through post_approved_charge(); the API calls it after approvals and
+`make post M=YYYY-MM` runs it from the command line:
+
+    python -m app.work.gateway --period 2026-01 [--entity ENT-CA]
+
+Moving an item to POSTED is a work-layer transition like any other:
+transitions.transition(..., 'post') as the gateway's own actor
+(`system:gateway`), so the event is hash-chained and replay rebuilds it.
+
 post_journal() and release_batch() work inside the caller's transaction, like
 append_event(), so the entry, the state change and its event commit or roll
 back together. A *denied* release is the exception: its audit event is written
@@ -19,10 +29,12 @@ in a transaction of its own, so the refusal is on record even though the
 caller's transaction rolls back when the error propagates.
 """
 
+import argparse
 import csv
 import io
 import json
 import re
+import sys
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -35,8 +47,9 @@ from sqlalchemy.engine import Connection
 from ..ledger import posting
 from ..ledger.posting import PeriodClosed, PostingError  # noqa: F401  re-exported
 from .events import append_event
+from .roles import GATEWAY_ACTOR, ensure_gateway_actor, load_actor
+from .transitions import transition
 
-GATEWAY_ACTOR = "system:gateway"
 AP_CLERK = "ap_clerk"
 CHARGE_CHECK = "CHARGE_CHECK"
 RELEASABLE_STATES = ("APPROVED", "POSTED")
@@ -118,15 +131,46 @@ def post_approved_charge(conn: Connection, item_id: int) -> int:
 
 
 def _mark_posted(conn: Connection, item_id: int, entry_id: int) -> None:
-    # Integration swaps this for work.transitions.transition(item, "post", ...).
-    event = append_event(
-        conn, actor_id=GATEWAY_ACTOR, action="post", subject_type="work_item",
-        subject_id=str(item_id), diff={"from": "APPROVED", "to": "POSTED", "set": {}},
-        evidence={"journal_entry_id": entry_id})
-    conn.execute(text("""
-        UPDATE work_item SET state = 'POSTED', updated_at = :at, last_event_seq = :seq
-         WHERE id = :id AND state = 'APPROVED'
-    """), {"at": event.at, "seq": event.seq, "id": item_id})
+    """APPROVED -> POSTED through the work layer, as system:gateway. The
+    item is already locked and checked APPROVED by post_journal()."""
+    transition(conn, _gateway_actor(conn), item_id, "post",
+               evidence={"journal_entry_id": entry_id})
+
+
+def _gateway_actor(conn: Connection):
+    """system:gateway as an Actor. Created if missing (a fresh or emptied
+    actor table); a gateway actor someone deactivated stays refused."""
+    ensure_gateway_actor(conn)
+    return load_actor(conn, GATEWAY_ACTOR)
+
+
+@dataclass(frozen=True)
+class PostedItem:
+    work_item_id: int
+    journal_entry_id: int
+
+
+def post_approved(conn: Connection, entity_id: str, period: date) -> List[PostedItem]:
+    """Post every APPROVED CHARGE_CHECK item of one entity and period, in id
+    order, inside the caller's transaction (a `lease_gateway` connection).
+
+    Idempotent: POSTED items are no longer APPROVED, so a second call finds
+    nothing, and post_approved_charge() itself returns the original entry for
+    a key that already posted. Held, proposed and rejected items are never
+    touched. Returns what this call posted.
+    """
+    _require_text(entity_id, "entity_id")
+    if not isinstance(period, date) or period.day != 1:
+        raise GatewayError("period must be the first of a month, got %r" % (period,))
+    ids = conn.execute(text("""
+        SELECT w.id FROM work_item w
+          JOIN landlord_charge c ON c.id = w.subject_id
+          JOIN clinic k ON k.id = c.clinic_id
+         WHERE w.kind = :kind AND w.subject_type = 'landlord_charge' AND w.state = 'APPROVED'
+           AND c.period = :period AND coalesce(w.entity_id, k.entity_id) = :entity
+         ORDER BY w.id
+    """), {"kind": CHARGE_CHECK, "period": period, "entity": entity_id}).scalars().all()
+    return [PostedItem(item_id, post_approved_charge(conn, item_id)) for item_id in ids]
 
 
 def _replay(earlier: Mapping, item_id: int, key: str) -> int:
@@ -363,3 +407,53 @@ def _mark_failed_attempt(conn: Connection, row: Mapping, max_attempts: int) -> N
 
 def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, default=str)
+
+
+# --------------------------------------------------------------------- CLI
+
+def main(argv=None) -> int:
+    """`make post M=YYYY-MM`: post the period's approved charge checks, as
+    lease_gateway, one transaction per entity."""
+    from ..db.engine import engine
+    from ..jobs.monthly import MonthlyRunError, parse_period
+
+    parser = argparse.ArgumentParser(description="Post a period's approved charge checks")
+    parser.add_argument("--period", required=True, help="YYYY-MM")
+    parser.add_argument("--entity", action="append",
+                        help="entity id (repeatable); default: every entity")
+    args = parser.parse_args(argv)
+    try:
+        month = parse_period(args.period)
+    except MonthlyRunError as exc:
+        print("post: %s" % exc, file=sys.stderr)
+        return 2
+
+    eng = engine("lease_gateway")
+    with eng.connect() as conn:
+        entities = args.entity or list(conn.execute(
+            text("SELECT id FROM entity ORDER BY id")).scalars())
+    if not entities:
+        print("post: no entities; run `make seed` first", file=sys.stderr)
+        return 2
+    try:
+        for entity_id in entities:
+            with eng.begin() as conn:
+                posted = post_approved(conn, entity_id, month)
+                states = conn.execute(text("""
+                    SELECT state, count(*) FROM work_item
+                     WHERE kind = :kind AND entity_id = :e AND period = :p
+                     GROUP BY state ORDER BY state
+                """), {"kind": CHARGE_CHECK, "e": entity_id, "p": month}).all()
+            label = "%s %s" % (entity_id, month.strftime("%Y-%m"))
+            print("  %s  posted %d item(s)%s" % (label, len(posted), "".join(
+                "  #%d->entry %d" % (p.work_item_id, p.journal_entry_id) for p in posted)))
+            print("  %s  items by state: %s" % (
+                label, ", ".join("%s=%d" % tuple(r) for r in states) or "none"))
+    except (GatewayError, PostingError) as exc:
+        print("post: %s" % exc, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
