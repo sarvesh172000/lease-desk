@@ -23,7 +23,8 @@
 >
 > Nothing in Block C is started.
 
-**Budget: 140 of 500 hours (28%)**
+**Budget: 166 of 526 hours (32%)** — 140 below, plus 26 for the two added
+sponsor groups (11 SpacetimeDB, 12 Anthropic).
 
 ## Goal
 Make Lease Desk feel like a finished product a controller would trust on day one, make it impossible to break in front of judges, and package one system for three tracks. The UI becomes a real finance tool: a "Today" screen for each role, an evidence viewer that reads like a case file, a rulebook timeline you can scrub through time, policy backtests and a close dashboard per entity. The system gets chaos-tested (killed workers, failing model calls, a dead mail server, duplicate syncs) and must recover without losing or doubling anything. It is deployed on Azure with a local fallback, the Microsoft judges get a real path to production with measured cost, and the Fetch.ai judges get a multi-agent front door in ASI:One built on the same backend and the same permissions. When this phase is done, a guided demo opens with the double billing catch and walks every judging question in under three minutes, judges can throw their own scenario at it live, and everything is submitted with the evidence up front.
