@@ -1,5 +1,24 @@
 # Phase 1 - Platform Core and the First Thin Slice
 
+> **Status — Person A's groups are largely complete.**
+>
+> | Group | Hours | Owner | Status |
+> |---|---|---|---|
+> | 1. Repo, tooling, CI | 8 | B | Partial — repo and tests exist; no Compose, no CI |
+> | 2. Data platform and DB roles | 12 | B | Not started |
+> | 3. Event-sourced work layer | 14 | B | Not started |
+> | 4. Gateway, outbox, ledger | 10 | B | Not started |
+> | 5. Jobs and business clock | 6 | B | Not started |
+> | 6. Document store and pipeline v1 | 8 | A | **Done** — `docs/storage.py`, `pipeline.py`, `citations.py` |
+> | 7. LLM layer | 8 | A | **Done** — `llm/{client,registry,cache,usage,untrusted}.py` |
+> | 8. Data generator v1 and answer key | 12 | A | **Mostly done** — company, leases, PDFs, invoices, errors. Missing 2025 history and `answer_key.json` |
+> | 9. Abstraction agent v1 | 10 | A | **Done** — `agents/abstraction.py`, 13 cited fields |
+> | 10. Charge engine and monthly run | 6 | A | **Done** — `engine/charges.py`, `agents/checker.py`, 5/5 caught |
+> | 11. Web app shell | 12 | B | Not started |
+> | 12. Eval v1 and regression gate | 4 | A | Not started — next |
+>
+> Roughly 44 of 110 hours complete. See [`../PLAN.md`](../PLAN.md).
+
 **Budget: 110 of 500 hours (22%)**
 
 ## Goal

@@ -1,185 +1,165 @@
-# Sponsor Strategy
+# Sponsor Strategy — five targets
 
 Cal Hacks 13.0 · Oct 23–25 2026 · Palace of Fine Arts, SF
 Presented by **Anthropic, Annapurna Labs, SpacetimeDB, Hyphenate**.
+Also sponsoring: Microsoft, Visa, Fetch.ai, Supercell, and ~40 others.
 
-> **Verify before relying on this.** The per-sponsor prize list on the Devpost
-> Prizes tab would not load for me (HTTP 403). The sponsor roster below is
-> confirmed from the official site; the *prizes* are partly inferred. Open the
-> Devpost Prizes tab in the first hour and correct this file.
+> **Verify in hour one.** The Devpost Prizes tab would not load for me (HTTP
+> 403). The sponsor roster is confirmed from the official site; the per-sponsor
+> prize list is partly inferred. Open the Prizes tab and correct this file.
+> Only SpacetimeDB's special prize is confirmed from a published source.
 
-## The headline
+One product, five framings. The system does not change per track — only the
+emphasis does.
 
-**Hyphenate sells an autonomous finance platform for the office of the CFO.**
-Their modules are order-to-cash, treasury, GL accounting, procure-to-pay, and
-reporting. Their pitch is agents that do routine finance work, escalate
-judgment calls to people, and document every step with an audit trail.
-
-**Lease accounting is not one of their modules.** And LeaseDesk is built in
-their exact architectural idiom: agents propose, humans approve, everything
-carries an audit trail.
-
-You are not "a project that happens to fit a sponsor." You are a missing module
-in a presenting sponsor's product line, built the way they build. Say that out
-loud at their booth and in your submission.
-
-## Where to spend effort
-
-Three sponsors, no more. Spreading across eight is how you end up with eight
-shallow integrations and no prize.
-
-| Sponsor | Fit | Has a public API? | Effort | Verdict |
-| --- | --- | --- | --- | --- |
-| **Hyphenate** | Exact | No | 0h | **Target** — positioning, not integration |
-| **Anthropic** | Exact | Yes, already used | 2h to deepen | **Target** |
-| **SpacetimeDB** | Strong | Yes | 4–6h | **Target if one person owns it** |
-| Visa | Strong | Yes (sandbox) | 3–4h | Stretch |
-| Elastic | Strong | Yes | 2–3h | Stretch |
-| Convex | Overlaps SpacetimeDB | Yes | 4h | Skip — pick one realtime DB |
-| Capital One | Moderate | Yes | 3h | Skip unless a prize names it |
-| Annapurna Labs | Weak | Inference hardware | — | Skip — no inference bottleneck here |
-| Bright Data, Apify | Weak | Yes | — | Skip — nothing to scrape |
+| Sponsor | Emphasis | Lands in | Owner |
+|---|---|---|---|
+| **Hyphenate** | Autonomy, escalation, evidence | The whole product | Both |
+| **Anthropic** | Disciplined model use, determinism | P3 group 12 | A |
+| **SpacetimeDB** | The audit trail *is* the database | P3 group 11 | B |
+| **Microsoft** | Customer, production path, cost | P3 groups 7 + 8 | B then A |
+| **Fetch.ai** | Multi-agent, inside ASI:One | P3 group 9 | B |
 
 ---
 
-## 1. Hyphenate — positioning, not code
+## 1. Hyphenate — the product is the pitch
 
-There is no public API to integrate. The play is entirely in how you present.
+There is no public API. Hyphenate sells an **autonomous finance platform for
+the office of the CFO**: order-to-cash, treasury, GL accounting,
+procure-to-pay, reporting. Agents that do routine finance work, escalate
+judgement calls to people, and document every step with an audit trail.
 
-**Do this:**
+**Lease accounting is not one of their five modules.** And LeaseDesk is built
+in their exact idiom. You are a missing module in a presenting sponsor's
+product line, built the way they build.
 
-- Go to their booth in hour one. Ask which modules they get asked for that they
-  don't have yet. If lease accounting comes up, you have your opening line for
-  the demo.
-- Mirror their vocabulary in the UI and the pitch: *continuous close*,
-  *escalation*, *audit trail*, *traceable answers*, *the office of the CFO*.
-  These are their words. Using them signals you understand the category.
-- Frame LeaseDesk as sitting beside their modules, not competing: lease
-  accounting feeds GL accounting (the journal entries) and procure-to-pay (rent
-  is an AP bill). Show that in the architecture slide.
-- **Do not clone their visual identity.** Borrowed branding reads as pandering.
-  Match the *idiom* — dense, high-contrast, enterprise — in your own palette.
+- Booth in hour one: ask which module they get asked for that they don't have.
+- Mirror their vocabulary: *continuous close*, *escalation*, *audit trail*,
+  *traceable answers*, *the office of the CFO*.
+- Show where it feeds their modules: lease entries into GL accounting, rent
+  into procure-to-pay as an AP bill.
+- **Do not clone their branding.** Match the idiom — dense, enterprise,
+  high-contrast — in your own palette. They are judging; borrowed branding
+  reads as pandering.
 
 **The line:** "Hyphenate automates order-to-cash, treasury, GL and
 procure-to-pay. Lease accounting is the gap, and it's the one where the source
-of truth isn't in any system — it's in an email. That's what we built."
+of truth isn't in any system — it's in somebody's inbox."
 
 ---
 
-## 2. Anthropic — deepen what you already have
+## 2. Anthropic — Phase 3 group 12 (12 h, Person A)
 
-Claude is already the extraction and investigation layer on `claude-opus-5-5`.
-To make it prize-worthy rather than incidental, show *disciplined* use:
+Claude is already the extraction and investigation layer. This group makes that
+use *prize-worthy* rather than incidental.
 
-| Technique | Where | Why it demos well |
-| --- | --- | --- |
-| **Structured outputs** (`messages.parse` + Pydantic) | `extract.py` — already done | Schema-validated terms, no JSON parsing bugs |
-| **Citations** | Investigation evidence | Every claim links to the sentence it came from |
-| **Effort control** (`output_config.effort`) | `low` for reconciliation triage, `high` for investigation | Shows cost-awareness, not just "we called an LLM" |
-| **Prompt caching** | The document corpus prefix | Re-investigating is near-free; mention the cache-hit number |
-| **Refusal / uncertainty handling** | `uncertain[]` in `ExtractedLease` | The answer to "what if it hallucinates" |
+| Task | h | What it demonstrates |
+|---|---|---|
+| Effort sweep: `low` for classification, `high` for investigation, measured against eval | 3 | Cost-awareness, not just "we called an LLM" |
+| Prompt caching over the document corpus, report cache-hit rate in the ops page | 2 | Re-investigating is near-free |
+| Cost per clinic per month from `llm/usage.py`, charted | 2 | A real unit economic |
+| Model comparison on the eval: Opus vs Sonnet vs Haiku per task type | 3 | Evidence for model choice, not vibes |
+| Write up the determinism split for the submission | 2 | The strongest line available |
 
-**The strongest Anthropic-specific line** is the architectural one: *we use
-Claude for exactly the thing it is good at — reading messy documents — and
-nothing else.* Most projects at this event will put an LLM on the critical path
-of a calculation. You deliberately did not. That is a more sophisticated use of
-the model than piling on features.
+**Already done:** structured outputs via `messages.parse`, versioned prompts
+with the id and version on every event, response cache, usage log, untrusted
+fencing with per-call nonces, and `uncertain[]` surfaced to humans.
 
-Have `extract.py` open in your editor when you talk to them, and have the
-`uncertain[]` and quote fields visible.
+**The argument:** *we use Claude for exactly the thing it is good at — reading
+messy documents — and nothing else.* Most projects at this event put an LLM on
+the critical path of a calculation. We deliberately did not, and the citation
+check catches a model that invents a number before it reaches a schedule.
+
+Have `agents/abstraction.py` and `agents/trust.py` open at their booth.
 
 ---
 
-## 3. SpacetimeDB — the audit trail belongs in it
+## 3. SpacetimeDB — Phase 3 group 11 (14 h, Person B)
 
-SpacetimeDB has a **confirmed special prize for the most impressive use of the
-platform**, and the fit is real rather than forced.
+**Confirmed special prize for the most impressive use of the platform.**
 
-SpacetimeDB puts your application logic inside the database as modules
-(*reducers*) and lets clients subscribe to SQL queries that push updates live.
-Two parts of LeaseDesk map onto that cleanly:
+SpacetimeDB puts application logic inside the database as reducers and pushes
+subscribed queries to clients live. Two parts of LeaseDesk map onto that
+without being forced.
 
-**a) The audit trail as append-only database state.** Every `AuditEvent` is a
-reducer call. The log is literally the database's transaction history — which is
-a much stronger claim than "we have an `audit_events` table." For an auditability
-pitch, "the audit trail *is* the database" is the line.
+| Task | h | What it gives |
+|---|---|---|
+| Mirror `audit_event` into a SpacetimeDB module; every transition is a reducer call | 5 | "The audit trail *is* the database" |
+| Subscribe the exception queue and work-item status | 4 | Live updates with no polling |
+| Two-window demo: approve on the left, right turns green | 2 | The beat judges remember |
+| Chain verification as a reducer, so tamper-detection runs in the DB | 3 | Auditability argument |
 
-**b) The live portfolio dashboard.** Multiple controllers watch the same
-exception queue. When one approves Store 14, every other screen turns green
-without a refresh. Subscriptions give you that for free, and it demos
-beautifully — open two browser windows side by side on stage.
-
-### Honest scoping
-
-This is 4–6 hours and it is the riskiest item in the plan. Rules:
-
-- **One person owns it end to end.** Do not split it.
-- **Only after the SQLite demo path already works.** It is an upgrade, never a
+**Scoping rules:**
+- Postgres stays the system of record. SpacetimeDB is the live projection
+  layer. Do not move the accounting engine into it.
+- The SQLite/Postgres path must stay runnable. This is an upgrade, never a
   dependency.
-- **Keep the SQLite path runnable.** If SpacetimeDB isn't working by H24, you
-  demo SQLite and say nothing about it.
-- Scope it to the audit trail and exception-status subscription only. Do not
-  move the accounting engine into it.
-
-### The two-window demo
-
-Worth the effort on its own: approve on the left window, watch the right window
-go green. Judges remember that.
+- One person owns it end to end.
 
 ---
 
-## 4. Visa — rent is a payment (stretch)
+## 4. Microsoft — Phase 3 groups 7 and 8 (24 h)
 
-Rent payment is a real payment rail, so this is not a contrived fit. The Visa
-Developer sandbox lets you initiate a push payment in test mode.
+Group 7 is the Azure deployment; group 8 is the judging-criteria write-up.
+Jenil's Phase 3 already specifies both. Additions:
 
-**The integration:** after the controller approves the remeasurement, the next
-month's rent goes out at the *corrected* amount through a Visa sandbox payment,
-and the resulting payment event flows straight back into reconciliation — where
-it now matches. That closes the loop from document to cash in one screen.
-
-**Only do this if** the core demo is done by H20 and the sandbox signup is
-quick. Use sandbox/test credentials exclusively — never real card or account
-numbers.
-
----
-
-## 5. Elastic — the search behind the Investigation Agent (stretch)
-
-Right now the Investigation Agent reads every document in the corpus. That works
-for four files and is obviously not how it scales.
-
-**The integration:** index the document corpus in Elasticsearch, and have the
-Investigation Agent retrieve candidates (BM25 plus vector search over
-embeddings) before Claude reads them. Then the demo line becomes concrete:
-"searching 1,284 documents" instead of "searching the folder."
-
-This is also the honest answer to the scaling question, so it earns its place
-even without the prize. 2–3 hours.
+- **Ask early** whether they want Azure OpenAI. If yes, flip the model switch
+  and rerun the eval to show parity — that comparison is itself a deliverable.
+- **Measurable usefulness** comes from `eval/report.json`, not adjectives:
+  errors caught, dollars recovered, false-hold rate, straight-through rate,
+  questions per 100 charges, close time, extraction accuracy on real EDGAR
+  leases.
+- **Cost per clinic per month** comes from `llm/usage.py` plus the Azure
+  hosting cost. Most teams cannot quote a unit cost at all.
+- **Responsible design** is already built, not retrofitted: limits enforced in
+  code *and* in the database through separate roles, separation of duties, the
+  gateway as sole writer, a hash-chained audit, untrusted-content handling with
+  adversarial results, and no payment ever made by the system.
 
 ---
 
-## What to say in the submission
+## 5. Fetch.ai — Phase 3 group 9 (22 h, Person B)
 
-Devpost writeups get skimmed. Lead with the number, name the sponsors
-explicitly, and say where each is used:
+Confirmed prize with cash plus internship interviews. Jenil's Phase 3 specifies
+it in full: a `uagents` front desk on Agentverse implementing the Chat
+Protocol, two specialist agents (`rulebook_agent`, `approvals_agent`), pairing
+an ASI:One user to an actor, and the primary workflow run entirely inside
+ASI:One.
 
-> LeaseDesk found a $443,255 understatement of lease liability hiding in an
-> email thread. It abstracts leases with **Claude** (`claude-opus-5-5`,
-> structured outputs with per-claim citations), keeps an append-only audit
-> trail in **SpacetimeDB** so every number traces to a source sentence, and
-> proposes ASC 842 adjusting entries for a controller to approve. Lease
-> accounting is the one module **Hyphenate** doesn't have, and it's the one
-> where the source of truth lives in somebody's inbox.
+**The constraint that keeps it honest:** the agents talk to the existing API
+only, never to the database. Every action still goes through `can()`, the
+gateway and the audit stream, and chat input is treated as untrusted. A
+regional manager paired in ASI:One who tries to answer another region's
+question gets denied, and the denial shows in the web app's audit timeline.
+
+That denial, demonstrated live, is the strongest Fetch.ai beat — it shows
+multi-agent work inside their platform under real permissions, not a chatbot
+wrapper.
+
+---
 
 ## Booth plan
 
-Sponsors judge their own prizes, usually from booth conversations as much as the
-demo. Budget 90 minutes total.
+Sponsors judge their own prizes, often from booth conversations as much as the
+demo. Budget two hours total.
 
-- [ ] **Hour 1:** Hyphenate booth — ask what module they get asked for most
-- [ ] **Hour 1:** Devpost Prizes tab — correct this file with the real list
-- [ ] **Hour 2:** SpacetimeDB booth — confirm the prize criteria before building
-- [ ] **Hour 2:** Anthropic booth — show them `extract.py`
-- [ ] **By H20:** go back to each with a working demo, not a description
-- [ ] **Submission:** name all three in the writeup, with where each is used
+- [ ] **Hour 1 — Devpost Prizes tab.** Correct this file with the real list.
+- [ ] **Hour 1 — Hyphenate.** Which module do they get asked for most?
+- [ ] **Hour 2 — SpacetimeDB.** Confirm prize criteria before building group 11.
+- [ ] **Hour 2 — Anthropic.** Show `abstraction.py` and the citation check.
+- [ ] **Hour 2 — Microsoft.** Ask about Azure OpenAI before group 7.
+- [ ] **Hour 3 — Fetch.ai.** Confirm Agentverse registration requirements.
+- [ ] **Later:** go back to each with a working demo, not a description.
+- [ ] **Submission:** name all five, with where each is actually used.
+
+## What to say in the submission
+
+> LeaseDesk found a $443,255 understatement of lease liability hiding in an
+> email thread. It abstracts leases with **Claude** — structured outputs, every
+> term carrying the sentence it came from, checked against the page before any
+> number reaches a schedule — keeps a hash-chained audit trail in
+> **SpacetimeDB** so every figure traces to a source, deploys on **Azure**, and
+> is driven from **ASI:One** through three **Fetch.ai** agents under the same
+> permission model as the web app. Lease accounting is the one module
+> **Hyphenate** doesn't have, and it's the one where the source of truth lives
+> in somebody's inbox.

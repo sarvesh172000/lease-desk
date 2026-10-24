@@ -1,5 +1,17 @@
 # Phase 2 - The Company, the Mess and the Full Autonomous Loop
 
+> **Status — four groups started early, because the demo moment needed them.**
+>
+> | Group | Hours | Owner | Status |
+> |---|---|---|---|
+> | 3. Messy inputs | 16 | A | Partial — `datagen/emails.py`: 10 threads incl. forged sender and injection. No scans, tracker, or multi-format invoices |
+> | 5. Bitemporal rulebook and lease changes | 14 | B/A | Partial — `agents/modification.py` finds causes and proposes versions. Not yet bitemporal |
+> | 8. ASC 842 subledger and close | 26 | A | Partial — `engine/remeasurement.py` remeasures and proposes balanced entries. No transition, close, or tie-out |
+> | 9. Resolver | 20 | B/A | Partial — `agents/trust.py` six-rank ranking + confidence. No routing, SLAs, or partial payment |
+> | 15. Safety and defense in depth | 8 | B | Partial — untrusted fencing and 4 adversarial tests. No DB-role depth tests |
+>
+> Everything else in this phase is not started. See [`../PLAN.md`](../PLAN.md).
+
 **Budget: 250 of 500 hours (50%)**
 
 ## Goal

@@ -590,4 +590,4 @@ Run the whole demo once with Wi-Fi off and know exactly which step breaks.
 
 ---
 
-See also: [`PLAN.md`](PLAN.md) · [`SPONSORS.md`](SPONSORS.md) · [`roadmap/`](roadmap/)
+See also: [`PLAN.md`](PLAN.md) · [`SPONSORS.md`](SPONSORS.md) · [`phases/`](phases/)

@@ -127,10 +127,10 @@ The demo and the whole test suite run offline. Only `--live` calls the API.
 
 | Document | What's in it |
 |---|---|
-| **[docs/PLAN.md](docs/PLAN.md)** | **The plan.** Seven stages, live status, who does what next |
+| **[docs/PLAN.md](docs/PLAN.md)** | **The plan.** Three phases, 526 hours, live status board |
 | [docs/DESIGN.md](docs/DESIGN.md) | How it works: trust model, agents, accounting, diagrams, API |
-| [docs/SPONSORS.md](docs/SPONSORS.md) | Which sponsors to target and how |
-| [docs/roadmap/](docs/roadmap/) | The full 500-hour plan — after the hackathon, not now |
+| [docs/SPONSORS.md](docs/SPONSORS.md) | Five sponsor targets and where each lands in the plan |
+| [docs/phases/](docs/phases/) | Phase 1, 2 and 3 in full — the task detail |
 
 ## Status
 

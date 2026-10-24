@@ -1,5 +1,12 @@
 # Phase 3 - Product Polish, Hardening and Multi-Track Delivery
 
+> **Status — not started.**
+>
+> Two additions to this phase beyond what is written below, both sponsor
+> targets: **SpacetimeDB** (group 11) and **Anthropic** (group 12). They are
+> specified in [`../SPONSORS.md`](../SPONSORS.md) and listed in
+> [`../PLAN.md`](../PLAN.md).
+
 **Budget: 140 of 500 hours (28%)**
 
 ## Goal

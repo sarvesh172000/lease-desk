@@ -1,12 +1,19 @@
 # THE PLAN
 
-**This is the only plan. If it is not in this file, we are not building it this weekend.**
+**Jenil's three-phase plan, 500 hours, in full.** This file is the index and the
+status board; the phase files hold the task detail.
 
-Cal Hacks 13.0 · 36 hours · **Sarvesh = Person A** (data, documents, LLM, engines, eval) · **Jenil = Person B** (work layer, gateway, ledger, infra, frontend)
+**Sarvesh = Person A** — data, documents, LLM layer, engines, eval
+**Jenil = Person B** — work layer, gateway, ledger, infra, frontend
 
-Built on Jenil's phase structure. Table names, role names, state names, make
-targets and repo layout are his and do not change. Full-scope phases live in
-[`roadmap/`](roadmap/) — that is **after** the hackathon, not now.
+| | |
+|---|---|
+| [Phase 1](phases/PHASE_1.md) | 110 h · Platform core and the first thin slice |
+| [Phase 2](phases/PHASE_2.md) | 250 h · The company, the mess and the full autonomous loop |
+| [Phase 3](phases/PHASE_3.md) | 140 h · Polish, hardening and multi-track delivery |
+
+Names are fixed from Phase 1 and do not change: tables, the four DB roles, the
+eight work states, make targets, repo layout.
 
 ---
 
@@ -14,235 +21,133 @@ targets and repo layout are his and do not change. Full-scope phases live in
 
 | | |
 |---|---|
-| **Stage** | **Stages 1–4 complete on Person A's side** |
+| **Done** | ~44 of 110 Phase 1 hours, plus five Phase 2 groups started early |
 | **Tests** | 174 passing, all offline, no API key needed |
-| **Built** | Everything Person A owns through Stage 4: storage, LLM layer, data generator, document pipeline, abstraction, checker, trust ranking, modification agent, remeasurement |
-| **Not built** | Everything Person B owns. No database, no API, no UI yet. |
-| **Demo data** | 5 leases, 6 invoices, $112,759.69 billed, $25,736.36 of it wrong |
+| **Demo path** | Runs end to end in code: variance → search → amendment → $443,255.70 balanced entries |
+| **Not built** | Everything Person B owns. No database, no gateway, no API, no UI. |
 
-### Next task for each of us
+### Next
 
-- **Sarvesh →** Stage 5: answer key, `eval/run.py`, EDGAR lease, adversarial set
-- **Jenil →** Stage 1: repo scaffolding, Postgres schema, the four DB roles
+- **Sarvesh →** Phase 1 group 12 (eval + answer key), then finish group 8 (2025 history)
+- **Jenil →** Phase 1 groups 1–5: Compose, Postgres schema, DB roles, event layer, gateway
 
 **Jenil is the critical path.** Nothing Person A has built is reachable from a
 browser until the work layer and web shell exist.
 
 ---
 
-## Status key
+## Phase 1 — Platform core (110 h)
 
-`DONE` · `NEXT` — start this now · `TODO` · `CUT` — decided against
+| # | Group | h | Owner | Status |
+|---|---|---|---|---|
+| 1 | Repo, tooling, CI | 8 | B | Partial |
+| 2 | Data platform and DB roles | 12 | B | — |
+| 3 | Event-sourced work layer | 14 | B | — |
+| 4 | Gateway, outbox, ledger | 10 | B | — |
+| 5 | Jobs and business clock | 6 | B | — |
+| 6 | Document store and pipeline v1 | 8 | A | **Done** |
+| 7 | LLM layer | 8 | A | **Done** |
+| 8 | Data generator v1 and answer key | 12 | A | **Mostly** — 2025 history, `answer_key.json` left |
+| 9 | Abstraction agent v1 | 10 | A | **Done** |
+| 10 | Charge engine and monthly run | 6 | A | **Done** |
+| 11 | Web app shell | 12 | B | — |
+| 12 | Eval v1 and regression gate | 4 | A | **Next** |
+
+## Phase 2 — The company and the mess (250 h)
+
+| # | Group | h | Owner | Status |
+|---|---|---|---|---|
+| 1 | Real lease corpus from EDGAR | 14 | A | — |
+| 2 | Company generator v2 and held-out company | 26 | A | — |
+| 3 | Messy inputs | 16 | A | **Partial** — emails done; scans, tracker, 3 invoice formats left |
+| 4 | Document understanding at full mess | 20 | A | — |
+| 5 | Bitemporal rulebook and lease changes | 14 | B/A | **Partial** — modification agent done |
+| 6 | CAM engine and shared pools | 20 | A | — |
+| 7 | Rent engine v2 with CPI | 8 | A | — |
+| 8 | ASC 842 subledger and period close | 26 | A | **Partial** — remeasurement done |
+| 9 | Resolver | 20 | B/A | **Partial** — trust ranking + confidence done |
+| 10 | Policy engine | 24 | B | — |
+| 11 | Disputes and correspondence | 12 | B | — |
+| 12 | Obligations and critical dates | 8 | B | — |
+| 13 | Human personas | 10 | A | — |
+| 14 | Why, auditor, evidence packs | 10 | B | — |
+| 15 | Safety and defense in depth | 8 | B | **Partial** — fencing + 4 adversarial tests |
+| 16 | Eval v2, held-out, counterfactual replay | 14 | A | — |
+
+## Phase 3 — Polish and delivery (140 h + 26 h added)
+
+| # | Group | h | Owner | Status |
+|---|---|---|---|---|
+| 1 | Product design and UI polish | 22 | B | — |
+| 2 | Guided demo, summaries, snapshots | 12 | B | — |
+| 3 | Scenario studio | 12 | B | — |
+| 4 | Reliability and chaos testing | 14 | A+B | — |
+| 5 | Performance and cost | 8 | A | — |
+| 6 | Testing and QA | 12 | A+B | — |
+| 7 | Cloud deployment and ops (Azure) | 14 | B | — |
+| 8 | **Microsoft** deliverables | 10 | A | — |
+| 9 | **Fetch.ai** / ASI:One front door | 22 | B | — |
+| 10 | Submission package and rehearsals | 14 | A+B | — |
+| **11** | **SpacetimeDB** live layer *(added)* | **14** | **B** | — |
+| **12** | **Anthropic** depth *(added)* | **12** | **A** | — |
+
+Groups 11 and 12 are new, specified in [`SPONSORS.md`](SPONSORS.md). Total
+becomes **526 hours**.
 
 ---
 
-## Stage 1 — Foundation (H0–H4)
+## Sponsor targets
 
-**Gate: `make up migrate seed` works from a fresh clone and the four DB roles exist.**
+Five, all specified in [`SPONSORS.md`](SPONSORS.md):
 
-| Who | Task | Status |
+| Sponsor | Where it lands | Owner |
 |---|---|---|
-| B | Monorepo, Compose (`db`, `api`, `web`, `fava`), Makefile targets | **NEXT** |
-| B | Postgres schema: records, golden, rulebook, work, ledger, audit | **NEXT** |
-| B | `db/roles.sql` — `lease_agent`, `lease_gateway`, `lease_api`, `lease_reader` | **NEXT** |
-| B | Triggers: append-only `audit_event`, hash on insert, unbalanced-journal constraint | TODO |
-| A | `docs/storage.py` — content-addressed store, sha256 keys | **DONE** |
-| A | `llm/client.py`, `registry.py`, `cache.py`, `usage.py` | **DONE** |
-| A | `llm/untrusted.py` — documents fenced as data | **DONE** |
-| A | Port `leasedesk/` into `backend/app/engine/` and `agents/` | TODO |
+| **Hyphenate** | Positioning — no public API. The whole product is the pitch | Both |
+| **Anthropic** | Phase 3 group 12 — effort tuning, caching, cost per clinic, the determinism story | A |
+| **SpacetimeDB** | Phase 3 group 11 — audit trail as database state, live multi-viewer sync | B |
+| **Microsoft** | Phase 3 groups 7 + 8 — Azure deployment and the production path | B then A |
+| **Fetch.ai** | Phase 3 group 9 — ASI:One front door, three registered agents | B |
 
 ---
 
-## Stage 2 — The thin slice (H4–H12)
+## What already exists
 
-**Gate: one lease, one January invoice, one variance, visible in a browser. Screenshot it.**
+Built and tested, mapped to Jenil's groups:
 
-| Who | Task | Status |
+| Module | Group | What it does |
 |---|---|---|
-| A | `datagen/company.py` — 5 clinics, 2 landlords, 2 centers | **DONE** |
-| A | `datagen/leases.py` + `render_lease.py` — 8-page lease PDFs | **DONE** |
-| A | `datagen/month.py` + `render_invoice.py` — January invoices, AP and bank exports | **DONE** |
-| A | `docs/pipeline.py` — page text, word boxes, 150 dpi page images | **DONE** |
-| A | Abstraction agent: value + page + verbatim quote per field | **DONE** |
-| B | `work/events.py` — `append_event()`, hash chain, `verify_chain()` | TODO |
-| B | `work/transitions.py` — 8 states, 9 transitions, one transaction | TODO |
-| B | Web shell: login, queue table, item detail skeleton | TODO |
-
----
-
-## Stage 3 — The guarantees (H12–H18)
-
-**Gate: the agent role is denied at the database, and the chain verifies.**
-
-| Who | Task | Status |
-|---|---|---|
-| B | `work/roles.py` — ROLES matrix, `can()`, separation of duties | TODO |
-| B | `work/gateway.py` — `post_journal()`, idempotency, APPROVED-only | TODO |
-| B | Chart of accounts, trial balance, Beancount export for Fava | TODO |
-| A | `docs/citations.py` — quote to bounding box, fuzzy, match score | **DONE** (early) |
-| A | `agents/checker.py` — **three rules, see below** | **DONE** — 5/5 caught, 0 false holds |
-
-### The checker needs three rules, not one
-
-Running the existing engine over January proved an amount comparison catches
-only 2 of the 5 errors. Pinned as tests in `backend/tests/test_month.py`.
-
-| Rule | Catches | Why amount comparison misses it |
-|---|---|---|
-| Amount vs. the lease | E4, E5 | — |
-| **Cardinality** per lease + period | E2 | Rent billed twice, *both copies correct*, so each one matches |
-| **Premises** vs. the demised suite | E3 | Reports CLINIC-02 *underpaying* $4,880 when it was overbilled $4,820 |
-| Operating expense vs. lease psf | E1 | A rent schedule says nothing about CAM |
-
-And E6 must **not** be held: CLINIC-04's $400 step looks like an unexplained
-3% jump and is exactly what the lease says. A false hold fails the eval.
-
----
-
-## Stage 4 — The moment (H18–H24)
-
-**Gate: the amendment is found, remeasured, approved, status goes green.**
-
-| Who | Task | Status |
-|---|---|---|
-| A | 10 `.eml` threads: the amendment, an unauthorized claim, a forged sender, an injection, 5 noise | **DONE** |
-| A | `agents/modification.py` — find the cause, propose a new `lease_version` | **DONE** |
-| A | Source trust ranking (6 ranks) — already written into `amendment_search/v1.md` | **DONE** |
-| A | Confidence from source rank, trust gap, agreement, failed verification | **DONE** |
-| A | Wire `remeasure.py` into the subledger, propose for controller approval | **DONE** — +$443,255.70, balanced |
-| B | Item detail as a case file: invoice left, lease right, both boxed | TODO |
-| B | Before/after schedules, entries with debits = credits shown, Approve button | TODO |
-| B | Audit timeline with a "chain verified" badge | TODO |
-
----
-
-## Stage 5 — Proof (H24–H30)
-
-**Gate: `make eval` reports 6 of 6 caught, 0 false holds, chain intact.**
-
-| Who | Task | Status |
-|---|---|---|
-| A | `datagen/errors.py` — the six planted errors as code | **DONE** (early) |
-| A | `data/answer_key.json`, importable only from `eval/` | TODO |
-| A | `eval/run.py` — caught, missed, false holds, dollars, extraction accuracy | TODO |
-| A | One real EDGAR lease, hand-labelled, extraction scored separately | TODO |
-| A | Adversarial: the injection email, a forged authorized-rep address | TODO |
-| B | Rulebook per clinic, click through to the cited page | TODO |
-| B | `make replay` rebuilds projections from `audit_event` | TODO |
-
----
-
-## Stage 6 — Submission (H30–H34)
-
-**Gate: submitted. Not drafted.**
-
-| Who | Task | Status |
-|---|---|---|
-| B | Demo snapshot, `make demo-reset` under 30 seconds | TODO |
-| B | Guided stepper, 3-minute path | TODO |
-| A | README: setup, what is real vs simulated, assumptions, known gaps | TODO |
-| A | Numbers write-up from `eval/report.json` | TODO |
-| Both | Demo video, 2 minutes, opening on the dollar figure | TODO |
-| Both | Devpost, naming every sponsor actually used | TODO |
-| Both | Repo public, `git log -p \| grep -i "sk-ant"` clean | TODO |
-
----
-
-## Stage 7 — Rehearsal (H34–H36)
-
-**Gate: both of us can run it alone, cold, from reset.**
-
-| Task | Status |
-|---|---|
-| Five rehearsals from `make demo-reset`, each presenting alone twice | TODO |
-| One rehearsal with wifi off | TODO |
-| The three judge questions out loud | TODO |
-| Laptop: never sleep, notifications off, one browser window | TODO |
-
----
-
-## The demo moment
-
-**The hidden amendment.** CLINIC-01's rent stops matching in July; the system
-finds the amendment in an email thread, remeasures under ASC 842, and asks the
-controller to sign off.
-
-Jenil's Phase 3 opens on the parking-lot double bill instead. **That needs the
-CAM engine, which is cut**, so it cannot be the opener this weekend. The data
-generator already sets it up — Serramonte Medical Plaza holds two Northbay
-suites — so it is the first thing to build after the hackathon.
-
-`CLINIC-01` reproduces the rehearsed Store 14 numbers exactly ($18,500 rising
-3% to $19,626.65), so the **$443,255.70** remeasurement figure in the demo
-script stays valid.
-
----
-
-## Cut list
-
-Cut from the top the moment a gate slips. Cut early, never halfway through.
-
-1. EDGAR real lease
-2. Beancount / Fava export
-3. `make replay` equality test (keep `verify_chain()`)
-4. Rulebook screen — evidence lives on the item detail anyway
-5. Bounding boxes → highlight the whole paragraph instead
-6. Postgres → SQLite, and the DB-role demo beat dies with it
-7. Adversarial set → keep the fenced-data wrapper, drop the tests
-
-**Never cut:** the thin slice · the hash chain · the amendment moment · the
-approve gate · `eval/report.json` · the video.
-
-### Already cut, with reasons
-
-CAM engine and shared pools · policy engine and backtests · bitemporal rulebook
-· CPI escalation · disputes and correspondence · obligations and critical dates
-· human personas · full EDGAR corpus · held-out company · Fetch.ai / ASI:One ·
-Azure deployment · scenario studio · chaos testing · Playwright / Locust / axe ·
-job queue and business clock · CI · transactional outbox.
-
-All of it is in [`roadmap/`](roadmap/), which is the answer to "what would you
-build next."
-
----
-
-## Acceptance criteria
-
-| Criterion | Status |
-|---|---|
-| Fresh clone to running app with `make up migrate seed run-month M=2026-01` | TODO |
-| 5 leases abstracted, every field boxed on its page | **DONE** (agent + citations; needs a real API run) |
-| January catches all 5 errors and does **not** hold the correct-but-odd one | **DONE** |
-| The amendment is found from email, remeasured, proposed for the controller | **DONE** (approval needs the UI) |
-| `lease_agent` cannot insert into `journal_entry` | TODO |
-| `verify_chain()` names a tampered row | TODO |
-| An approver cannot approve their own answer, and the denial is logged | TODO |
-| `make eval`: 6 of 6, 0 false holds, chain intact | TODO |
-| Lease and invoice PDFs are byte-reproducible | **DONE** |
-| Generated leases build schedules that amortize to zero | **DONE** |
+| `app/docs/storage.py` | P1-6 | Content-addressed store, sha256 keys |
+| `app/docs/pipeline.py` | P1-6 | Page text, word boxes, 150 dpi images |
+| `app/docs/citations.py` | P1-6 | Quote → box, fuzzy, match score |
+| `app/llm/*` | P1-7 | Client, versioned prompts, cache, usage, untrusted fencing |
+| `datagen/company,leases,render_lease` | P1-8 | 5 clinics, 2 landlords, 8-page lease PDFs |
+| `datagen/month,render_invoice` | P1-8 | January invoices, AP and bank exports |
+| `datagen/errors.py` | P1-8 | Six planted errors with proofs |
+| `datagen/emails.py` | P2-3 | 10 threads: amendment, forged sender, injection, noise |
+| `app/agents/abstraction.py` | P1-9 | 13 cited fields, verified against the page |
+| `app/engine/charges.py` | P1-10 | What the lease supports, deterministic |
+| `app/agents/checker.py` | P1-10 | Three rules — 5/5 caught, 0 false holds |
+| `app/agents/trust.py` | P2-9 | Six-rank source ranking |
+| `app/agents/modification.py` | P2-5 | Finds the cause, proposes a version |
+| `app/engine/remeasurement.py` | P2-8 | Revised terms → balanced entries |
 
 ---
 
 ## Working agreements
 
-- **Separate files, always.** Sarvesh never opens `backend/app/work/` or
-  `frontend/`. Jenil never opens `datagen/`, `engine/` or `agents/`.
-- **Commit every 30 minutes.** Hackathon laptops die.
-- **Branch per stage**, merge at each gate. `main` is always demo-ready.
+- **Separate files.** Sarvesh never opens `backend/app/work/` or `frontend/`.
+  Jenil never opens `datagen/`, `engine/` or `agents/`.
+- **Commit every 30 minutes.** `main` is always demo-ready.
+- **Python is `./.venv/bin/python`** (3.13). Run tests with plain `pytest`.
+- **The contract** is in [`DESIGN.md`](DESIGN.md) §16. Build screens against the
+  fixtures; do not wait for the API.
 - **Say "I'm stuck" at 30 minutes**, not at three hours.
-- **Sleep in shifts from H18.** Four hours each, staggered.
-- **Python is `./.venv/bin/python`** (3.13). ReportLab needs 3.10+ and the
-  system interpreter is 3.9.
-- Run the suite with plain `pytest` from the repo root.
 
----
+## Standing risks
 
-## Risks
-
-- **Stage 2's gate is not met until Jenil's half lands.** Person A is a stage
-  ahead and Person B has not started. The thin slice is the floor everything
-  else stands on — if H12 arrives with no browser view, stop adding backend and
-  pair on the UI.
-- **Postgres roles eat hours in local setup.** All grants in one `roles.sql`.
-  Not working by H14 → take cut 6 and move on.
-- **Sleep.** Two exhausted people make worse calls than one rested one.
+- **Person B has not started.** Four phases of backend are worth nothing a
+  judge can see. If the gap widens, Person A stops and pairs on the UI.
+- **Everything runs against a fake model client.** The system is proven against
+  what a model returns, not that Claude returns it. One real API run settles it.
+- **Scope is 526 hours.** It is reachable at agent throughput, and only at
+  agent throughput. The cut order in each phase file still applies if it slips.
