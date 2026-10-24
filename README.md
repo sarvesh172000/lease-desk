@@ -131,6 +131,10 @@ The demo and the whole test suite run offline. Only `--live` calls the API.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | High and low level diagrams, API surface, frontend structure |
 | [docs/SPONSORS.md](docs/SPONSORS.md) | Sponsor integration strategy |
 | [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Stage-by-stage build plan for two people |
+| [docs/PLAN_RECONCILIATION.md](docs/PLAN_RECONCILIATION.md) | How the 36-hour build relates to the long-form roadmap |
+| [docs/ROADMAP_PHASE_1.md](docs/ROADMAP_PHASE_1.md) | Roadmap: platform core and first thin slice |
+| [docs/ROADMAP_PHASE_2.md](docs/ROADMAP_PHASE_2.md) | Roadmap: the company, the mess, the full loop |
+| [docs/ROADMAP_PHASE_3.md](docs/ROADMAP_PHASE_3.md) | Roadmap: polish, hardening, multi-track delivery |
 
 ## Status
 
