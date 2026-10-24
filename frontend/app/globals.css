@@ -118,6 +118,3 @@
   }
 }
 
-/* react-pdf: we render canvas only (no text/annotation layers). */
-.react-pdf__Page { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 0 !important; }
-.react-pdf__Page__canvas { display: block; width: 100% !important; height: auto !important; }

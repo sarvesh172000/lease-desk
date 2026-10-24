@@ -142,6 +142,16 @@ export function fixtureDocumentUrl(docId: string): string {
   return `/fixtures/docs/${encodeURIComponent(docId)}.pdf`;
 }
 
+/**
+ * One rendered page, mirroring GET /api/documents/{sha}/pages/{n}.png.
+ *
+ * Written by scripts/render_fixture_pages.py with the same renderer and DPI
+ * the API uses, so a citation box lands in the same place with or without it.
+ */
+export function fixturePageUrl(docId: string, page: number): string {
+  return `/fixtures/docs/${encodeURIComponent(docId)}/${page}.png`;
+}
+
 // ---------------------------------------------------------------------------
 // People and audit (shapes assumed; see README)
 // ---------------------------------------------------------------------------

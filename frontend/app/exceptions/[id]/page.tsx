@@ -104,7 +104,6 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
             {ex.clinic_id ? ` · ${ex.clinic_id}` : ""} · <span className="font-mono text-sm">{ex.exception_id}</span>
           </p>
         </div>
-        <Actions ex={ex} />
       </div>
 
       {/* the calculation */}
@@ -243,6 +242,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
           </Card>
         </div>
       </div>
+
+      <ActionBar ex={ex} />
     </div>
   );
 }
@@ -258,58 +259,77 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
 
 const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold" };
 
-function Actions({ ex }: { ex: ExceptionDetail }) {
+function ActionBar({ ex }: { ex: ExceptionDetail }) {
   const qc = useQueryClient();
   const allowed = useQuery({ queryKey: ["allowed-actions", ex.exception_id], queryFn: () => getAllowedActions(ex.exception_id) });
   const [done, setDone] = useState<string | null>(null);
   const m = useMutation({
     mutationFn: (action: ItemAction) => (action === "approve" ? approveException(ex.exception_id) : holdException(ex.exception_id)),
     onSuccess: (res, action) => {
-      setDone(`${action === "approve" ? "Approved" : "Held"} · now ${STATUS_LABEL[res.status] ?? res.status}`);
+      setDone(`${action === "approve" ? "Approved" : "Held"} \u00b7 now ${STATUS_LABEL[res.status] ?? res.status}`);
     },
     onSettled: () => {
       for (const k of ["exception", "exceptions", "leases", "audit", "allowed-actions"]) void qc.invalidateQueries({ queryKey: [k] });
     },
   });
-  const blockApprove = !!ex.investigation && (!ex.investigation.balanced || !ex.investigation.explains_variance);
+  const inv = ex.investigation;
+  const blockApprove = !!inv && (!inv.balanced || !inv.explains_variance);
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1.5 pt-5">
-      <div className="flex items-center gap-2">
-        {allowed.isLoading ? (
-          <Skeleton className="h-11 w-56" />
-        ) : allowed.isError ? (
-          <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
-        ) : allowed.data?.actions.length ? (
-          allowed.data.actions.map((a) => (
-            <Button
-              key={a}
-              size="lg"
-              variant={a === "approve" ? "primary" : "secondary"}
-              disabled={m.isPending || (a === "approve" && blockApprove)}
-              onClick={() => m.mutate(a)}
-              title={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
-            >
-              {m.isPending && m.variables === a ? "Working…" : ACTION_LABEL[a] ?? humanize(a)}
-            </Button>
-          ))
-        ) : (
-          <span className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
-            {ex.status === "balanced" ? "Approved — nothing to do" : "No actions available to your role"}
-          </span>
-        )}
+    <div className="sticky bottom-0 z-20 -mx-6 mt-1 border-t border-line bg-surface/92 px-6 py-3 backdrop-blur-md">
+      <div className="flex items-center justify-between gap-6">
+        <div className="min-w-0">
+          <div className="truncate text-sm">
+            <span className="num font-semibold">{signedMoney(ex.delta)}</span> variance
+            {inv ? (
+              <>
+                {" \u00b7 "}
+                {inv.entries.length} proposed {inv.entries.length === 1 ? "entry" : "entries"}
+                {" \u00b7 "}
+                <span className={cn("font-medium", inv.balanced ? "text-ok" : "text-bad")}>{inv.balanced ? "balanced" : "out of balance"}</span>
+              </>
+            ) : (
+              <span className="text-ink-muted">{" \u00b7 "}no investigation on record</span>
+            )}
+          </div>
+          <div className="text-xs text-ink-muted">Nothing posts to the ledger until you approve. The decision is recorded in the audit trail.</div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-3">
+          {m.isError ? (
+            <span role="alert" className="max-w-xs text-right text-sm text-bad">
+              {(m.error as Error).message}
+            </span>
+          ) : done ? (
+            <span role="status" className="text-sm font-medium text-ok">
+              {done}
+            </span>
+          ) : null}
+          {allowed.isLoading ? (
+            <Skeleton className="h-11 w-56" />
+          ) : allowed.isError ? (
+            <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
+          ) : allowed.data?.actions.length ? (
+            allowed.data.actions.map((a) => (
+              <Button
+                key={a}
+                size="lg"
+                variant={a === "approve" ? "primary" : "secondary"}
+                loading={m.isPending && m.variables === a}
+                disabled={m.isPending}
+                disabledReason={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
+                onClick={() => m.mutate(a)}
+              >
+                {ACTION_LABEL[a] ?? humanize(a)}
+              </Button>
+            ))
+          ) : (
+            <span className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
+              {ex.status === "balanced" ? "Approved \u2014 nothing to do" : "No actions available to your role"}
+            </span>
+          )}
+        </div>
       </div>
-      {m.isError ? (
-        <span role="alert" className="text-sm text-bad">
-          {(m.error as Error).message}
-        </span>
-      ) : done ? (
-        <span role="status" className="text-sm font-medium text-ok">
-          {done}
-        </span>
-      ) : (
-        <span className="text-xs text-ink-muted">Approval is recorded in the audit trail.</span>
-      )}
     </div>
   );
 }

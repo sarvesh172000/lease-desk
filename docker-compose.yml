@@ -19,6 +19,8 @@ x-backend: &backend
   environment:
     LEASEDESK_DB_HOST: db
     LEASEDESK_DB_PORT: "5432"
+    # Absolute: the default is relative and would resolve under /app/backend.
+    LEASEDESK_DATA_DIR: /app/data
   depends_on:
     db:
       condition: service_healthy
@@ -62,6 +64,9 @@ services:
   api:
     <<: *backend
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Read-only: the API serves document pages, it never writes the store.
+    volumes:
+      - ./data/generated:/app/data:ro
     ports:
       - "8000:8000"
     healthcheck:
@@ -73,6 +78,8 @@ services:
   worker:
     <<: *backend
     command: ["python", "-m", "app.jobs.worker"]
+    volumes:
+      - ./data/generated:/app/data
 
   # The Next.js app lands in frontend/ with the thin slice (A8).
   web:

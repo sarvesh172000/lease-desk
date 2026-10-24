@@ -35,9 +35,14 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
-from .deps import get_engine, get_gateway_engine
+from ..docs.citations import locate
+from ..docs.storage import LocalStorage
+from ..records.ingest import stable_id
+from .deps import get_engine, get_gateway_engine, get_storage
+from .documents import cached_document
 from .items import perform
-from .schemas import ApproveResult, Entry, Evidence, ExceptionDetail, ExceptionSummary, Investigation
+from .schemas import (ApproveResult, Entry, Evidence, ExceptionDetail, ExceptionSummary,
+                      Investigation, InvoiceLine, LeaseCitation)
 
 router = APIRouter(prefix="/api", tags=["exceptions"], dependencies=[Depends(current_actor)])
 
@@ -61,11 +66,15 @@ _SELECT = """
            c.clinic_id   AS charge_clinic_id,
            c.charge_type AS charge_type,
            c.amount      AS charge_amount,
-           c.period      AS charge_period
+           c.period      AS charge_period,
+           c.description AS charge_description,
+           c.page        AS charge_page,
+           cd.sha256     AS charge_doc_sha
       FROM work_item w
       LEFT JOIN landlord_charge c
         ON c.id = COALESCE(CASE WHEN w.subject_type = 'landlord_charge' THEN w.subject_id END,
                            w.evidence ->> 'charge_id')
+      LEFT JOIN source_document cd ON cd.id = c.document_id
      WHERE w.kind = 'CHARGE_CHECK' AND w.proposal = 'hold'
 """
 
@@ -91,19 +100,24 @@ def list_exceptions(eng: Engine = Depends(get_engine)) -> List[ExceptionSummary]
 
 
 @router.get("/exceptions/{exc_id}", response_model=ExceptionDetail)
-def get_exception(exc_id: str, eng: Engine = Depends(get_engine)) -> ExceptionDetail:
+def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
+                  storage: Optional[LocalStorage] = Depends(get_storage)) -> ExceptionDetail:
     match = _ID.match(exc_id)
     if match is None:
         raise HTTPException(404, "no exception %r" % exc_id)
     with eng.connect() as conn:
         row = conn.execute(text(_SELECT + " AND w.id = :id"),
                            {"id": int(match.group(1))}).mappings().first()
-    if row is None:
-        raise HTTPException(404, "no exception %r" % exc_id)
-    flat = _flatten(row)
+        if row is None:
+            raise HTTPException(404, "no exception %r" % exc_id)
+        flat = _flatten(row)
+        lease_sha = _lease_document_sha(conn, flat["lease_id"])
     return ExceptionDetail(
-        **{k: flat[k] for k in ("exception_id", "lease_id", "period", "expected",
-                                "actual", "delta", "status")},
+        **{k: flat[k] for k in ("exception_id", "lease_id", "clinic_id", "period",
+                                "charge_type", "expected", "actual", "delta",
+                                "status", "confidence")},
+        invoice_line=_invoice_line(row, storage),
+        lease_citation=_lease_citation(flat["evidence"], lease_sha, storage),
         investigation=_investigation(flat["evidence"].get("investigation")),
     )
 
@@ -131,6 +145,82 @@ def approve_exception(exc_id: str, body: Optional[ApproveBody] = None,
     result = perform(eng, gateway_engine, actor, item_id, "approve",
                      reason=(body or ApproveBody()).reason)
     return ApproveResult(status=STATUS_BY_STATE[result.state])
+
+
+# --- the documents behind the two panes ------------------------------------------
+
+def _lease_document_sha(conn: Connection, lease_id: Optional[str]) -> Optional[str]:
+    """The stored lease PDF for `lease_id`.
+
+    Ingest names a lease document `stable_id("datagen.leases", lease_id)`
+    (records/ingest.py), so the link needs no column of its own. A lease whose
+    document was never ingested simply has none.
+    """
+    if not lease_id:
+        return None
+    row = conn.execute(text("SELECT sha256 FROM source_document WHERE id = :id AND kind = 'lease'"),
+                       {"id": stable_id("datagen.leases", lease_id)}).first()
+    return row[0] if row else None
+
+
+def _locate(storage: Optional[LocalStorage], sha: Optional[str], quote: Optional[str],
+            page_hint: Optional[int] = None):
+    """Where `quote` really sits in document `sha`, as (page, box).
+
+    The box is read out of the stored PDF's own text, never guessed: if the
+    citations module cannot match the quote, this returns (page_hint, None) and
+    the viewer shows the page with no highlight rather than a box over the
+    wrong words.
+    """
+    if storage is None or not sha or not quote:
+        return page_hint, None
+    try:
+        document = cached_document(str(storage.root), sha)
+    except Exception:  # noqa: BLE001 — an unreadable PDF must not take the screen down
+        return page_hint, None
+    found = locate(document, quote, page_hint=page_hint)
+    if found is None:
+        return page_hint, None
+    return found.page, [round(v, 2) for v in found.box]
+
+
+def _invoice_line(row, storage: Optional[LocalStorage]) -> Optional[InvoiceLine]:
+    """The billed line, boxed on the invoice it was billed on."""
+    sha = row["charge_doc_sha"]
+    description = _str(row["charge_description"])
+    amount = _money(row["charge_amount"])
+    if sha is None and description is None and amount is None:
+        return None
+    # The description names the line; the amount is the fallback when the
+    # rendered wording differs from what was standardized.
+    page, box = _locate(storage, sha, description, row["charge_page"])
+    if box is None and amount is not None:
+        page, box = _locate(storage, sha, "{:,.2f}".format(amount), row["charge_page"])
+    return InvoiceLine(doc_id=sha, page=page, box=box, description=description, amount=amount)
+
+
+def _lease_citation(evidence: Dict[str, Any], lease_sha: Optional[str],
+                    storage: Optional[LocalStorage]) -> Optional[LeaseCitation]:
+    """The clause the checker rested on, as it recorded it in `evidence.proof`.
+
+    The quote and the section are the checker's; only the page and box are
+    resolved here, and only when the checker did not already record them.
+    """
+    proof = evidence.get("proof")
+    if not isinstance(proof, dict):
+        return None
+    quote = _str(proof.get("quote"))
+    section = _str(proof.get("section"))
+    if quote is None and section is None:
+        return None
+    page = int(proof["page"]) if isinstance(proof.get("page"), int) else None
+    box = [_number(v) for v in _list(proof.get("box"))]
+    box = box if len(box) == 4 and all(v is not None for v in box) else None
+    if box is None:
+        page, box = _locate(storage, lease_sha, quote, page)
+    return LeaseCitation(doc_id=lease_sha, page=page, box=box,
+                         label=("\u00a7%s" % section) if section else "Lease clause",
+                         quote=quote)
 
 
 # --- shaping ---------------------------------------------------------------------
@@ -161,10 +251,15 @@ def _flatten(row) -> Dict[str, Any]:
     }
 
 
-def _investigation(raw: Optional[dict]) -> Investigation:
-    """The investigation exactly as recorded, nulls where nothing was."""
-    if not isinstance(raw, dict):
-        return Investigation()
+def _investigation(raw: Optional[dict]) -> Optional[Investigation]:
+    """The investigation exactly as recorded, or None if there was none.
+
+    The distinction matters on screen: an empty Investigation renders as an
+    investigation that ran and explained nothing, rather than as one that was
+    never run.
+    """
+    if not isinstance(raw, dict) or not raw:
+        return None
     evidence = [_lenient(Evidence, e) for e in _list(raw.get("evidence")) if isinstance(e, dict)]
     entries = [Entry(account=str(e.get("account") or ""), debit=_money(e.get("debit")) or 0.0,
                      credit=_money(e.get("credit")) or 0.0)

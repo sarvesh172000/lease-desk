@@ -334,7 +334,7 @@ def test_hostile_evidence_is_nulled_not_a_500(client, seeded):
     assert e["actual"] == 12.5, "falls back to the item amount"
     assert e["confidence"] is None
     detail = client.get("/api/exceptions/" + e["exception_id"]).json()
-    assert detail["investigation"]["evidence"] == []
+    assert detail["investigation"] is None, "a string where the investigation should be is no investigation"
 
 
 # --- GET /api/exceptions/{id} -------------------------------------------------------
@@ -352,17 +352,19 @@ INVESTIGATION = {
 }
 
 
-def test_exception_detail_without_investigation_is_nulls(client, checked):
+def test_exception_detail_without_investigation_is_null(client, checked):
+    """No investigation is null, not an Investigation full of nulls.
+
+    The screen says "No investigation on record yet." for the first and
+    "does not explain the variance" for the second; they are different claims.
+    """
     item = cam_item(checked)
     body = client.get("/api/exceptions/exc_%d" % item).json()
     assert body["exception_id"] == "exc_%d" % item
     assert (body["lease_id"], body["period"], body["expected"], body["actual"], body["delta"]) \
         == ("LEASE-01", "2026-01-01", 5941.67, 6458.33, 516.66)
     assert body["status"] == "pending_review"
-    assert body["investigation"] == {
-        "root_cause": None, "confidence": None, "explains_variance": None, "evidence": [],
-        "liability_before": None, "liability_after": None, "rou_before": None,
-        "rou_after": None, "entries": [], "balanced": None}
+    assert body["investigation"] is None
 
 
 def test_exception_detail_carries_the_recorded_investigation(client, seeded):

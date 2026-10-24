@@ -34,6 +34,7 @@ import {
   FIXTURE_SCHEDULES,
   FIXTURE_SSE,
   fixtureDocumentUrl,
+  fixturePageUrl,
 } from "./fixtures";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -349,9 +350,29 @@ export function ingestDocument(file: File): Promise<unknown> {
 }
 
 /** GET /api/documents/{sha}/pages (named in §16 for box scaling). */
+/**
+ * The wire shape of GET /api/documents/{sha}/pages.
+ *
+ * It numbers each page `number` and names the document `sha256`; everything on
+ * this side calls those `page` and `doc_id`. The two were not the same shape,
+ * so the page lookup in the viewer never matched and no citation box could
+ * draw. Normalising here keeps that mismatch in one place.
+ */
+interface WireDocumentPages {
+  sha256: string;
+  page_count: number;
+  pages: Array<{ number: number; width: number; height: number }>;
+}
+
 export function getDocumentPages(docId: string): Promise<DocumentPages> {
   return call(
-    () => http<DocumentPages>(`/api/documents/${encodeURIComponent(docId)}/pages`),
+    async () => {
+      const wire = await http<WireDocumentPages>(`/api/documents/${encodeURIComponent(docId)}/pages`);
+      return {
+        doc_id: wire.sha256,
+        pages: (wire.pages ?? []).map((p) => ({ page: p.number, width: p.width, height: p.height })),
+      };
+    },
     () => {
       const d = FIXTURE_DOCUMENTS[docId];
       if (!d) throw new ApiError(404, `404 document ${docId} not in fixtures`);
@@ -363,6 +384,20 @@ export function getDocumentPages(docId: string): Promise<DocumentPages> {
 /** EXTENSION: GET /api/documents/{sha}/file — the PDF bytes. */
 export function documentUrl(docId: string): string {
   return source === "fixtures" ? fixtureDocumentUrl(docId) : `${API_URL}/api/documents/${encodeURIComponent(docId)}/file`;
+}
+
+/**
+ * One rendered page: GET /api/documents/{sha}/pages/{n}.png.
+ *
+ * The viewer draws these rather than the PDF itself. The server already
+ * rasterizes with PyMuPDF and serves the result immutable (the sha names the
+ * bytes), so the browser needs no PDF engine, no worker, and no second copy of
+ * the document. Citation boxes are positioned as percentages of the page, so
+ * the render DPI never enters the arithmetic.
+ */
+export function pageImageUrl(docId: string, page: number): string {
+  if (source === "fixtures") return fixturePageUrl(docId, page);
+  return `${API_URL}/api/documents/${encodeURIComponent(docId)}/pages/${page}.png`;
 }
 
 /**

@@ -75,15 +75,43 @@ class Investigation(BaseModel):
     balanced: Optional[bool] = None
 
 
+class InvoiceLine(BaseModel):
+    """The billed line under review, boxed on the invoice page it came from.
+    `page`/`box` are located in the stored PDF; null when the text was not
+    found, which leaves the page shown without a highlight."""
+    doc_id: Optional[str] = None
+    page: Optional[int] = None
+    box: Optional[List[float]] = None
+    description: Optional[str] = None
+    amount: Optional[float] = None
+
+
+class LeaseCitation(BaseModel):
+    """The lease clause the expected amount rests on, as the checker cited it."""
+    doc_id: Optional[str] = None
+    page: Optional[int] = None
+    box: Optional[List[float]] = None
+    label: Optional[str] = None
+    quote: Optional[str] = None
+
+
 class ExceptionDetail(BaseModel):
     exception_id: str
     lease_id: Optional[str]
+    clinic_id: Optional[str] = None
     period: Optional[date]
+    charge_type: Optional[str] = None
     expected: Optional[float]
     actual: Optional[float]
     delta: Optional[float]
     status: str
-    investigation: Investigation
+    confidence: Optional[float] = None
+    invoice_line: Optional[InvoiceLine] = None
+    lease_citation: Optional[LeaseCitation] = None
+    # None when nothing has been investigated: an empty Investigation would
+    # read on screen as an investigation that found nothing, which is a
+    # different claim.
+    investigation: Optional[Investigation]
 
 
 # --- POST /api/exceptions/{id}/approve ----------------------------------------

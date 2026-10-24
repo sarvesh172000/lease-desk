@@ -1,6 +1,6 @@
 "use client";
 
-import { documentUrl, getDocumentPages } from "@/lib/api";
+import { getDocumentPages } from "@/lib/api";
 import { isValidBox } from "@/lib/bbox";
 import type { Box } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
@@ -65,7 +65,7 @@ export function DocumentViewer({
     body = <Fallback reason="No document is attached to this side yet." text={fallbackText} />;
   } else if (pages.isError && !pdfError) {
     // page sizes unavailable: still try the PDF, which knows its own size
-    body = <PdfPage url={documentUrl(docId)} page={pageNo} box={validBox} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />;
+    body = <PdfPage docId={docId} page={pageNo} box={validBox} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />;
   } else if (pdfError) {
     body = <Fallback reason={`Document ${docId} could not be opened (${pdfError}).`} text={fallbackText} />;
   } else if (pages.isLoading) {
@@ -77,7 +77,7 @@ export function DocumentViewer({
     );
   } else {
     body = (
-      <PdfPage url={documentUrl(docId)} page={pageNo} box={validBox} pageSize={size} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />
+      <PdfPage docId={docId} page={pageNo} box={validBox} pageSize={size} tone={tone} label={label} onError={(e) => setPdfError(e.message)} />
     );
   }
 

@@ -1,79 +1,94 @@
 "use client";
 
 /**
- * One PDF page with a citation box drawn over it. Browser-only (pdf.js), so it
- * is loaded through next/dynamic from DocumentViewer.
+ * One document page with a citation box drawn over it.
+ *
+ * The page is the server's own render (GET /api/documents/{sha}/pages/{n}.png),
+ * not a PDF parsed in the browser: the backend already rasterizes with PyMuPDF
+ * and serves the result immutable, so there is no PDF engine, no web worker and
+ * no second copy of the bytes on this side. The box is positioned in percent of
+ * the page, so the render DPI never enters the arithmetic.
  */
 
+import { pageImageUrl } from "@/lib/api";
 import { boxToPercent, scaleBox, type PageSize } from "@/lib/bbox";
 import type { Box } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
 export interface PdfPageProps {
-  url: string;
+  docId: string;
   page: number;
   box?: Box | null;
-  /** From GET /api/documents/{sha}/pages; falls back to the PDF's own size. */
+  /** From GET /api/documents/{sha}/pages; falls back to the image's own size. */
   pageSize?: PageSize | null;
   tone?: "billed" | "cited";
   label?: string;
   onError?: (e: Error) => void;
 }
 
-/** Canvas resolution. The page is then scaled to its column with CSS, so a
- * resize never re-renders the PDF and the %-positioned box tracks it exactly. */
-const RENDER_WIDTH = 1100;
-
 const ZOOMS = [1, 1.5, 2] as const;
 
-export default function PdfPage({ url, page, box, pageSize, tone = "cited", label, onError }: PdfPageProps) {
+export default function PdfPage({ docId, page, box, pageSize, tone = "cited", label, onError }: PdfPageProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [intrinsic, setIntrinsic] = useState<PageSize | null>(null);
   const [rendered, setRendered] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState<(typeof ZOOMS)[number]>(1);
 
-  const size = pageSize ?? intrinsic;
-  const rect = box && size ? boxToPercent(box, size) : null;
+  const src = pageImageUrl(docId, page);
+  // `pageSize` is in PDF points; the image is a 150-DPI raster of the same
+  // page. Only the points can place a box, so without them the page is shown
+  // unhighlighted rather than with the box in the wrong place.
+  const rect = box && pageSize ? boxToPercent(box, pageSize) : null;
+
+  // a new page is a new render: do not keep the old one on screen
+  useEffect(() => {
+    setRendered(false);
+    setFailed(false);
+  }, [src]);
 
   // bring the box into view once the page has painted, and after each zoom
   useEffect(() => {
     const sc = scrollRef.current;
     const wrap = wrapRef.current;
-    if (!rendered || !box || !size || !sc || !wrap) return;
-    const px = scaleBox(box, size, wrap.clientWidth);
+    if (!rendered || !box || !pageSize || !sc || !wrap) return;
+    const px = scaleBox(box, pageSize, wrap.clientWidth);
     // keep the page header in view when the box already fits; otherwise centre it
     const fits = px.top + px.height + 48 <= sc.clientHeight;
     sc.scrollTop = fits ? 0 : Math.max(0, px.top - sc.clientHeight / 3);
     sc.scrollLeft = zoom === 1 ? 0 : Math.max(0, px.left + px.width / 2 - sc.clientWidth / 2);
-  }, [rendered, box, size, zoom]);
+  }, [rendered, box, pageSize, zoom]);
 
   const color = tone === "billed" ? "border-bad bg-bad/10" : "border-mark bg-mark/20";
+
+  if (failed) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-bad">
+        Could not load page {page} of this document.
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full">
       <div ref={scrollRef} className={cn("h-full overflow-y-auto bg-[#e9e7e1] p-3", zoom === 1 ? "overflow-x-hidden" : "overflow-x-auto")}>
         <div ref={wrapRef} className="relative mx-auto bg-white shadow-[0_1px_4px_rgba(0,0,0,0.18)]" style={{ width: `${zoom * 100}%` }}>
-          <Document
-            file={url}
-            loading={<div className="flex h-[480px] items-center justify-center text-sm text-ink-muted">Loading document…</div>}
-            error={<div className="flex h-[300px] items-center justify-center px-6 text-center text-sm text-bad">Could not open this PDF.</div>}
-            onLoadError={(e) => onError?.(e)}
-          >
-            <Page
-              pageNumber={page}
-              width={RENDER_WIDTH}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              onLoadSuccess={(p) => setIntrinsic({ width: p.originalWidth, height: p.originalHeight })}
-              onRenderSuccess={() => setRendered(true)}
-              loading={<div className="h-[480px]" />}
-            />
-          </Document>
+          {/* A cross-origin API render, already served immutable: the image
+              optimizer would add a hop and nothing else. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`Page ${page}`}
+            draggable={false}
+            className="block w-full select-none"
+            onLoad={() => setRendered(true)}
+            onError={() => {
+              setFailed(true);
+              onError?.(new Error(`page ${page} did not load`));
+            }}
+          />
+          {!rendered ? <div className="absolute inset-0 animate-pulse bg-sunken" /> : null}
           {rect && rendered ? (
             <>
               <div

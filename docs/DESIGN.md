@@ -513,8 +513,10 @@ from `datagen`, so the fixtures and the live API agree.
 
 ```json
 {"exception_id": "exc_01_jul_amendment", "lease_id": "LEASE-01",
- "period": "2026-07-01", "expected": 19626.65, "actual": 17400.00,
- "delta": -2226.65, "status": "pending_review",
+ "clinic_id": "CLINIC-01", "period": "2026-07-01", "charge_type": "base_rent",
+ "expected": 19626.65, "actual": 17400.00,
+ "delta": -2226.65, "status": "pending_review", "confidence": 0.94,
+ "invoice_line": null, "lease_citation": null,
  "investigation": {
    "root_cause": "amendment", "confidence": 0.94, "explains_variance": true,
    "evidence": [{"doc_id": "eml_20260618", "date": "2026-06-18",
@@ -533,6 +535,30 @@ from `datagen`, so the fixtures and the live API agree.
 
 `box` is `[x0, y0, x1, y1]` in PDF points, origin top-left. Scale it against
 the page's `width` and `height` from `GET /api/documents/{sha}/pages`.
+
+`invoice_line` and `lease_citation` are the two panes of the money screen: what
+was billed, and the clause the expected amount rests on. Both are `null` above
+because that exception is about a work item with no stored charge and no
+recorded proof. When there is one, they carry the documents:
+
+```json
+{"invoice_line": {
+   "doc_id": "3e650feaf3741186b68e9a528b87c17e7acb7cfcdf8e55d291dc0230adf1e127",
+   "page": 1, "box": [67.2, 319.25, 177.76, 331.61],
+   "description": "Base Rent — January 2026", "amount": 19626.65},
+ "lease_citation": {
+   "doc_id": "37ad6c52c33b6a2ffd96312fb9bf5a587369f9a29f1af9416e59041ccdff1e14",
+   "page": 3, "box": [85.2, 161.29, 526.8, 188.34],
+   "label": "§3.2",
+   "quote": "Base Rent shall be due and payable in advance on the first (1st) day of each calendar month during the Term"}}
+```
+
+`invoice_line` comes from the `landlord_charge` the work item is about, and its
+document is the invoice that charge was billed on. `lease_citation` is the
+checker's own `evidence.proof` — its quote and section are the checker's, and
+only `page`/`box` are resolved at read time, by locating the quote in the
+stored PDF (`docs/citations.py`). Neither box is ever guessed: when the quote
+cannot be matched, `box` is `null` and the viewer shows the page unhighlighted.
 
 ### SSE event shape
 

@@ -4,6 +4,7 @@ import { investigate } from "@/lib/api";
 import { pct, signedMoney } from "@/lib/format";
 import type { InvestigationEvent } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "./ui/Button";
 
@@ -57,6 +58,7 @@ export function InvestigationTimeline({
   const abortRef = useRef<AbortController | null>(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
+  const reduce = useReducedMotion();
 
   const run = useCallback(async () => {
     abortRef.current?.abort();
@@ -90,6 +92,10 @@ export function InvestigationTimeline({
   const seen = new Map(events.map((e) => [e.stage, e]));
   const nextIdx = STAGES.findIndex((s) => !seen.has(s.stage));
 
+  // The line into a step draws only once its own event has arrived, so the
+  // stroke is a readout of real progress, not a timed animation.
+  const draw = reduce ? { duration: 0 } : { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
+
   return (
     <div>
       <ol className="relative">
@@ -99,23 +105,55 @@ export function InvestigationTimeline({
           return (
             <li key={s.stage} className="relative flex gap-3 pb-4 last:pb-0" data-stage={s.stage} data-done={ev ? "true" : "false"}>
               {i < STAGES.length - 1 ? (
-                <span aria-hidden className={cn("absolute left-[9px] top-5 h-[calc(100%-12px)] w-px", ev ? "bg-accent" : "bg-line")} />
+                <span aria-hidden className="absolute left-[9px] top-5 h-[calc(100%-12px)] w-px bg-line">
+                  <motion.span
+                    className="absolute inset-0 block origin-top bg-accent"
+                    initial={false}
+                    animate={{ scaleY: ev ? 1 : 0 }}
+                    transition={draw}
+                  />
+                </span>
               ) : null}
-              <span
+              <motion.span
                 aria-hidden
+                initial={false}
+                animate={ev ? { scale: [1, 1.22, 1] } : { scale: 1 }}
+                transition={reduce ? { duration: 0 } : { duration: 0.34, ease: "easeOut" }}
                 className={cn(
                   "relative z-10 mt-0.5 flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
                   ev ? "border-accent bg-accent text-white" : active ? "animate-pulse border-accent bg-accent-soft" : "border-line-strong bg-surface",
                 )}
               >
                 {ev ? "✓" : ""}
-              </span>
+              </motion.span>
               <div className="min-w-0 flex-1 text-sm">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className={cn("font-medium", !ev && !active && "text-ink-muted")}>{s.title}</span>
+                  <span className={cn("font-medium transition-colors", !ev && !active && "text-ink-muted")}>{s.title}</span>
                   <span className="text-2xs uppercase tracking-wide text-ink-faint">{s.agent}</span>
                 </div>
-                {ev ? <div className="mt-0.5 text-ink-soft">{detail(ev)}</div> : active ? <div className="mt-0.5 text-ink-muted">Working…</div> : null}
+                <AnimatePresence initial={false} mode="wait">
+                  {ev ? (
+                    <motion.div
+                      key="detail"
+                      initial={reduce ? false : { opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={reduce ? { duration: 0 } : { duration: 0.24, ease: "easeOut", delay: 0.1 }}
+                      className="mt-0.5 text-ink-soft"
+                    >
+                      {detail(ev)}
+                    </motion.div>
+                  ) : active ? (
+                    <motion.div
+                      key="working"
+                      initial={reduce ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="mt-0.5 text-ink-muted"
+                    >
+                      Working…
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </div>
             </li>
           );
