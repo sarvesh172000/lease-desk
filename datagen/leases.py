@@ -141,6 +141,29 @@ class LeaseTerms:
         }
 
 
+# Lease terms for the clinics beyond the Phase 1 five, cycled deterministically
+# so every run produces the same leases while no two read alike.
+#
+# The cycle lengths are deliberately co-prime. Square footage runs on 8 in
+# company.py; indexing rent per square foot on 8 as well made the two move
+# together, so thirty leases carried only thirteen distinct rents and the
+# documents were near-duplicates. An extraction benchmark on near-duplicates
+# measures pattern-matching, not reading.
+_PSF_CYCLE = (34.50, 29.75, 41.00, 26.25, 37.80, 31.40, 44.20)        # 7
+_TERM_YEARS_CYCLE = (5, 7, 3, 10, 4, 6)                               # 6
+_START_MONTHS = ((2023, 2), (2024, 5), (2024, 9), (2025, 3), (2023, 11))  # 5
+_ESCALATIONS = (                                                      # 7
+    ("fixed_percent", 0.030), ("fixed_step", 325.00), ("fixed_percent", 0.0275),
+    ("fixed_step", 450.00), ("fixed_percent", 0.035), ("fixed_percent", 0.025),
+    ("fixed_step", 280.00),
+)
+_CAM_PSF_CYCLE = (10.25, 12.75, 8.90, 11.40, 9.60, 13.20, 10.80, 12.10, 9.15, 11.95, 8.40)  # 11
+_RENEWALS = (
+    RenewalOption(1, 5, 270), RenewalOption(2, 3, 180), RenewalOption(1, 3, 240),
+    RenewalOption(2, 5, 365), RenewalOption(1, 5, 180), RenewalOption(0, 0, 0),
+)
+
+
 def build_leases(company: Optional[Company] = None) -> List[LeaseTerms]:
     company = company or build_company()
     specs = [
@@ -162,6 +185,12 @@ def build_leases(company: Optional[Company] = None) -> List[LeaseTerms]:
          RenewalOption(1, 3, 120)),
     ]
 
+    known = {spec[1] for spec in specs}
+    for index, clinic in enumerate(company.clinics):
+        if clinic.clinic_id in known:
+            continue
+        specs.append(_derived_spec(index, clinic))
+
     leases = []
     for lease_id, clinic_id, start, end, rent, esc, cam, deposit, renewal in specs:
         years = round((end - start).days / 365.25)
@@ -182,6 +211,37 @@ def build_leases(company: Optional[Company] = None) -> List[LeaseTerms]:
             )
         )
     return leases
+
+
+def _derived_spec(index: int, clinic):
+    """Terms for a clinic beyond the Phase 1 five.
+
+    Deterministic from the clinic's position, so the same company always
+    produces the same leases, and varied enough that an extractor cannot
+    succeed by pattern-matching one shape.
+    """
+    number = int(clinic.clinic_id.split("-")[1])
+
+    year, month = _START_MONTHS[number % len(_START_MONTHS)]
+    start = date(year, month, 1)
+    years = _TERM_YEARS_CYCLE[number % len(_TERM_YEARS_CYCLE)]
+    end = _add_months(start, years * 12) - timedelta(days=1)
+
+    psf = _PSF_CYCLE[number % len(_PSF_CYCLE)]
+    monthly = round(clinic.rsf * psf / 12, 2)
+    kind, amount = _ESCALATIONS[number % len(_ESCALATIONS)]
+
+    return (
+        "LEASE-%02d" % number,
+        clinic.clinic_id,
+        start,
+        end,
+        monthly,
+        Escalation(kind, amount, start.month),
+        _CAM_PSF_CYCLE[number % len(_CAM_PSF_CYCLE)],
+        round(monthly * 2, 2),
+        _RENEWALS[number % len(_RENEWALS)],
+    )
 
 
 def _add_months(d: date, months: int) -> date:
