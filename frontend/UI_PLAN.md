@@ -234,13 +234,13 @@ components/domain/ EvidenceCard, ScheduleDiff, JournalEntryTable,
 
 | # | Phase | Hours | Done when |
 |---|---|---|---|
-| 1 | Tokens, fonts, dark theme, `Button`/`Card`/`Badge` | 4 | Every existing screen renders dark with no hex in any `.tsx` |
-| 2 | Dashboard polish — tiles, sparkline, queue | 3 | Count-up and hover states feel deliberate |
-| 3 | **Exception screen** — split view, timeline, entries, diff | 8 | The 3-minute demo runs on it without apology |
-| 4 | **Landing page** `/welcome` | 8 | A stranger reads it once and can say what the product does |
-| 5 | Leases, audit, login | 5 | Hash chain is visibly a chain |
-| 6 | Command palette, toasts, empty and loading states | 3 | Nothing ever shows a raw spinner or a blank panel |
-| 7 | Motion pass, reduced-motion, projector check at 1280 | 3 | Legible from across a room |
+| 1 | ~~Tokens, fonts, dark theme, `Button`/`Card`/`Badge`~~ **DONE** | 4 | Every existing screen renders dark with no hex in any `.tsx` |
+| 2 | Dashboard polish — tiles, queue **DONE** (sparkline not built) | 3 | Count-up and hover states feel deliberate |
+| 3 | ~~**Exception screen**~~ **DONE** — split view, timeline, entries, diff | 8 | The 3-minute demo runs on it without apology |
+| 4 | ~~**Landing page** `/welcome`~~ **DONE** | 8 | A stranger reads it once and can say what the product does |
+| 5 | ~~Leases, audit, login~~ **DONE** | 5 | Hash chain is visibly a chain |
+| 6 | Command palette, empty and loading states **DONE** (no toasts) | 3 | Nothing ever shows a raw spinner or a blank panel |
+| 7 | Motion pass, reduced-motion **DONE**; projector check at 1280 pending | 3 | Legible from across a room |
 
 **34 hours.** If it slips, cut in this order: command palette → sparklines →
 scroll-driven landing sequence (fall back to four static steps) → dark/light
@@ -291,3 +291,26 @@ Sign in as `priya.raghunathan@northbaypt.example` / `demo`.
 Build against fixtures when the backend is in flux
 (`NEXT_PUBLIC_USE_FIXTURES=1`), but do the final pass on live data — the live
 payload is where the empty states and the missing fields actually show up.
+
+
+---
+
+## Status, 24 Oct 2026
+
+Phases 1-6 are built and on `main`. Phase 7's motion and reduced-motion work is
+done; the 1280 projector check still wants a human eye on a real screen.
+
+Building phase 3 surfaced that the money screen had no data to show, and four
+breaks underneath it, all now fixed: the detail endpoint returned seven scalars
+and neither document; the api/worker containers had no data volume, so every
+page request 404'd; the page viewer crashed on pdf.js and is now the server's
+own PNG renders; and the page-size lookup compared `page` against the API's
+`number`, so no citation box could ever draw.
+
+**The one thing still missing for the demo:** `POST /api/exceptions/{id}/investigate`
+does not exist. "Run investigation" 404s on live data, so the timeline, the
+proposed entries and the schedule diff stay empty there. All of it works
+against fixtures (`NEXT_PUBLIC_USE_FIXTURES=1`, exception
+`exc_01_jul_amendment`), which is where the $443,255.70 remeasurement and the
+balanced $447,880.44 entries were verified. Wiring the investigation agent to
+that route is what turns the live screen into the demo.
