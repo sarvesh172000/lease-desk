@@ -10,19 +10,22 @@ for the web app.
     claimed = client.claim("K7QM-9XDA", chat_user="agent1q...")       # no session needed
     me = client.paired(claimed["token"], "agent1q...")
     me.items(); me.act(42, "approve", reason="...")
+    for frame in me.investigate(42): ...        # the investigation's SSE frames, as they arrive
 
 Any non-2xx is an ApiError with the status and the API's `detail`. Tests hand
 in FastAPI's TestClient (an httpx.Client) as `http`, so the agents are
 exercised against the real app and a real database with no server running.
 """
 
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, Dict, Iterator, List, Optional
 from urllib.parse import quote
 
 import httpx
 
 CHAT_USER_HEADER = "X-LeaseDesk-Chat-User"      # = app.auth.pairing.CHAT_USER_HEADER
 CLIENT_KEY_HEADER = "X-Pairing-Client-Key"
+INVESTIGATION_READ_S = 600.0
 
 
 class ApiError(Exception):
@@ -117,6 +120,29 @@ class PairedClient:
     def why(self, item_id: int, question: Optional[str] = None) -> Dict[str, Any]:
         return self._post("/api/items/%d/why" % item_id,
                           {"question": question} if question else None)
+
+    def investigate(self, item_id: int) -> Iterator[Dict[str, Any]]:
+        """POST /api/exceptions/exc_<id>/investigate: the investigation's
+        `data: {...}` frames (stage searching | found | not_found | remeasured
+        | complete | error), yielded as the API streams them. An investigation
+        may run a model over the mailbox, so the read timeout is long."""
+        http = self._base.http
+        try:
+            with http.stream("POST", "/api/exceptions/exc_%d/investigate" % item_id, headers=self._headers,
+                             timeout=httpx.Timeout(30.0, read=INVESTIGATION_READ_S)) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise ApiError(response.status_code, _detail(response))
+                for line in response.iter_lines():
+                    if line.startswith("data:"):
+                        try:
+                            frame = json.loads(line[len("data:"):].strip())
+                        except ValueError:
+                            continue
+                        if isinstance(frame, dict):
+                            yield frame
+        finally:
+            http.cookies.clear()
 
     # the rulebook
     def leases(self) -> List[Dict[str, Any]]:

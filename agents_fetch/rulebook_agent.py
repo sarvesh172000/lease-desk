@@ -19,8 +19,10 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from .client import ApiError, LeaseDeskClient, PairedClient
 from .grammar import TOPICS, Command
+from .live import Feed, record_step
 from .protocol import ERROR, INVALID, NOT_FOUND, REFUSED, UNPAIRED, Reply
 
+FEED_NAME = "rulebook"
 AGENT_NAME = "lease_desk_rulebook"
 DESCRIPTION = ("Answers questions about Northbay PT's leases (rent, escalation, CAM, term) with the "
                "page and quote each answer comes from. Reached through the Northbay Lease Desk agent.")
@@ -121,12 +123,14 @@ def handle(client: PairedClient, command: Command) -> Reply:
         return Reply("Lease Desk couldn't answer that (%s)." % exc.detail, outcome=ERROR)
 
 
-def handle_request(request: Mapping[str, Any], api: LeaseDeskClient) -> Dict[str, Any]:
-    """One SpecialistRequest (protocol.py) -> one SpecialistReply dict."""
+def handle_request(request: Mapping[str, Any], api: LeaseDeskClient, feed: Optional[Feed] = None) -> Dict[str, Any]:
+    """One SpecialistRequest (protocol.py) -> one SpecialistReply dict, with
+    this agent's step on the live feed under the message's run id."""
     command = Command.from_dict(request.get("command") or {})
     reply = handle(api.paired(str(request.get("token") or ""), str(request.get("chat_user") or "")),
                    command)
     reply.request_id = request.get("request_id")
+    record_step(feed, str(request.get("run_id") or ""), FEED_NAME, command, reply)
     return reply.as_dict()
 
 

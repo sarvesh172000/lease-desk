@@ -5,11 +5,15 @@ a chat user, becomes a bearer token that acts as that person on the chat
 routes only. Real app, real database, real cookies; nothing patched.
 """
 
+import json
+
 import ledger_world as w
 import pytest
 from sqlalchemy import text
 from test_api_write import as_, make_client, open_item, world  # noqa: F401 — fixtures
 
+from app.agents import investigation_run
+from app.api.exceptions import investigation_runner, sse_delay
 from app.auth import pairing
 
 CHAT = "agent1qchatuserdesert000000000000000000000000000000000000000"
@@ -182,6 +186,8 @@ def test_the_bearer_header_wins_over_a_cookie(world):  # noqa: F811
     ("post", "/api/pairing/1/revoke"),
     ("post", "/api/batches/2026-01/release"),
     ("post", "/api/exceptions/exc_1/approve"),
+    ("post", "/api/exceptions/exc_1/hold"),
+    ("post", "/api/exceptions/exc_1/pay-as-billed"),
     ("get", "/api/summary"),
 ])
 def test_a_paired_session_reaches_only_the_chat_routes(world, method, path):  # noqa: F811
@@ -197,6 +203,37 @@ def test_a_paired_session_reads_and_acts_through_can(world):  # noqa: F811
     api = make_client(world)
     assert [i["id"] for i in api.get("/api/items", headers=bearer(token)).json()["items"]] == [bay]
     assert api.get("/api/items/%d" % bay, headers=bearer(token)).status_code == 200
+
+
+def no_model(**_):
+    raise investigation_run.NoModel("No model in this test.")
+
+
+def test_a_paired_session_may_run_an_investigation(world):  # noqa: F811
+    """The investigation agent's one call: an SSE stream under the paired
+    person's token. It proposes and never posts, so nothing changes state."""
+    bay = open_item(world, w.RENT)
+    token, _ = paired(world, "PER-RM-BAY")
+    api = make_client(world)
+    api.app.dependency_overrides[sse_delay] = lambda: 0.0
+    api.app.dependency_overrides[investigation_runner] = lambda: no_model
+    response = api.post("/api/exceptions/exc_%d/investigate" % bay, headers=bearer(token))
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("text/event-stream")
+    stages = [json.loads(line[len("data:"):])["stage"] for line in response.text.splitlines()
+              if line.startswith("data:")]
+    assert stages and stages[-1] == "error", stages
+    assert api.get("/api/items/%d" % bay, headers=bearer(token)).json()["item"]["state"] == "PROPOSED"
+
+
+def test_an_investigation_still_needs_a_live_pairing(world):  # noqa: F811
+    bay = open_item(world, w.RENT)
+    token, _ = paired(world, "PER-RM-BAY")
+    api = make_client(world)
+    api.app.dependency_overrides[investigation_runner] = lambda: no_model
+    assert api.post("/api/exceptions/exc_%d/investigate" % bay,
+                    headers=bearer(token, OTHER_CHAT)).status_code == 401
+    assert api.post("/api/exceptions/exc_%d/investigate" % bay).status_code == 401
 
 
 # --- revoking ------------------------------------------------------------------------

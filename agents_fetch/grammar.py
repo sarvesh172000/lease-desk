@@ -16,13 +16,20 @@ the API as a string and never parsed again. So
     "answer 17 yes. approve 42"                       -> answer 17 with that text
     "review 17\\napprove 42"                          -> help (review takes nothing after)
 
+An investigation ("investigate 42", "why is 42 off?") is a read too: it asks
+the investigation agent to search the mailbox for what explains a charge
+check's variance, and it proposes, never posts.
+
 Reads are matched more loosely ("what needs me this week?", "what is Clinic
 03's escalation and where does it say so?") because a read cannot change
 anything, and the API scopes it to the paired person anyway.
 
 Interactive Card buttons arrive as a `selection` dict; `from_selection`
 validates it against the same commands, so a button can only ever press what
-typing could.
+typing could. `render` writes a Command back as the exact line that parses to
+it, which is how the front desk shows a person what to send when ASI:One's
+model read a message it could not parse (understand.py): the model's reading
+is only ever a suggestion, typed back through this grammar.
 """
 
 import re
@@ -46,12 +53,18 @@ NEEDS_TEXT = {"answer", "hold", "reject"}
 
 APPROVALS = "approvals"
 RULEBOOK = "rulebook"
+INVESTIGATION = "investigation"
 DESK = "desk"
+
+# What a specialist may be asked. Reads change nothing; `act` is the only
+# command that writes, and it only ever comes from what a person typed or pressed.
+READS = ("inbox", "review", "why", "investigate", "lease")
 
 
 @dataclass(frozen=True)
 class Command:
-    name: str                       # help, pair, unpair, whoami, inbox, review, why, act, lease, unknown
+    name: str                       # help, pair, unpair, whoami, inbox, review, why, investigate,
+    #                                 act, lease, unknown
     item_id: Optional[int] = None
     action: Optional[str] = None    # for act: the API action
     verb: Optional[str] = None      # for act: what the person typed
@@ -67,6 +80,8 @@ class Command:
             return APPROVALS
         if self.name == "lease":
             return RULEBOOK
+        if self.name == "investigate":
+            return INVESTIGATION
         return DESK
 
     def as_dict(self) -> dict:
@@ -90,6 +105,11 @@ class Command:
             if item_id is None:
                 return Command("unknown", problem="bad item number")
             return Command(name, item_id=item_id, text=_clip(data.get("text")))
+        if name == "investigate":
+            item_id = _item(data.get("item_id"))
+            if item_id is None:
+                return Command("unknown", problem="bad item number")
+            return Command("investigate", item_id=item_id)
         if name == "inbox":
             return Command("inbox")
         if name == "lease":
@@ -137,6 +157,13 @@ _ACTION_RE = re.compile(r"^(%s)%s%s(?:[ \t]*[:,\-]?[ \t]*(.*))?$"
 _PAIR_RE = re.compile(r"^pair(?:%s(?:with|code)?)?[ \t]*([A-Za-z0-9][A-Za-z0-9 \-]{6,12})$"
                       % _WS, re.IGNORECASE)
 _REVIEW_RE = re.compile(r"^(?:review|show|open)%s%s[ \t]*[.?!]?$" % (_WS, _ITEM), re.IGNORECASE)
+# "investigate 42", "look into exc_42", "why is 42 off?": the item is all it takes.
+_INVESTIGATE_RE = re.compile(
+    r"^(?:investigate|look[ \t]+into|dig[ \t]+into)%s(?:item[ \t]+|exc_)?#?(\d{1,19})[ \t]*[.?!]?$"
+    % _WS, re.IGNORECASE)
+_WHY_OFF_RE = re.compile(
+    r"^why%s(?:is|was)%s(?:item[ \t]+|exc_)?#?(\d{1,19})%s(?:off|wrong|different)[ \t]*[.?!]*$"
+    % (_WS, _WS, _WS), re.IGNORECASE)
 _WHY_RE = re.compile(r"^why(?:%s(?:was|is)%s(?:item%s)?)?%s#?(\d{1,19})\b[ \t]*(.*)$"
                      % (_WS, _WS, _WS, r"[ \t]*"), re.IGNORECASE | re.DOTALL)
 _WHY_HELD_RE = re.compile(r"^why\b.*?\b(?:item[ \t]+|#)(\d{1,19})\b", re.IGNORECASE | re.DOTALL)
@@ -170,6 +197,8 @@ _TOPIC_WORDS = (
     ("renewal", ("renewal", "renew", "option")),
     ("discount", ("discount rate", "ibr", "borrowing rate")),
 )
+# A topic as words _topic() reads back as that topic (render()).
+_TOPIC_PHRASE = {"discount": "discount rate"}
 _LEASE_HINTS = ("lease", "clinic", "where does it say", "rulebook", "clause")
 
 
@@ -226,6 +255,11 @@ def parse(text: Optional[str]) -> Command:
         item_id = _item(m.group(1))
         return Command("review", item_id=item_id) if item_id else Command("unknown")
 
+    m = _INVESTIGATE_RE.match(raw) or _WHY_OFF_RE.match(raw)
+    if m:
+        item_id = _item(m.group(1))
+        return Command("investigate", item_id=item_id) if item_id else Command("unknown")
+
     m = _WHY_RE.match(raw) or _WHY_HELD_RE.match(raw)
     if m:
         item_id = _item(m.group(1))
@@ -251,9 +285,33 @@ def from_selection(selection: Optional[Mapping[str, Any]]) -> Command:
     if cmd in ("review", "why") and item_id:
         return Command(cmd, item_id=item_id,
                        text=_clip(selection.get("text")) if cmd == "why" else None)
+    if cmd == "investigate" and item_id:
+        return Command("investigate", item_id=item_id)
     if cmd == "inbox":
         return Command("inbox")
     return Command("unknown", problem="bad selection")
+
+
+def render(command: Command) -> Optional[str]:
+    """The one line a person would type to get `command`, or None for what a
+    line cannot carry (unknown). parse(render(c)) gives c back for every
+    specialist command; tests hold that."""
+    name, n = command.name, command.item_id
+    if name == "act" and command.verb in ACTIONS and n:
+        return ("%s %d %s" % (command.verb, n, " ".join(command.text.split()))
+                if command.text else "%s %d" % (command.verb, n))
+    if name in ("review", "investigate") and n:
+        return "%s %d" % (name, n)
+    if name == "why" and n:
+        return "why %d" % n
+    if name == "inbox":
+        return "what needs me this week?"
+    if name == "lease" and command.lease_ref:
+        topic = _TOPIC_PHRASE.get(command.topic or "", command.topic)
+        return "lease %s%s" % (command.lease_ref, " %s" % topic if topic else "")
+    if name in ("help", "whoami", "unpair"):
+        return name
+    return None
 
 
 HELP = """**Northbay Lease Desk** — lease accounting questions and approvals, under your own Lease Desk permissions.
@@ -265,10 +323,12 @@ Then:
 - `what needs me this week?` — your open items and questions
 - `review 42` — a held item with its sources and the trust explanation
 - `why 42` — why item 42 is where it is
+- `investigate 42` (or `why is 42 off?`) — the investigation agent searches the mailbox for what explains it
 - `answer 42 <your answer>` — answer the open question on item 42
 - `approve 42 <reason>` / `uphold 42 <reason>` / `hold 42 <reason>` / `reject 42 <reason>` / `resume 42`
 - `what is Clinic 03's escalation and where does it say so?` — lease terms with page and quote
 - `whoami`, `unpair`
 
-Actions only run when the message starts with the action and the item number. \
+Actions only run when the message starts with the action and the item number; if I read \
+anything else as an action, I show you the exact line to send instead of doing it. \
 Lease Desk checks every action against your role and region, and records refusals too."""

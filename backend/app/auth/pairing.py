@@ -19,8 +19,8 @@ The flow (PHASE_3.md group 9):
    `X-LeaseDesk-Chat-User`, and `auth.deps.current_actor` turns it into the
    same SessionActor a cookie would, re-read from `actor` on every request.
 
-The token is a *scoped* session: it reaches only PAIRED_ROUTES, the reads and
-the item actions the chat workflow needs. It cannot mint pairing codes, list
+The token is a *scoped* session: it reaches only PAIRED_ROUTES, the reads,
+the item actions and the investigation the chat workflow needs. It cannot mint pairing codes, list
 or revoke other pairings, switch actors, release batches or reset the demo.
 Within that scope can() still decides every action, exactly as for the web
 app, and a refusal is on the audit stream either way.
@@ -68,6 +68,11 @@ PAIRED_ROUTES: FrozenSet[Tuple[str, str]] = frozenset({
     ("GET", "/api/leases/{lease_id}/schedule"),
     ("GET", "/api/exceptions"),
     ("GET", "/api/exceptions/{exc_id}"),
+    # The investigation agent's one call: searches the mailbox and proposes,
+    # never posts, exactly as the web app's timeline does for any signed-in
+    # person. Approve / hold / pay-as-billed on /api/exceptions stay out: the
+    # chat acts through /api/items/{id}/actions only.
+    ("POST", "/api/exceptions/{exc_id}/investigate"),
     ("GET", "/api/audit"),
 })
 
