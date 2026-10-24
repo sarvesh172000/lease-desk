@@ -1,5 +1,6 @@
 "use client";
 
+import { ChainLink, ChainVerdict } from "@/components/data/HashChain";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
 import { getAudit } from "@/lib/api";
@@ -18,24 +19,6 @@ export default function AuditPage() {
   );
 }
 
-function ChainBadge({ verified, brokenAt }: { verified: boolean; brokenAt?: number | null }) {
-  return (
-    <span
-      data-testid="chain-badge"
-      data-verified={verified ? "true" : "false"}
-      className={cn(
-        "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-semibold",
-        verified ? "border-ok-line bg-ok-soft text-ok" : "border-bad-line bg-bad-soft text-bad",
-      )}
-    >
-      <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs">
-        {verified ? "✓" : "✗"}
-      </span>
-      {verified ? "Chain verified" : `Chain broken${brokenAt != null ? ` at #${brokenAt}` : ""}`}
-    </span>
-  );
-}
-
 function AuditTrail() {
   const params = useSearchParams();
   const router = useRouter();
@@ -51,7 +34,13 @@ function AuditTrail() {
           <div className="eyebrow">Append-only · hash-chained</div>
           <h1 className="text-2xl font-semibold">Audit trail{leaseId ? ` · ${leaseId}` : ""}</h1>
         </div>
-        {q.data ? <ChainBadge verified={q.data.chain_verified} brokenAt={q.data.broken_at} /> : null}
+        {q.data ? (
+          <ChainVerdict
+            verified={q.data.chain_verified}
+            brokenAt={q.data.broken_at}
+            count={q.data.events?.length ?? 0}
+          />
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3 text-sm">
@@ -94,7 +83,7 @@ function AuditTrail() {
               </tr>
             </thead>
             <tbody>
-              {events.map((e) => (
+              {events.map((e, i) => (
                 <tr key={e.seq} className={cn("border-b border-line/70 align-top", !e.allowed && "bg-bad-soft/40")}>
                   <td className="num py-2.5 pl-5 text-right text-ink-muted">{e.seq}</td>
                   <td className="num px-3 py-2.5 text-ink-soft">{timestamp(e.at)}</td>
@@ -120,8 +109,14 @@ function AuditTrail() {
                     <span className={cn("text-xs font-semibold uppercase tracking-wide", e.allowed ? "text-ok" : "text-bad")}>{e.allowed ? "Allowed" : "Denied"}</span>
                     {e.reason ? <div className="text-xs text-ink-soft">{e.reason}</div> : null}
                   </td>
-                  <td className="px-3 py-2.5 pr-5 font-mono text-2xs text-ink-muted" title={e.hash}>
-                    {e.hash ? e.hash.slice(0, 12) : "—"}
+                  <td className="px-3 py-2.5 pr-5">
+                    <ChainLink
+                      seq={e.seq}
+                      hash={e.hash}
+                      prevHash={e.prev_hash}
+                      allowed={e.allowed}
+                      index={i}
+                    />
                   </td>
                 </tr>
               ))}

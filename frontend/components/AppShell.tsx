@@ -4,6 +4,7 @@ import { demoSwitch, logout } from "@/lib/api";
 import { humanize } from "@/lib/format";
 import { useDataSource, useDemoActors, useMe } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      <CommandPalette />
       <Header pathname={pathname} />
       <main className="mx-auto w-full max-w-[1400px] px-6 pb-16 pt-6">
         {me.isLoading ? (
