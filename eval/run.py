@@ -221,6 +221,84 @@ def _run_investigation(llm, base, company, documents, senders):
     )
 
 
+def score_heldout() -> Section:
+    """Run the deterministic engines over a company never seen in development.
+
+    The checker, the charge engine and the CAM engine were all built and tuned
+    against Northbay. If they only work there, they are tuned to a generator
+    rather than to leases. This runs them over Stonebridge — different seed,
+    landlords, cities, lease language and suite numbering — and asserts the
+    invariants that must hold for any company at all.
+    """
+    from app.engine.cam import CamRule, allowed, check_shared_pool
+    from datagen.cam_pools import build_pools
+    from datagen.heldout import build_heldout
+
+    section = Section("held_out")
+    company, leases = build_heldout()
+    rules = rules_from_terms(leases, company)
+    pools = build_pools(company, 2025)
+
+    checks = {}
+
+    # Every lease must produce a schedule that amortizes to zero.
+    import json
+    import tempfile
+
+    from leasedesk.models import load_lease
+    from leasedesk.schedule import build as build_schedule
+
+    amortizes = True
+    for terms in leases:
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(terms.to_engine_json(company), fh)
+            path = fh.name
+        schedule = build_schedule(load_lease(path))
+        amortizes &= abs(schedule.periods[-1].liability_close) < 0.01
+    checks["schedules_amortize_to_zero"] = amortizes
+
+    # A correct statement must raise nothing — no false holds on a clean month.
+    clean = True
+    for center in company.centers:
+        pool = pools[center.center_id]
+        for clinic in company.clinics_in(center.center_id):
+            rule = CamRule("L", clinic.clinic_id, center.center_id,
+                           clinic.rsf, center.total_rsf)
+            due = allowed(rule, pool, gross_receipts=center.total_rsf * 20.0)
+            clean &= all(l.share >= 0 for l in due.lines)
+    checks["no_negative_allocations"] = clean
+
+    # No center may allocate more than 100% of a pool across its tenants.
+    within = True
+    for center in company.centers:
+        pool = pools[center.center_id]
+        clinic_rules = [
+            CamRule("L", c.clinic_id, center.center_id, c.rsf, center.total_rsf)
+            for c in company.clinics_in(center.center_id)
+        ]
+        within &= round(sum(r.pro_rata for r in clinic_rules), 6) <= 1.0
+        within &= check_shared_pool(clinic_rules, pool) == []
+    checks["no_over_allocation"] = within
+
+    # The rulebook shim must produce a usable rule for every lease.
+    checks["rules_built_for_every_lease"] = len(rules) == len(leases)
+
+    for ok in checks.values():
+        section.passed += ok
+        section.failed += not ok
+
+    section.detail = {
+        "company": company.entity.name,
+        "seed": company.seed,
+        "clinics": len(company.clinics),
+        "leases": len(leases),
+        "checks": checks,
+    }
+    section.note = "%d clinics, seed %d, %d/%d invariants hold" % (
+        len(company.clinics), company.seed, section.passed, section.total)
+    return section
+
+
 def score_safety(key: dict) -> Section:
     """The three sources that must never settle anything, and the fencing."""
     from app.agents.trust import classify_email, decide
@@ -351,7 +429,7 @@ def main(argv=None) -> int:
         return 2
     key = load_answer_key(key_path)
 
-    sections = [score_checking(key), score_safety(key),
+    sections = [score_checking(key), score_safety(key), score_heldout(),
                 score_investigation(key, _live_llm)]
     if args.extraction:
         sections.append(score_extraction(key, _live_llm))
@@ -377,13 +455,14 @@ def _append_history(path: Path, report: dict, sections: List[Section]) -> None:
     with open(path, "a", newline="") as fh:
         writer = csv.writer(fh)
         if new:
-            writer.writerow(["at", "passed", "checking", "safety",
+            writer.writerow(["at", "passed", "checking", "safety", "held_out",
                              "investigation", "extraction", "dollars_flagged"])
         by = {s.name: s for s in sections}
         writer.writerow([
             report["at"], report["passed"],
             _cell(by.get("checking")), _cell(by.get("safety")),
-            _cell(by.get("investigation")), _cell(by.get("extraction")),
+            _cell(by.get("held_out")), _cell(by.get("investigation")),
+            _cell(by.get("extraction")),
             by["checking"].detail.get("dollars_flagged", ""),
         ])
 

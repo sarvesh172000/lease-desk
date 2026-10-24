@@ -48,8 +48,15 @@ class PlantedError:
 
     @property
     def is_error(self) -> bool:
-        """False for the correct-but-odd charge."""
-        return abs(self.variance) >= 0.01
+        """Whether this charge should be held.
+
+        Follows the expected outcome rather than the variance. A duplicate
+        invoice carries the *correct* amount — that is precisely why it
+        survives — so testing on the variance would classify it as not an
+        error at all. The same goes for an abatement that was never applied
+        and a credit that was never issued.
+        """
+        return self.expected_outcome == HOLD
 
 
 JANUARY_2026: List[PlantedError] = [

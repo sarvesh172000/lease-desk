@@ -34,10 +34,10 @@ then move.
 | | |
 |---|---|
 | **Complete** | **A1–A4 (all of Person A's Block A)** · 48 of 526 hours |
-| **Partial** | B1, B3, B5, B10 (started early for the demo moment) · **A5–A7** — gates pass in tests on `claude/a5-platform`, not yet merged to `main` |
-| **Tests** | 772 passing with Postgres 16 (380 offline, the rest skip without a database), no API key · `python -m eval.run` passes |
-| **Next (Sarvesh)** | **B2** — error catalog v2 (~60 errors) and the 2026 year |
-| **Next (Jenil)** | Merge A5–A7 to `main`, prove `make up` on a clean machine, then **A8** — screens on the read API, approve/hold through HTTP |
+| **Partial** | B1, B3, B4, B8, B10 · **A5–A8** — gates pass in tests on `claude/a5-platform` ([PR #2](https://github.com/sarvesh172000/lease-desk/pull/2)), not yet on `main` |
+| **Tests** | 800+ passing with Postgres 16 (the database tests skip without one), no API key · `python -m eval.run` passes |
+| **Next (Sarvesh)** | **B3** — the mess: scans, invoice formats, tracker, parsers |
+| **Next (Jenil)** | Merge PR #2, then **A8** — the web app on the live API (it runs on the §16 fixtures today) |
 
 **Jenil is the critical path.** A1–A4 are backend no judge can see until A5–A8
 land.
@@ -55,7 +55,7 @@ land.
 | **A5** | Platform & database | 20 | B | P1 g1, g2 | `make up migrate seed` from a fresh clone; `lease_agent` denied on `journal_entry` | **Partial** — schema, triggers, the four roles (`make check-grants` exact), seed, Compose, CI workflow, `make prove-roles`; agent denied on `journal_entry` is tested. Left: `make up` from a fresh clone not yet proven on a clean machine; CI not yet green on `main` |
 | **A6** | Work layer & permissions | 14 | B | P1 g3 | `verify_chain()` names a tampered row; nobody approves their own proposal | **Partial** — gate passes: hash chain, `can()` with region and separation of duties, the 8-state machine, `make replay` byte-identical, Hypothesis properties; the monthly run proposes through `transition()` (12 items, 5 holds). Left: approve/hold over HTTP (in progress), lease_version confirmation by a person (needs A3 wired) |
 | **A7** | Gateway & ledger | 16 | B | P1 g4, g5 | Only the gateway posts; unbalanced entries rejected; Fava opens the books | **Partial** — gate passes in tests: posting is the work layer's `post` as `system:gateway`, idempotent `make post M=`, AP batch through the outbox, trial balance, Beancount export loads with 0 errors; queue, worker and clock run January twice with nothing new. Left: Fava opened on the Compose profile by hand; abstraction step still skipped in the run |
-| **A8** | The thin slice | 12 | B | P1 g11 | One variance visible in a browser, with its evidence, end to end | — |
+| **A8** | The thin slice | 12 | B | P1 g11 | One variance visible in a browser, with its evidence, end to end | **Partial** — web app in `frontend/` on the §16 fixtures; read and write API with login done; wiring the two left |
 
 **Block A gate:** a January run goes from lease PDFs to posted entries, a human
 approves in the UI, and the eval scores it. *This is the floor everything else
@@ -68,13 +68,13 @@ stands on.*
 | # | Chunk | h | Owner | Covers | Gate | Status |
 |---|---|---|---|---|---|---|
 | **B1** | Lease changes & resolver | 34 | A+B | P2 g5, g9 | A variance finds its cause, ranks sources, routes to the right person | **Partial** — modification + trust done |
-| **B2** | Company at scale | 26 | A | P2 g2 | 30 clinics, 3 entities, 2025 history, held-out company from another seed | **Partial** — structure + held-out done; error catalog v2 and full 2026 left |
-| **B3** | The mess | 36 | A | P2 g3, g4 | Scans, 3 invoice formats, the previous accountant's spreadsheet, all parsed | **Partial** — emails done |
-| **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | — |
-| **B5** | ASC 842 & close | 26 | A | P2 g8 | Subledger ties to GL to the cent; the month closes and locks | **Partial** — remeasurement done |
+| **B2** | Company at scale | 26 | A | P2 g2 | 30 clinics, 3 entities, 2025 history, held-out company from another seed | **DONE** — 57 errors / 21 types / 821 charges |
+| **B3** | The mess | 36 | A | P2 g3, g4 | Scans, 3 invoice formats, the previous accountant's spreadsheet, all parsed | **Partial** — emails, 3 formats, parser, name resolution done; scans, tracker, replies, classifier left |
+| **B4** | CAM & CPI | 28 | A | P2 g6, g7 | The parking-lot line billed to two suites is caught; CPI escalations tie to BLS | **Partial** — CAM engine + shared pool done ($169,200 caught); CPI left |
+| **B5** | ASC 842 & close | 26 | A | P2 g8 | Subledger ties to GL to the cent; the month closes and locks | **DONE** |
 | **B6** | Policies | 24 | B | P2 g10 | A policy is learned, backtested, approved, and cited on a later decision | — |
 | **B7** | Disputes & obligations | 20 | B | P2 g11, g12 | A dispute letter goes out, a credit memo clears it, a renewal date fires | — |
-| **B8** | Proof | 28 | A | P2 g1, g16 | Real EDGAR leases scored separately; held-out company scored next to dev | — |
+| **B8** | Proof | 28 | A | P2 g1, g16 | Real EDGAR leases scored separately; held-out company scored next to dev | **Partial** — held-out scored in eval; EDGAR and counterfactual left |
 | **B9** | Personas & explainability | 20 | A+B | P2 g13, g14 | A year runs unattended; "why was this held?" answers with rows | — |
 | **B10** | Safety | 8 | B | P2 g15 | Every adversarial case produces zero unauthorized state change | **Partial** — fencing + 4 tests |
 
@@ -166,8 +166,8 @@ depends on the other person's work says so in its gate.
 
 ## Standing risks
 
-- **Person B has not started.** Four chunks of backend are worth nothing a judge
-  can see. If the gap widens, Person A stops and pairs on A5–A8.
+- **The web app is not on the live API yet.** It runs on the §16 fixtures; until
+  A8 lands, nothing a judge sees comes from the database.
 - **Everything runs against a fake model client.** Proven against what a model
   returns, not that Claude returns it. One real API run settles it — do it
   before B2.
