@@ -50,6 +50,17 @@ The checker's `LeaseRule`s are built from the *confirmed* version 1 terms in
 the database, never from the generator. A lease with no confirmed version is
 returned as waiting, with the reason, and its charges are not checked at all
 (see `jobs/monthly.check_period`).
+
+When the model cannot be read (C3)
+----------------------------------
+Provider calls on the LLM path go through the `llm` circuit breaker
+(`work/breaker.py`); cached answers never reach it. A single failed call
+falls back to the generator path, on record in the item's `path_note`. A
+provider *outage* (the breaker is open) does not: the job raises
+`ProviderUnavailable`, the worker holds it until the breaker next probes, and
+whatever it drafted so far rolls back with it. A lease neither path can read
+is never skipped in silence: it gets a LEASE_UNREADABLE work item, HELD for a
+person, with the reason.
 """
 
 import json
@@ -64,14 +75,17 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from ..records.ingest import stable_id
+from ..work.breaker import guard_client, open_in_chain
 from ..work.roles import load_actor
 from ..work.transitions import create_item, transition
+from .recovery import JobHeld
 
 log = logging.getLogger(__name__)
 
 ABSTRACTOR = "agent:abstraction"
 ITEM_KIND = "LEASE_ABSTRACTION"
 SUBJECT = "lease_version"
+UNREADABLE_KIND = "LEASE_UNREADABLE"
 LEASE_SOURCE = "datagen.leases"
 
 PATH_LLM = "abstraction:llm"
@@ -91,6 +105,10 @@ PROOF_FIELD = {"base_rent": "base_rent_monthly", "escalation": "escalation_amoun
 
 class AbstractionError(RuntimeError):
     """The step cannot run at all (for example, no abstraction agent actor)."""
+
+
+class ProviderUnavailable(JobHeld):
+    """The model provider is down (its circuit breaker is open): hold the job."""
 
 
 # ---------------------------------------------------------------- data dir
@@ -147,14 +165,19 @@ class _CacheOnlyClient:
 def default_llm():
     """The LLM to try, or None when the LLM path cannot possibly run.
 
-    With ANTHROPIC_API_KEY: the real client (cache first, as always).
+    With ANTHROPIC_API_KEY: the real client (cache first, as always), its
+    provider calls behind the `llm` circuit breaker.
     Without: a cache-only client, if the cache directory exists at all."""
     from ..llm.cache import ResponseCache
     from ..llm.client import LLM
 
     cache_root = Path(os.environ.get("LEASEDESK_LLM_CACHE", ".cache/llm"))
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return LLM(cache=ResponseCache(cache_root))
+        import anthropic
+
+        # The same timeout and SDK retries LLM() uses when it builds its own.
+        provider = anthropic.Anthropic(timeout=120.0, max_retries=3)
+        return LLM(cache=ResponseCache(cache_root), client=guard_client(provider))
     if not cache_root.is_dir():
         return None
     return LLM(cache=ResponseCache(cache_root), client=_CacheOnlyClient())
@@ -265,9 +288,10 @@ class Draft:
 
 
 def abstract_one(conn: Connection, lease_id: str, *, root: Optional[Path] = None,
-                 llm_factory: Callable[[], Any] = default_llm) -> Optional[Draft]:
-    """Read one lease by the best path available. None if neither path can
-    say anything about it (no document and no generated terms)."""
+                 llm_factory: Callable[[], Any] = default_llm) -> Draft:
+    """Read one lease by the best path available. A Draft whose abstraction
+    is None if neither path can say anything about it (its `note` says why
+    the LLM path did not)."""
     from ..agents.abstraction import abstract_lease
 
     doc_id, document = load_lease_document(conn, lease_id, root)
@@ -281,6 +305,11 @@ def abstract_one(conn: Connection, lease_id: str, *, root: Optional[Path] = None
             result = abstract_lease(document, llm, lease_id, source="%s.pdf" % lease_id)
             return Draft(lease_id, PATH_LLM, result, doc_id, flags=flags)
         except Exception as exc:  # noqa: BLE001 - any LLM failure falls through, on record
+            outage = open_in_chain(exc)
+            if outage is not None:
+                raise ProviderUnavailable(
+                    "model provider unavailable while reading %s (%s)" % (lease_id, outage),
+                    delay=timedelta(seconds=max(outage.retry_in, 1.0))) from exc
             if _is_cold(exc):
                 note = "LLM cache cold and no API key; read from the generator"
             else:
@@ -288,8 +317,6 @@ def abstract_one(conn: Connection, lease_id: str, *, root: Optional[Path] = None
                     type(exc).__name__, str(exc)[:300])
                 log.warning("lease %s: %s", lease_id, note)
     result = abstract_from_generator(document, lease_id)
-    if result is None:
-        return None
     return Draft(lease_id, PATH_GENERATOR, result, doc_id, note=note, flags=flags)
 
 
@@ -318,9 +345,11 @@ def draft_versions(conn: Connection, entity_id: str, *, root: Optional[Path] = N
                         {"l": lease["id"]}).first():
             continue
         draft = abstract_one(conn, lease["id"], root=root, llm_factory=llm_factory)
-        commencement = draft and _date(_value(draft.abstraction, "commencement"))
-        if draft is None or commencement is None:
+        commencement = (_date(_value(draft.abstraction, "commencement"))
+                        if draft.abstraction is not None else None)
+        if commencement is None:
             out["unreadable"].append(lease["id"])
+            _route_unreadable(conn, actor, lease, draft)
             continue
         _cross_check(conn, draft, history_until)
         version_id, fields = _write_version(conn, draft, commencement)
@@ -461,6 +490,27 @@ def _open_item(conn: Connection, actor, lease: Mapping, draft: Draft, version_id
                            lease["id"], len(fields), len(low)))
     transition(conn, actor, item["id"], "propose", reason=reason,
                patch={"proposal": "approve", "reason": reason, "evidence": evidence})
+
+
+def _route_unreadable(conn: Connection, actor, lease: Mapping, draft: Draft) -> None:
+    """A lease no path could read goes to a person, HELD with the reason,
+    never past them. Idempotent: an item already opened is left as it is."""
+    if draft.abstraction is None:
+        why = "neither the abstraction agent nor the generated terms could read it"
+    else:
+        why = "no commencement date could be read from it (%s)" % (draft.note or draft.path)
+    reason = "%s could not be read: %s. A person must abstract it before any of its " \
+             "charges are checked." % (lease["id"], why)
+    item = create_item(conn, actor, kind=UNREADABLE_KIND, subject_type="lease",
+                       subject_id=lease["id"], entity_id=lease["entity_id"],
+                       region_id=lease["region_id"], clinic_id=lease["clinic_id"],
+                       title="%s could not be read" % lease["id"])
+    if item["state"] != "NEW":
+        return
+    transition(conn, actor, item["id"], "hold", reason=reason, patch={
+        "proposal": "hold", "reason": reason,
+        "evidence": {"lease_id": lease["id"], "why": why, "document_id": draft.document_id,
+                     "path_note": draft.note, "flags": list(draft.flags)}})
 
 
 # ------------------------------------------------- confirmed rules (checker)

@@ -156,3 +156,18 @@ ci: lint           ## what CI runs, locally: lint, the suite with database tests
 .PHONY: prove-limits
 prove-limits:      ## three forbidden actions refused and on record (needs LEASEDESK_DEMO_MODE=1)
 	$(PY) -m app.work.limits
+
+# Chaos (C3; not part of the frozen list). See ops/chaos/README.md.
+#
+#   LEASEDESK_DB_PORT=5432 make chaos      # host Postgres
+#   make chaos                             # Compose (:5433)
+#
+# January on two scratch databases of its own (created, migrated, dropped):
+# A uninterrupted, B with the worker SIGKILLed twice mid-job and restarted.
+# Fails unless both end identical, both chains verify, replay equals live and
+# the books balance; then January CHAOS_SOAK more times on A, nothing growing.
+.PHONY: chaos
+CHAOS_SOAK ?= 20
+
+chaos:             ## kill the worker mid-month on a scratch db: identical results, then a soak
+	$(PY) -m ops.chaos.acceptance --soak $(CHAOS_SOAK)

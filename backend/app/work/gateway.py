@@ -484,14 +484,21 @@ def send_outbox(conn: Connection, out_dir: Union[str, Path],
 
     Each row is claimed with FOR UPDATE SKIP LOCKED, delivered, and marked in
     its own transaction, so a concurrent sender skips it rather than sending
-    it again. A failed delivery counts an attempt; after `max_attempts` the row
-    is marked failed. This function commits, so pass a connection with no
-    work of its own in progress.
+    it again. A failed delivery counts an attempt. When the *target* is
+    unavailable (an OSError: the outbox directory or mail server cannot be
+    reached or written) the row stays pending however many attempts that
+    takes, and the next call tries again: the outbox retries until the target
+    returns, then sends once. Any other failure (a payload the deliverer
+    cannot handle) marks the row failed after `max_attempts`. This function
+    commits, so pass a connection with no work of its own in progress.
     """
     if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
         raise ValueError("max_attempts must be a positive integer")
     out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass                    # the target is down; each delivery below says so and is retried
     if conn.in_transaction():
         conn.commit()
     sent: List[int] = []
@@ -504,6 +511,8 @@ def send_outbox(conn: Connection, out_dir: Union[str, Path],
         tried.append(row["id"])
         try:
             DELIVERERS[row["kind"]](row, out)
+        except OSError:                                     # the target is down: retry later
+            _mark_failed_attempt(conn, row, None)
         except Exception:                                   # noqa: BLE001  any failure counts
             _mark_failed_attempt(conn, row, max_attempts)
         else:
@@ -522,8 +531,11 @@ def _claim(conn: Connection, tried: List[int]) -> Optional[Mapping]:
     """), {"tried": tried}).mappings().first()
 
 
-def _mark_failed_attempt(conn: Connection, row: Mapping, max_attempts: int) -> None:
-    status = "failed" if row["attempts"] + 1 >= max_attempts else "pending"
+def _mark_failed_attempt(conn: Connection, row: Mapping, max_attempts: Optional[int]) -> None:
+    """Count an attempt. max_attempts None: the target was unavailable, so the
+    row stays pending for the next send, however many attempts that takes."""
+    status = ("failed" if max_attempts is not None and row["attempts"] + 1 >= max_attempts
+              else "pending")
     conn.execute(text("UPDATE outbox SET attempts = attempts + 1, status = :s WHERE id = :id"),
                  {"s": status, "id": row["id"]})
 

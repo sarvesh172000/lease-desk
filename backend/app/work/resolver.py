@@ -551,7 +551,8 @@ def charge_sources(conn: Connection, evidence: Mapping[str, Any]) -> List[Source
         version_id = evidence.get("lease_version_id")
         section = proof.get("section")
         out.append(Source(
-            source_id="lease:%s%s" % (lease_id, ":v%s" % version_id if version_id else ""),
+            source_id="lease:%s%s" % (lease_id, ":v%s" % _version_number(conn, version_id)
+                                      if version_id else ""),
             kind="lease", rank=ORIGINAL_LEASE,
             label="the lease %s%s" % (lease_id or "", " §%s" % section if section else ""),
             value=round(supported, 2),
@@ -620,6 +621,14 @@ def _payments(conn: Connection, charge: Optional[Mapping]) -> List[Mapping]:
          ORDER BY paid_on, id LIMIT 1
     """), {"l": charge["lease_id"], "p": charge["period"], "t": charge["charge_type"],
            "i": charge["invoice_id"]}).mappings())
+
+
+def _version_number(conn: Connection, version_id: Any) -> Any:
+    """A lease version's number (v1, v2, ...), not its row id: row ids depend on
+    what earlier, rolled-back runs consumed, and source ids must not."""
+    number = conn.execute(text("SELECT version FROM lease_version WHERE id = :v"),
+                          {"v": int(version_id)}).scalar()
+    return version_id if number is None else number
 
 
 def _term_confidence(conn: Connection, version_id: Any, rule: Any) -> Optional[float]:
