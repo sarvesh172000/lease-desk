@@ -13,9 +13,11 @@ add, net or round anything the engine did not.
 
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 
 from .api import DeskError, LeaseDeskAPI
 from .intent import Intent, interpret
+from .live import Feed
 
 HELP = """**Lease Desk** checks every landlord charge against what the lease supports, and \
 when they disagree, finds out why.
@@ -45,10 +47,21 @@ class Conversation:
     pending: Optional[Dict[str, Any]] = None     # {"action", "exception_id", "reason"}
 
 
+@dataclass(frozen=True)
+class Run:
+    """One message's work, as the live feed groups it."""
+    feed: Feed
+    run_id: str
+
+    def say(self, agent: str, kind: str, detail: str, exception_id: Optional[str] = None) -> None:
+        self.feed.step(self.run_id, agent, kind, detail, exception_id or "")
+
+
 @dataclass
 class Desk:
     api: LeaseDeskAPI
     read: Callable[..., Intent] = interpret
+    live: Feed = field(default_factory=Feed)
     conversations: Dict[str, Conversation] = field(default_factory=dict)
 
     def end(self, sender: str) -> None:
@@ -58,19 +71,24 @@ class Desk:
         """The reply to one message. `progress` gets interim lines for a long step
         (the investigation), so the chat shows work happening."""
         convo = self.conversations.setdefault(sender, Conversation())
+        run = Run(self.live, uuid4().hex[:12])
         try:
             open_items = self.api.exceptions()
             intent = self.read(text, open_items, convo.last)
-            return self._route(convo, intent, open_items, progress)
+            run.say("coordinator", "intent", "%s%s (read by %s)" % (
+                intent.name, " " + intent.exception_id if intent.exception_id else "", intent.via),
+                intent.exception_id)
+            return self._route(convo, intent, open_items, progress, run)
         except DeskError as exc:
+            run.say("coordinator", "error", str(exc))
             return _refused(exc)
 
     # --- routing ---------------------------------------------------------
 
     def _route(self, convo: Conversation, intent: Intent, open_items: List[Dict[str, Any]],
-               progress: Optional[Callable[[str], None]]) -> str:
+               progress: Optional[Callable[[str], None]], run: Run) -> str:
         if intent.name == "confirm":
-            return self._confirm(convo)
+            return self._confirm(convo, run)
         if intent.name == "cancel":
             had = convo.pending is not None
             convo.pending = None
@@ -82,6 +100,8 @@ class Desk:
         if intent.name == "help":
             return HELP
         if intent.name == "list":
+            for e in open_items:
+                self.live.status(e, e.get("status") or "", "sync")
             return self._list(open_items)
         if intent.name == "other":
             return "I'm not sure what you'd like. " + _short_help()
@@ -97,7 +117,7 @@ class Desk:
         if intent.name == "show":
             return self._show(exc_id)
         if intent.name == "investigate":
-            return self._investigate(exc_id, progress)
+            return self._investigate(exc_id, progress, run)
         return self._propose(convo, intent.name, exc_id, intent.reason)
 
     # --- the answers -----------------------------------------------------
@@ -136,13 +156,14 @@ class Desk:
         lines += ["", _next_steps(d)]
         return "\n".join(lines)
 
-    def _investigate(self, exc_id: str, progress: Optional[Callable[[str], None]]) -> str:
+    def _investigate(self, exc_id: str, progress: Optional[Callable[[str], None]], run: Run) -> str:
         found: List[Dict[str, Any]] = []
         remeasured: Optional[Dict[str, Any]] = None
         complete: Optional[Dict[str, Any]] = None
         errors: List[str] = []
         for frame in self.api.investigate(exc_id):
             stage = frame.get("stage")
+            run.say("investigation", stage or "frame", _frame_line(frame), exc_id)
             if stage == "searching" and progress:
                 progress("🔎 %s" % frame.get("message", "Searching the mailbox…"))
             elif stage == "found":
@@ -178,7 +199,7 @@ class Desk:
 
     def _propose(self, convo: Conversation, action: str, exc_id: str, reason: Optional[str]) -> str:
         d = self.api.exception(exc_id)
-        convo.pending = {"action": action, "exception_id": exc_id, "reason": reason}
+        convo.pending = {"action": action, "exception_id": exc_id, "reason": reason, "item": d}
         head = "**%s %s?** %s, %s, %s" % (
             "Approve" if action == "approve" else "Hold", exc_id, d.get("lease_id") or "no lease",
             _charge(d), _period(d.get("period")))
@@ -195,7 +216,7 @@ class Desk:
             what = "**%s** posts to AP as billed." % _money(d["payable"])
         return "%s\n\n%s\n\nReply **yes** to go ahead, or **no**." % (head, what)
 
-    def _confirm(self, convo: Conversation) -> str:
+    def _confirm(self, convo: Conversation, run: Run) -> str:
         p, convo.pending = convo.pending, None
         if p is None:
             return "Nothing is waiting on a yes. " + _short_help()
@@ -203,6 +224,8 @@ class Desk:
         result = act(p["exception_id"], p.get("reason"))
         who = (self.api.actor or {}).get("name", "you")
         done = "Approved" if p["action"] == "approve" else "Put on hold"
+        run.say("coordinator", "action", "%s by %s: %s" % (done, who, result.get("state")), p["exception_id"])
+        self.live.status(p["item"], result.get("status") or "", who)
         return "✅ %s %s as %s. Work state: **%s**.%s It's on the audit trail." % (
             done, p["exception_id"], who, result.get("state"), _posting(result.get("posting")))
 
@@ -236,6 +259,18 @@ def _status(s: Optional[str]) -> str:
 def _clip(s: str, n: int = 280) -> str:
     s = " ".join(s.split())
     return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _frame_line(f: Dict[str, Any]) -> str:
+    """One investigation frame as a line on the live feed."""
+    stage = f.get("stage")
+    if stage == "found":
+        return "%s: %s" % (f.get("source") or f.get("doc_id") or "document", _clip(f.get("quote") or "", 200))
+    if stage == "remeasured":
+        return "liability %s, ROU %s" % (_signed(f.get("liability_delta")), _signed(f.get("rou_delta")))
+    if stage == "complete":
+        return "%s entries proposed%s" % (f.get("entries", 0), ", balanced" if f.get("balanced") else "")
+    return f.get("message") or stage or ""
 
 
 def _posting(p: Optional[Dict[str, Any]]) -> str:

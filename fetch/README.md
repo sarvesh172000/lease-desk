@@ -39,6 +39,7 @@ Protocol come next; see `docs/SPONSOR_PLAN.md`.
    | `ASI_ONE_API_KEY` | From asi1.ai. Without it, a keyword reader understands simpler phrasing. |
    | `LEASEDESK_API_URL` | Default `http://localhost:8000` |
    | `AGENT_PORT` | Default `8001` |
+   | `SPACETIME_DB` / `SPACETIME_TOKEN` | Optional: the live feed of every step to SpacetimeDB (`spacetime/README.md`). Unset, the feed is off. |
 
 3. **Start it:**
 
@@ -79,6 +80,7 @@ Desk refuses it, the refusal is recorded, and the agent says so.
 | `desk.py` | The conversation: one message in, one markdown reply out |
 | `intent.py` | ASI:One's model reads intent; a keyword reader takes over if it can't |
 | `api.py` | The Lease Desk API client (signs in, signs in again if the session expires) |
+| `live.py` | The SpacetimeDB live feed: each step, sent in order on a background thread, never blocking a reply |
 
 `tests/test_fetch_desk.py` covers the conversation in the main suite, with no
 network and no uagents.

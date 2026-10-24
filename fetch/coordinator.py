@@ -15,6 +15,8 @@ Environment (fetch/README.md has the full setup):
     LEASEDESK_PASSWORD
     ASI_ONE_API_KEY          ASI:One's model reads intent; without it, keywords do
     AGENT_PORT               default 8001
+    SPACETIME_DB, SPACETIME_TOKEN, SPACETIME_HOST
+                             the live feed (live.py); unset, it is off
 """
 
 import asyncio
@@ -33,6 +35,7 @@ from uagents_core.contrib.protocols.chat import (
     chat_protocol_spec,
 )
 
+from . import live
 from .api import Credentials, LeaseDeskAPI
 from .desk import HELP, Desk
 
@@ -51,7 +54,7 @@ agent = Agent(
                 "investigates why, and signs off adjusting entries.",
 )
 
-desk = Desk(api=LeaseDeskAPI(Credentials.from_env()))
+desk = Desk(api=LeaseDeskAPI(Credentials.from_env()), live=live.from_env())
 chat = Protocol(spec=chat_protocol_spec)
 
 
@@ -101,8 +104,9 @@ agent.include(chat, publish_manifest=True)
 
 @agent.on_event("startup")
 async def announce(ctx: Context):
-    ctx.logger.info("Lease Desk coordinator at %s, acting for %s on %s",
-                    agent.address, desk.api.creds.email, desk.api.creds.base_url)
+    ctx.logger.info("Lease Desk coordinator at %s, acting for %s on %s; live feed %s",
+                    agent.address, desk.api.creds.email, desk.api.creds.base_url,
+                    "on" if desk.live.enabled else "off")
 
 
 if __name__ == "__main__":

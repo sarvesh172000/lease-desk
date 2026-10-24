@@ -1,0 +1,15 @@
+{
+  "name": "leasedesk-live",
+  "private": true,
+  "type": "module",
+  "description": "The SpacetimeDB module behind Lease Desk's live agent feed",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "spacetimedb": "2.13.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
