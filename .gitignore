@@ -15,4 +15,3 @@ data/generated/
 data/gen2/
 eval/report.json
 eval/history.csv
-data/reference/edgar/*.txt

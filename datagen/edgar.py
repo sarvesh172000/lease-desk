@@ -103,6 +103,39 @@ class EdgarLease:
         return _flat(label.quote)[:60] in _flat(self.text)
 
 
+class CorpusMissing(RuntimeError):
+    """The cached exhibits are not on disk.
+
+    They are committed to the repository — public SEC filings, a few hundred
+    kilobytes — so this means a broken or partial checkout, not a missing
+    download step.
+    """
+
+
+def require_corpus(include_duplicates: bool = False) -> List[EdgarLease]:
+    """`load_corpus`, but an empty corpus is an error rather than an empty list.
+
+    An absent benchmark does not fail honestly on its own. The tests that count
+    leases fail with arithmetic that says nothing about the cause, and the ones
+    that loop over every lease pass without checking anything at all — the
+    second being much the worse of the two. This says what is actually wrong,
+    once.
+    """
+    corpus = load_corpus(include_duplicates)
+    if corpus:
+        return corpus
+    missing = [str(p) for p in (MANIFEST, LABELS) if not p.exists()]
+    if not missing:
+        missing = ["%s/*.txt" % CORPUS]
+    raise CorpusMissing(
+        "The EDGAR benchmark corpus is empty: no exhibit was loaded from %s.\n"
+        "Missing: %s\n"
+        "These are public SEC filings committed to the repository; restore them "
+        "with `git checkout -- data/reference/edgar` (and check they are tracked: "
+        "`git ls-files data/reference/edgar`)."
+        % (CORPUS, ", ".join(missing)))
+
+
 def load_corpus(include_duplicates: bool = False) -> List[EdgarLease]:
     """The cached exhibits with their hand-written labels."""
     if not MANIFEST.exists() or not LABELS.exists():

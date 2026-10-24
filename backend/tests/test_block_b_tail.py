@@ -21,7 +21,7 @@ from app.personas.people import (
     AGREE, PERSONAS, REFUSE, UNAVAILABLE, UNKNOWN, answer, route,
 )
 from datagen.company import build_company
-from datagen.edgar import coverage, load_corpus, score
+from datagen.edgar import coverage, load_corpus, require_corpus, score
 from datagen.leases import SECOND_AMENDMENT, amended, build_leases
 from datagen.month import build_month
 
@@ -119,40 +119,53 @@ def test_an_unknown_kind_is_an_error():
 
 # --- the EDGAR corpus -----------------------------------------------------
 
-def test_three_distinct_real_leases_are_cached():
-    corpus = load_corpus()
+@pytest.fixture(scope="module")
+def edgar():
+    """The cached SEC exhibits, or one clear failure saying they are gone.
+
+    Every test below takes this rather than calling `load_corpus()` itself. An
+    absent corpus used to fail ten of them on arithmetic while the ones that
+    loop over each lease passed having checked nothing; now it fails here, for
+    the stated reason. It is never skipped: the benchmark is part of the suite,
+    and a green run with no benchmark in it is the thing worth avoiding.
+    """
+    return require_corpus()
+
+
+def test_three_distinct_real_leases_are_cached(edgar):
+    corpus = edgar
     assert len(corpus) == 3
     assert all(len(lease.text) > 20_000 for lease in corpus)
 
 
-def test_the_duplicate_lease_is_excluded_from_scoring():
+def test_the_duplicate_lease_is_excluded_from_scoring(edgar):
     """Inuvo is the renamed FindWhat.com and both filings attach the identical
     Colonial Bank Plaza lease. Scoring both double-weights one lease."""
-    assert all(not lease.is_duplicate for lease in load_corpus())
+    assert all(not lease.is_duplicate for lease in edgar)
     with_dupes = load_corpus(include_duplicates=True)
     assert len(with_dupes) == 4
     assert sum(1 for l in with_dupes if l.is_duplicate) == 1
 
 
-def test_every_lease_records_where_it_came_from():
-    for lease in load_corpus():
+def test_every_lease_records_where_it_came_from(edgar):
+    for lease in edgar:
         assert lease.cik and lease.url.startswith("https://www.sec.gov/")
         assert lease.file_date and lease.document
 
 
-def test_every_label_quote_really_is_in_the_filing():
+def test_every_label_quote_really_is_in_the_filing(edgar):
     """The check that makes a hand label verifiable rather than asserted."""
-    for lease in load_corpus():
+    for lease in edgar:
         for name, label in lease.labels.items():
             if not label.is_absent:
                 assert lease.quote_is_in_text(name), "%s/%s" % (lease.doc_id, name)
 
 
-def test_a_stated_numeric_label_appears_verbatim_in_its_quote():
+def test_a_stated_numeric_label_appears_verbatim_in_its_quote(edgar):
     """Stated labels are read off the page. Derived ones — "0.03" for "Three
     (3%) percent", a monthly figure computed from an annual — are correct but
     are not in the words, so they are marked and excused."""
-    for lease in load_corpus():
+    for lease in edgar:
         for label in lease.labelled:
             if not label.is_stated:
                 continue
@@ -162,53 +175,53 @@ def test_a_stated_numeric_label_appears_verbatim_in_its_quote():
                     "%s %s" % (lease.doc_id, label.field)
 
 
-def test_every_derived_label_explains_its_derivation():
-    for lease in load_corpus():
+def test_every_derived_label_explains_its_derivation(edgar):
+    for lease in edgar:
         for label in lease.labelled:
             if label.derived:
                 assert label.note, "%s/%s" % (lease.doc_id, label.field)
 
 
-def test_most_labels_are_read_rather_than_inferred():
+def test_most_labels_are_read_rather_than_inferred(edgar):
     """A benchmark made mostly of inference is not testing reading."""
-    labels = [l for lease in load_corpus() for l in lease.labelled]
+    labels = [l for lease in edgar for l in lease.labelled]
     stated = [l for l in labels if l.is_stated]
     assert len(stated) > len(labels) / 2
 
 
-def test_an_absent_field_says_why():
+def test_an_absent_field_says_why(edgar):
     """Absent means the exhibit does not state the term, not that labelling
     gave up."""
-    for lease in load_corpus():
+    for lease in edgar:
         for label in lease.labels.values():
             if label.is_absent:
                 assert label.absent_reason, "%s/%s" % (lease.doc_id, label.field)
                 assert label.quote is None
 
 
-def test_one_lease_carries_two_different_proportionate_shares():
+def test_one_lease_carries_two_different_proportionate_shares(edgar):
     """38.55% for taxes and insurance, 33.08% for CAM on ground-floor area. A
     system assuming one share per lease gets this lease wrong."""
-    lease = next(l for l in load_corpus() if "sportsmans" in l.doc_id)
+    lease = next(l for l in edgar if "sportsmans" in l.doc_id)
     assert lease.label("pro_rata_share").value == "38.55"
     assert lease.label("pro_rata_share_cam").value == "33.08"
 
 
-def test_a_lease_that_contradicts_itself_is_labelled_with_a_note():
-    lease = next(l for l in load_corpus() if "findwhat" in l.doc_id)
+def test_a_lease_that_contradicts_itself_is_labelled_with_a_note(edgar):
+    lease = next(l for l in edgar if "findwhat" in l.doc_id)
     assert lease.label("rentable_sf").note
     assert "32,823" in lease.label("rentable_sf").note
 
 
-def test_coverage_is_reported_per_field():
+def test_coverage_is_reported_per_field(edgar):
     numbers = coverage()
     assert numbers["cam_present"] == 3
     assert numbers["cam_cap"] == 0          # none of the three caps CAM
     assert numbers["rentable_sf"] == 3
 
 
-def test_a_perfect_extractor_scores_one():
-    corpus = load_corpus()
+def test_a_perfect_extractor_scores_one(edgar):
+    corpus = edgar
     perfect = {l.doc_id: {n: lab.value for n, lab in l.labels.items()
                           if not lab.is_absent} for l in corpus}
     result = score(perfect)
@@ -216,30 +229,30 @@ def test_a_perfect_extractor_scores_one():
     assert result["wrong"] == 0 and result["fabricated"] == 0
 
 
-def test_an_extractor_that_says_nothing_scores_zero():
+def test_an_extractor_that_says_nothing_scores_zero(edgar):
     result = score({})
     assert result["accuracy"] == 0.0
     assert result["missed"] == result["scorable"]
 
 
-def test_inventing_a_value_is_counted_separately_from_misreading_one():
+def test_inventing_a_value_is_counted_separately_from_misreading_one(edgar):
     """Claiming a cap on a lease that has none is a different failure from
     reading the wrong cap."""
-    corpus = load_corpus()
+    corpus = edgar
     result = score({corpus[0].doc_id: {"cam_cap": "5%"}})
     assert result["fabricated"] == 1
     assert result["wrong"] == 0
 
 
-def test_a_wrong_value_is_counted_as_wrong():
-    corpus = load_corpus()
+def test_a_wrong_value_is_counted_as_wrong(edgar):
+    corpus = edgar
     result = score({corpus[0].doc_id: {"term_years": "99"}})
     assert result["wrong"] == 1
     assert result["fabricated"] == 0
 
 
-def test_numbers_compare_regardless_of_formatting():
-    corpus = load_corpus()
+def test_numbers_compare_regardless_of_formatting(edgar):
+    corpus = edgar
     lease = next(l for l in corpus if l.label("annual_base_rent").value)
     value = lease.label("annual_base_rent").value
     assert score({lease.doc_id: {"annual_base_rent": "%s" % float(value)}})["right"] >= 1
