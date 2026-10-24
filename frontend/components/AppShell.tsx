@@ -19,13 +19,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/";
   const router = useRouter();
   const me = useMe();
-  const onLogin = pathname.startsWith("/login");
+  // Public routes: no app chrome, and no redirect to sign in. The welcome page
+  // is the first thing a stranger sees, so it must render without a session.
+  const isPublic = pathname.startsWith("/login") || pathname.startsWith("/welcome");
 
   useEffect(() => {
-    if (!onLogin && me.isSuccess && me.data === null) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-  }, [onLogin, me.isSuccess, me.data, pathname, router]);
+    if (!isPublic && me.isSuccess && me.data === null) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+  }, [isPublic, me.isSuccess, me.data, pathname, router]);
 
-  if (onLogin) return <>{children}</>;
+  if (isPublic) return <>{children}</>;
 
   return (
     <div className="min-h-screen">
