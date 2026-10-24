@@ -391,10 +391,21 @@ def test_exception_detail_unknown_or_malformed_id_is_404(client, checked, bad):
     assert client.get("/api/exceptions/" + bad).status_code == 404
 
 
-def test_exception_detail_of_a_non_exception_work_item_is_404(client, seeded):
+def test_exception_detail_of_a_work_item_that_is_not_a_charge_check_is_404(client, seeded):
     item = insert_work_item(seeded["owner"], state="PROPOSED", proposal="approve",
-                            subject_id="q", evidence={})
+                            kind="LEASE_VERSION", subject_type="lease", subject_id="LEASE-01",
+                            evidence={})
     assert client.get("/api/exceptions/exc_%d" % item).status_code == 404
+
+
+def test_a_charge_check_proposed_for_approval_opens_but_is_not_listed(client, seeded):
+    """The money screen also shows a charge the checker found correct, so a
+    person can sign it off there; the exceptions list stays the holds."""
+    item = insert_work_item(seeded["owner"], state="PROPOSED", proposal="approve",
+                            subject_id="q", evidence={"billed": 100.0, "supported": 100.0})
+    body = client.get("/api/exceptions/exc_%d" % item).json()
+    assert (body["delta"], body["proposal"]) == (0.0, "approve")
+    assert client.get("/api/exceptions").json() == []
 
 
 # --- GET /api/audit -----------------------------------------------------------------
@@ -419,7 +430,8 @@ def test_audit_for_a_lease_gathers_its_subjects(client, seeded, checked):
     assert elsewhere not in seqs
     first = body["events"][0]
     assert set(first) == {"seq", "at", "actor_id", "action", "subject_type", "subject_id",
-                          "allowed", "reason"}
+                          "allowed", "reason", "actor_name", "hash", "prev_hash"}
+    assert body["broken_at"] is None and len(first["hash"]) == 64
 
 
 def test_audit_by_subject_and_denied_attempts_show(client, seeded):

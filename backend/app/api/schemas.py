@@ -12,6 +12,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+from .items import Posting
+
 # The four statuses the frontend's StatusBadge knows (DESIGN.md §16).
 STATUSES = ("balanced", "exception", "pending_review", "escalated")
 
@@ -75,6 +77,25 @@ class Investigation(BaseModel):
     balanced: Optional[bool] = None
 
 
+class InvoiceLine(BaseModel):
+    """The billed line, boxed on the invoice PDF (api/evidence.py)."""
+    doc_id: str                       # the invoice's sha256
+    page: int
+    box: List[float]                  # [x0, y0, x1, y1], PDF points, origin top-left
+    description: str
+    amount: float
+
+
+class LeaseCitation(BaseModel):
+    """The clause the expected amount comes from, boxed on the lease PDF."""
+    doc_id: str                       # the lease's sha256
+    page: int
+    box: List[float]
+    label: str                        # "LEASE-02 · §1.1"
+    quote: str
+    match_score: Optional[float] = None   # docs.citations' score for the located quote
+
+
 class ExceptionDetail(BaseModel):
     exception_id: str
     lease_id: Optional[str]
@@ -84,13 +105,28 @@ class ExceptionDetail(BaseModel):
     delta: Optional[float]
     status: str
     investigation: Investigation
+    # Added after §16 (the fixture's keys above are frozen; these only add).
+    item_id: Optional[int] = None     # the work item: /api/items/{item_id}
+    state: Optional[str] = None       # the work state behind `status`, e.g. POSTED
+    clinic_id: Optional[str] = None
+    charge_type: Optional[str] = None
+    confidence: Optional[float] = None
+    proposal: Optional[str] = None    # what the checker proposed: hold | approve
+    reason: Optional[str] = None      # the checker's reason, in words
+    rule: Optional[str] = None        # the checker rule that decided it
+    invoice_line: Optional[InvoiceLine] = None
+    lease_citation: Optional[LeaseCitation] = None
 
 
 # --- POST /api/exceptions/{id}/approve ----------------------------------------
 
 class ApproveResult(BaseModel):
-    """§16 #4 returns the new status, one of STATUSES."""
+    """§16 #4 returns the new status, one of STATUSES. Also the answer to
+    POST /api/exceptions/{id}/hold."""
     status: str
+    exception_id: Optional[str] = None
+    state: Optional[str] = None        # the work state: APPROVED, POSTED, HELD
+    posting: Optional[Posting] = None  # after an approval: posted, or pending (and why)
 
 
 # --- GET /api/leases/{id}/schedule (no fixture in §16) -------------------------
@@ -115,6 +151,7 @@ class Schedule(BaseModel):
     versions: List[int]               # every version this lease has, for a picker
     effective_from: date              # commencement for v1, the amendment date after
     confirmed: bool                   # v1 is the lease as signed; later ones need a person
+    active: bool = False              # the version in effect on the business date
     discount_rate: float
     opening_liability: float
     opening_rou: float
@@ -132,11 +169,15 @@ class AuditEvent(BaseModel):
     subject_id: str
     allowed: bool
     reason: Optional[str]
+    actor_name: Optional[str] = None
+    hash: Optional[str] = None
+    prev_hash: Optional[str] = None
 
 
 class AuditTrail(BaseModel):
     chain_verified: bool
     broken_seq: Optional[int]         # the first broken link, when there is one
+    broken_at: Optional[int] = None   # the same, under the name the web app reads
     events: List[AuditEvent]
 
 
@@ -146,9 +187,25 @@ class PageSize(BaseModel):
     number: int                       # 1-based, as citations cite it
     width: float                      # PDF points; scale `box` against these
     height: float
+    page: int = 0                     # = number, under the name the web app reads
 
 
 class DocumentPages(BaseModel):
     sha256: str
     page_count: int
     pages: List[PageSize]
+    doc_id: Optional[str] = None      # the id it was asked for: a sha256 or a source_document.id
+    kind: Optional[str] = None        # source_document.kind (lease, invoice, ...) when on record
+
+
+# --- GET /api/summary (no fixture in §16) ----------------------------------------
+
+class Summary(BaseModel):
+    """The dashboard's four tiles, each summed here so the web app adds nothing."""
+    as_of: date
+    active_leases: int                # leases whose term has not ended on as_of
+    open_exceptions: int              # open holds (the /api/exceptions list)
+    pending_review: int               # of those, awaiting a person's sign-off
+    held_total: float                 # over-bills held: positive variances of open holds
+    held_count: int
+    portfolio_liability: float        # sum of each lease's liability on as_of
