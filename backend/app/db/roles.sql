@@ -73,6 +73,19 @@ GRANT UPDATE (status, attempts, sent_at) ON outbox TO lease_gateway;
 GRANT UPDATE (state, updated_at, last_event_seq) ON work_item TO lease_gateway;
 GRANT INSERT ON audit_event TO lease_gateway;
 
+-- ------------------------------------------------------------- actor
+-- Everyone sees who can act; only the API (login) and the gateway (seeding)
+-- see password hashes. ALL TABLES above granted reader the whole row.
+DO $$
+BEGIN
+    IF to_regclass('public.actor') IS NOT NULL THEN
+        REVOKE SELECT ON actor FROM lease_reader;
+        GRANT SELECT (id, name, role, email, region_id, entity_id, active) ON actor
+            TO lease_agent, lease_reader;
+        GRANT INSERT, UPDATE ON actor TO lease_gateway;
+    END IF;
+END $$;
+
 -- Sequences behind serial columns. Identity columns need no grant.
 GRANT USAGE ON SEQUENCE audit_event_seq_seq TO lease_agent, lease_gateway, lease_api;
 

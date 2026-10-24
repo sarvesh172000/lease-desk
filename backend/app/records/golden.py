@@ -59,6 +59,25 @@ def load_org(conn: Connection, company) -> None:
         center_id=c.center_id, suite=c.suite, rsf=c.rsf) for c in company.clinics])
 
 
+# The agents that act in Phase 1. They are actors so every event they write
+# names a real row, and so can() can refuse them like anyone else.
+AGENTS = [("agent:abstraction", "Lease abstraction agent"),
+          ("agent:checker", "Charge checker"),
+          ("agent:modification", "Lease modification agent")]
+
+
+def load_actors(conn: Connection, company) -> None:
+    """People from the org chart, plus the agents. Passwords are set by
+    auth (A8); a null hash cannot log in."""
+    region_of = {company.region.manager_id: company.region.region_id}
+    rows = [dict(id=p.person_id, name=p.name, role=p.role, email=p.email,
+                 region_id=region_of.get(p.person_id), entity_id=None, active=True)
+            for p in company.people]
+    rows += [dict(id=agent_id, name=name, role="agent", email=None, region_id=None,
+                  entity_id=None, active=True) for agent_id, name in AGENTS]
+    upsert(conn, m.actor, rows)
+
+
 def load_leases(conn: Connection, leases) -> int:
     return upsert(conn, m.lease, [dict(
         id=t.lease_id, clinic_id=t.clinic_id, landlord_id=t.landlord_id, status="active")

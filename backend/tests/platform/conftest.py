@@ -29,7 +29,7 @@ ALL_TABLES = (
     "source_document, raw_row, sync_cursor, entity, region, landlord, center, clinic, "
     "lease, landlord_charge, payment, lease_version, lease_term, agent_run, tool_call, "
     "work_item, question, policy, job, account, period, journal_entry, journal_line, "
-    "outbox, audit_event"
+    "outbox, audit_event, actor"
 )
 
 

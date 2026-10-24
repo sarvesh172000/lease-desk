@@ -1,6 +1,6 @@
 """The schema as SQLAlchemy Core tables, for building queries in Python.
 
-The source of truth is `sql/001_schema.sql`. This module mirrors its tables
+The source of truth is the SQL in `sql/`. This module mirrors its tables
 and columns so application code gets names it can autocomplete and a typo
 fails at import, not at runtime. `tests/platform/test_schema.py` compares the
 two after migrating and fails on any drift.
@@ -202,6 +202,15 @@ audit_event = Table(
     Column("diff", JSONB), Column("evidence", JSONB), Column("policy_ref", Text),
     Column("model_ref", Text), Column("prev_hash", Text), Column("hash", Text),
 )
+
+actor = Table(
+    "actor", metadata, _text_id(),
+    Column("name", Text), Column("role", Text), Column("email", Text),
+    Column("region_id", Text), Column("entity_id", Text), Column("password_hash", Text),
+    Column("active", Boolean),
+)
+
+ACTOR_ROLES = ("regional_manager", "ap_clerk", "controller", "auditor", "agent")
 
 # The eight work states, frozen. work/transitions.py owns the transitions.
 WORK_STATES = (

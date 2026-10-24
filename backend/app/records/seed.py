@@ -25,11 +25,11 @@ from ..db import models as m
 from ..db.engine import engine
 from ..ledger.chart import install_chart, open_periods
 from ..settings import get_settings
-from .golden import load_leases, load_org, standardize_charges, standardize_payments
+from .golden import load_actors, load_leases, load_org, standardize_charges, standardize_payments
 from .ingest import IngestError, ingest_all
 
 
-COUNTED = (m.source_document, m.raw_row, m.clinic, m.lease, m.landlord_charge,
+COUNTED = (m.source_document, m.raw_row, m.clinic, m.actor, m.lease, m.landlord_charge,
            m.payment, m.account, m.period)
 
 
@@ -56,6 +56,7 @@ def seed(data_dir: Path, agent: Engine, gateway: Engine) -> dict:
     company = build_company()
     with gateway.begin() as conn:
         load_org(conn, company)
+        load_actors(conn, company)
         load_leases(conn, build_leases(company))
         standardize_charges(conn)
         standardize_payments(conn)

@@ -16,11 +16,11 @@ GOLDEN = {"entity", "region", "landlord", "center", "clinic", "lease", "landlord
 RULEBOOK = {"lease_version", "lease_term"}
 WORK = {"work_item", "question", "policy", "agent_run", "tool_call", "job"}
 LEDGER = {"account", "period", "journal_entry", "journal_line"}
-ALL = RECORDS | GOLDEN | RULEBOOK | WORK | LEDGER | {"outbox", "audit_event"}
+ALL = RECORDS | GOLDEN | RULEBOOK | WORK | LEDGER | {"outbox", "audit_event", "actor"}
 
 # role -> privilege -> tables. Column-level UPDATEs are listed separately.
 SPEC = {
-    "lease_reader": {"SELECT": ALL},
+    "lease_reader": {"SELECT": ALL - {"actor"}},     # actor: columns only, below
     "lease_agent": {
         "SELECT": RECORDS | GOLDEN | RULEBOOK | WORK | {"account", "period", "audit_event"},
         "INSERT": {"source_document", "raw_row", "sync_cursor", "lease_version", "lease_term",
@@ -35,8 +35,8 @@ SPEC = {
     "lease_gateway": {
         "SELECT": ALL,
         "INSERT": GOLDEN | {"account", "period", "journal_entry", "journal_line", "outbox",
-                            "audit_event"},
-        "UPDATE": GOLDEN,
+                            "audit_event", "actor"},
+        "UPDATE": GOLDEN | {"actor"},
     },
 }
 COLUMN_UPDATES = {
@@ -81,6 +81,15 @@ def test_grant_matrix_is_exact(engines):
             columns = _column_updates(conn, role)
             for table, expected in tables.items():
                 assert columns[table] == expected, (role, table)
+
+
+def test_only_api_and_gateway_can_read_password_hashes(engines):
+    with engines["owner"].connect() as conn:
+        rows = conn.execute(text("""
+            SELECT grantee FROM information_schema.column_privileges
+             WHERE table_name = 'actor' AND column_name = 'password_hash'
+               AND privilege_type = 'SELECT' AND grantee LIKE 'lease\\_%'""")).scalars()
+        assert set(rows) == {"lease_api", "lease_gateway"}
 
 
 def test_no_role_may_delete_or_truncate_anything(engines):

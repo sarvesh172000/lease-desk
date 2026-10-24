@@ -17,17 +17,18 @@ FROZEN_TABLES = {
     "account", "journal_entry", "journal_line", "period",
     "outbox", "audit_event",
 }
+ADDED_TABLES = {"actor"}  # not in the frozen list; added for can() and login
 
 
 def test_every_frozen_table_exists_and_nothing_else(engines):
     tables = set(inspect(engines["owner"]).get_table_names()) - {"alembic_version"}
-    assert tables == FROZEN_TABLES
+    assert tables == FROZEN_TABLES | ADDED_TABLES
 
 
 def test_models_match_the_migrated_schema(engines):
     """models.py mirrors 001_schema.sql. Drift in either direction fails."""
     inspector = inspect(engines["owner"])
-    assert set(models.metadata.tables) == FROZEN_TABLES
+    assert set(models.metadata.tables) == FROZEN_TABLES | ADDED_TABLES
     for name, table in models.metadata.tables.items():
         db_columns = {c["name"] for c in inspector.get_columns(name)}
         assert {c.name for c in table.columns} == db_columns, name
