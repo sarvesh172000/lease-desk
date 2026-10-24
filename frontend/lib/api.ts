@@ -14,6 +14,7 @@ import type {
   Actor,
   AllowedActions,
   AuditResponse,
+  ChargeCheck,
   DocumentPages,
   ExceptionDetail,
   ExceptionSummary,
@@ -22,6 +23,7 @@ import type {
   LeaseSummary,
   Schedule,
   Status,
+  Summary,
 } from "./types";
 import {
   FIXTURE_ACTORS,
@@ -74,6 +76,28 @@ export class ApiError extends Error {
 
 class Unreachable extends Error {}
 
+/** A live API answered 401 on a data call: the session is gone, so sign in again. */
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  const here = window.location.pathname + window.location.search;
+  if (window.location.pathname.startsWith("/login")) return;
+  window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+}
+
+/**
+ * Exception ids vs work item ids. The live API names an exception `exc_<work_item.id>`
+ * and the queue (/api/items) takes the bare `<work_item.id>`. Fixture ids
+ * (`exc_01_jul_amendment`) are not work items and pass through unchanged.
+ */
+export function itemIdFor(exceptionId: string): string {
+  const m = /^exc_([1-9][0-9]*)$/.exec(exceptionId);
+  return m ? m[1] : exceptionId;
+}
+
+export function exceptionIdFor(itemId: number | string): string {
+  return `exc_${itemId}`;
+}
+
 async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -90,6 +114,7 @@ async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
   } finally {
     clearTimeout(timer);
   }
+  if (res.status === 401 && !path.startsWith("/api/auth/")) redirectToLogin();
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -202,12 +227,85 @@ export function getExceptions(): Promise<ExceptionSummary[]> {
 /** 3. GET /api/exceptions/{id} */
 export function getException(id: string): Promise<ExceptionDetail> {
   return call(
-    () => http<ExceptionDetail>(`/api/exceptions/${encodeURIComponent(id)}`),
+    async () => normalizeDetail(await http<ExceptionDetail>(`/api/exceptions/${encodeURIComponent(id)}`)),
     () => {
       const d = FIXTURE_EXCEPTION_DETAILS[id];
       if (!d) throw new ApiError(404, `404 exception ${id} not found`);
       return { ...clone(d), status: fxStatus(id, d.status) };
     },
+  );
+}
+
+/**
+ * The live API always sends an `investigation` object, all nulls when nothing
+ * has been investigated; the screens read `null` as "not investigated yet".
+ */
+function normalizeDetail(d: ExceptionDetail): ExceptionDetail {
+  const inv = d.investigation;
+  const empty = !!inv && inv.root_cause == null && !inv.evidence?.length && !inv.entries?.length && inv.liability_before == null;
+  return empty ? { ...d, investigation: null } : d;
+}
+
+/** EXTENSION: GET /api/summary — dashboard tiles, every figure summed by the API. */
+export function getSummary(): Promise<Summary> {
+  return call(
+    () => http<Summary>("/api/summary"),
+    () => {
+      // Offline stand-in only: the fixture rows, in cents. Over-bills only, like the API.
+      const open = FIXTURE_EXCEPTIONS.filter((e) => fxStatus(e.exception_id, e.status) !== "balanced");
+      const over = open.filter((e) => e.delta > 0);
+      return {
+        as_of: "2026-07-01",
+        active_leases: FIXTURE_LEASES.length,
+        open_exceptions: open.length,
+        pending_review: open.filter((e) => fxStatus(e.exception_id, e.status) === "pending_review").length,
+        held_total: over.reduce((s, e) => s + Math.round(e.delta * 100), 0) / 100,
+        held_count: over.length,
+        portfolio_liability: FIXTURE_LEASES.reduce((s, l) => s + Math.round(l.liability * 100), 0) / 100,
+      };
+    },
+  );
+}
+
+interface QueueResponse {
+  counts: Record<string, number>;
+  total: number;
+  items: Array<{ id: number; kind: string; state: string; title: string; clinic_id: string | null; period: string | null; amount: number | null; proposal: string | null; reason: string | null }>;
+}
+
+/** EXTENSION: every charge check of a month (GET /api/items?kind=CHARGE_CHECK), holds and correct charges alike. */
+export function getChargeChecks(period?: string): Promise<ChargeCheck[]> {
+  const q = new URLSearchParams({ kind: "CHARGE_CHECK" });
+  if (period) q.set("period", period);
+  return call<ChargeCheck[]>(
+    async () => {
+      const res = await http<QueueResponse>(`/api/items?${q.toString()}`);
+      return res.items
+        .map((i): ChargeCheck => ({
+          exception_id: exceptionIdFor(i.id),
+          item_id: i.id,
+          state: i.state,
+          title: i.title,
+          clinic_id: i.clinic_id,
+          period: i.period,
+          amount: i.amount,
+          proposal: i.proposal,
+          reason: i.reason,
+        }))
+        .sort((a, b) => (a.item_id ?? 0) - (b.item_id ?? 0));
+    },
+    () =>
+      FIXTURE_EXCEPTIONS.map((e) => ({
+        exception_id: e.exception_id,
+        item_id: null,
+        state: fxStatus(e.exception_id, e.status) === "balanced" ? "APPROVED" : "PROPOSED",
+        title: `${e.clinic_id} ${e.charge_type}`,
+        clinic_id: e.clinic_id,
+        period: e.period,
+        amount: e.actual,
+        proposal: "hold",
+        reason: null,
+      })),
   );
 }
 
@@ -360,16 +458,24 @@ export function getDocumentPages(docId: string): Promise<DocumentPages> {
   );
 }
 
-/** EXTENSION: GET /api/documents/{sha}/file — the PDF bytes. */
+/** EXTENSION: GET /api/documents/{doc_id}/file — the PDF bytes (doc_id: sha256 or source_document id). */
 export function documentUrl(docId: string): string {
   return source === "fixtures" ? fixtureDocumentUrl(docId) : `${API_URL}/api/documents/${encodeURIComponent(docId)}/file`;
 }
 
-/** EXTENSION: GET /api/items/{id}/allowed-actions → {"actions": [...]} */
-export function getAllowedActions(itemId: string): Promise<AllowedActions> {
+/** The live API's PDF route needs the session cookie; fixtures are static files. */
+export function documentNeedsCredentials(): boolean {
+  return source === "api";
+}
+
+/**
+ * EXTENSION: GET /api/items/{id}/allowed-actions → {"actions": [...]}.
+ * Takes the exception id the screens hold (`exc_42`) and asks for work item `42`.
+ */
+export function getAllowedActions(exceptionId: string): Promise<AllowedActions> {
   return call(
-    () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemId)}/allowed-actions`),
-    () => ({ actions: fxAllowed(itemId) }),
+    () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemIdFor(exceptionId))}/allowed-actions`),
+    () => ({ actions: fxAllowed(exceptionId) }),
   );
 }
 

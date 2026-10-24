@@ -58,6 +58,84 @@ describe("api fixtures fallback", () => {
   });
 });
 
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+describe("live API wiring", () => {
+  it("maps exception ids to work item ids and back", async () => {
+    const api = await freshApi();
+    expect(api.itemIdFor("exc_42")).toBe("42");
+    expect(api.itemIdFor("exc_01_jul_amendment")).toBe("exc_01_jul_amendment"); // a fixture id is not a work item
+    expect(api.exceptionIdFor(42)).toBe("exc_42");
+  });
+
+  it("asks /api/items/{item id} for allowed actions, with the session cookie", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ actions: ["approve", "hold"] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await freshApi();
+    expect(await api.getAllowedActions("exc_7")).toEqual({ actions: ["approve", "hold"] });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://localhost:8000/api/items/7/allowed-actions");
+    expect(init.credentials).toBe("include");
+  });
+
+  it("reads an all-null investigation as not investigated, and keeps a real one", async () => {
+    const empty = { root_cause: null, confidence: null, explains_variance: null, evidence: [], liability_before: null, liability_after: null, rou_before: null, rou_after: null, entries: [], balanced: null };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json({ exception_id: "exc_1", investigation: empty, invoice_line: null })));
+    const api = await freshApi();
+    const d = await api.getException("exc_1");
+    expect(d.investigation).toBeNull();
+    expect(d.invoice_line).toBeNull();
+  });
+
+  it("returns the server's posting status from approve", async () => {
+    const answer = { status: "balanced", exception_id: "exc_5", state: "POSTED", posting: { status: "posted", journal_entry_id: 1, error: null } };
+    const fetchMock = vi.fn().mockResolvedValue(json(answer));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await freshApi();
+    expect(await api.approveException("exc_5")).toEqual(answer);
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8000/api/exceptions/exc_5/approve");
+  });
+
+  it("takes dashboard totals from /api/summary, not from the exception rows", async () => {
+    const summary = { as_of: "2026-01-01", active_leases: 5, open_exceptions: 5, pending_review: 5, held_total: 25736.36, held_count: 5, portfolio_liability: 2259943.54 };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(summary)));
+    const api = await freshApi();
+    expect(await api.getSummary()).toEqual(summary);
+  });
+
+  it("lists every charge check under its exception id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      json({ counts: {}, total: 2, items: [
+        { id: 3, kind: "CHARGE_CHECK", state: "PROPOSED", title: "b", clinic_id: "CLINIC-01", period: "2026-01-01", amount: 1, proposal: "approve", reason: "Matches the lease." },
+        { id: 1, kind: "CHARGE_CHECK", state: "PROPOSED", title: "a", clinic_id: "CLINIC-02", period: "2026-01-01", amount: 2, proposal: "hold", reason: "Suite 118" },
+      ] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await freshApi();
+    const rows = await api.getChargeChecks();
+    expect(rows.map((r) => r.exception_id)).toEqual(["exc_1", "exc_3"]);
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8000/api/items?kind=CHARGE_CHECK");
+  });
+
+  it("sends the browser to /login when a data call is 401", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { pathname: "/exceptions/exc_1", search: "", assign } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ detail: "not signed in" }, 401)));
+    const api = await freshApi();
+    await expect(api.getExceptions()).rejects.toMatchObject({ status: 401 });
+    expect(assign).toHaveBeenCalledWith("/login?next=%2Fexceptions%2Fexc_1");
+  });
+
+  it("does not redirect for auth calls (signed out is an answer there)", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { pathname: "/", search: "", assign } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ detail: "not signed in" }, 401)));
+    const api = await freshApi();
+    expect(await api.getMe()).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+});
+
 describe("parseSseChunk", () => {
   it("parses a data frame and ignores comments", async () => {
     const { parseSseChunk } = await freshApi();
@@ -67,6 +145,10 @@ describe("parseSseChunk", () => {
       balanced: true,
     });
     expect(parseSseChunk(": keep-alive")).toBeNull();
+    expect(parseSseChunk('data: {"stage": "not_found", "message": "No clause is cited for this charge."}')).toEqual({
+      stage: "not_found",
+      message: "No clause is cited for this charge.",
+    });
     expect(parseSseChunk("data: not json")).toBeNull();
   });
 });

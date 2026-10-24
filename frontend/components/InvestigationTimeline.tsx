@@ -22,10 +22,21 @@ function detail(ev: InvestigationEvent) {
     case "found":
       return (
         <span>
-          <span className="font-mono text-ink-soft">{ev.doc_id}</span> · confidence <span className="num font-semibold">{pct(ev.confidence)}</span>
+          <span className="font-mono text-ink-soft" title={ev.doc_id ?? undefined}>
+            {ev.source ?? (ev.doc_id ? (ev.doc_id.length > 24 ? `${ev.doc_id.slice(0, 12)}…` : ev.doc_id) : "document not on file")}
+          </span>
+          {ev.page != null ? <span className="text-ink-muted"> · p.{ev.page}</span> : null}
+          {ev.confidence != null ? (
+            <>
+              {" "}
+              · confidence <span className="num font-semibold">{pct(ev.confidence)}</span>
+            </>
+          ) : null}
           <span className="mt-1 block italic text-ink-soft">“{ev.quote}”</span>
         </span>
       );
+    case "not_found":
+      return <span className="text-bad">{ev.message}</span>;
     case "remeasured":
       return (
         <span className="num">
@@ -33,13 +44,24 @@ function detail(ev: InvestigationEvent) {
         </span>
       );
     case "complete":
-      return (
+      return ev.balanced == null ? (
+        <span>
+          {ev.entries ? `${ev.entries} entries proposed` : "No entries proposed"}
+          {ev.message ? <span className="mt-1 block text-ink-soft">{ev.message}</span> : null}
+        </span>
+      ) : (
         <span>
           {ev.entries} entries proposed ·{" "}
           <span className={cn("font-semibold", ev.balanced ? "text-ok" : "text-bad")}>{ev.balanced ? "balanced" : "NOT balanced"}</span>
+          {ev.message ? <span className="mt-1 block text-ink-soft">{ev.message}</span> : null}
         </span>
       );
   }
+}
+
+/** The stage that fills a timeline slot: `not_found` answers the "found" step. */
+function eventFor(seen: Map<string, InvestigationEvent>, stage: Stage): InvestigationEvent | undefined {
+  return seen.get(stage) ?? (stage === "found" ? seen.get("not_found") : undefined);
 }
 
 export function InvestigationTimeline({
@@ -87,15 +109,17 @@ export function InvestigationTimeline({
     return () => abortRef.current?.abort();
   }, [autoStart, run]);
 
-  const seen = new Map(events.map((e) => [e.stage, e]));
-  const nextIdx = STAGES.findIndex((s) => !seen.has(s.stage));
+  const seen = new Map<string, InvestigationEvent>(events.map((e) => [e.stage, e]));
+  const finished = seen.has("complete");
+  const nextIdx = STAGES.findIndex((s) => !eventFor(seen, s.stage));
 
   return (
     <div>
       <ol className="relative">
         {STAGES.map((s, i) => {
-          const ev = seen.get(s.stage);
-          const active = state === "running" && i === nextIdx;
+          const ev = eventFor(seen, s.stage);
+          const active = state === "running" && i === nextIdx && !finished;
+          const skipped = !ev && finished;
           return (
             <li key={s.stage} className="relative flex gap-3 pb-4 last:pb-0" data-stage={s.stage} data-done={ev ? "true" : "false"}>
               {i < STAGES.length - 1 ? (
@@ -115,7 +139,13 @@ export function InvestigationTimeline({
                   <span className={cn("font-medium", !ev && !active && "text-ink-muted")}>{s.title}</span>
                   <span className="text-2xs uppercase tracking-wide text-ink-faint">{s.agent}</span>
                 </div>
-                {ev ? <div className="mt-0.5 text-ink-soft">{detail(ev)}</div> : active ? <div className="mt-0.5 text-ink-muted">Working…</div> : null}
+                {ev ? (
+                  <div className="mt-0.5 text-ink-soft">{detail(ev)}</div>
+                ) : active ? (
+                  <div className="mt-0.5 text-ink-muted">Working…</div>
+                ) : skipped ? (
+                  <div className="mt-0.5 text-ink-muted">Skipped · nothing on record changes the lease terms.</div>
+                ) : null}
               </div>
             </li>
           );
@@ -132,7 +162,7 @@ export function InvestigationTimeline({
         <span className="text-xs text-ink-muted">
           {state === "idle" && "Not run in this session."}
           {state === "running" && "Streaming from the investigation…"}
-          {state === "done" && `${events.length} of ${STAGES.length} stages received.`}
+          {state === "done" && `${events.length} event${events.length === 1 ? "" : "s"} received.`}
           {state === "error" && "Stopped."}
         </span>
         <Button size="sm" variant={state === "idle" ? "primary" : "secondary"} onClick={() => void run()} disabled={state === "running"}>

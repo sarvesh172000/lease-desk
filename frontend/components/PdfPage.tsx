@@ -22,6 +22,8 @@ export interface PdfPageProps {
   tone?: "billed" | "cited";
   label?: string;
   onError?: (e: Error) => void;
+  /** Send the session cookie with the PDF request (the live API's /file route needs it). */
+  withCredentials?: boolean;
 }
 
 /** Canvas resolution. The page is then scaled to its column with CSS, so a
@@ -30,7 +32,9 @@ const RENDER_WIDTH = 1100;
 
 const ZOOMS = [1, 1.5, 2] as const;
 
-export default function PdfPage({ url, page, box, pageSize, tone = "cited", label, onError }: PdfPageProps) {
+const WITH_CREDENTIALS = { withCredentials: true } as const;
+
+export default function PdfPage({ url, page, box, pageSize, tone = "cited", label, onError, withCredentials = false }: PdfPageProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [intrinsic, setIntrinsic] = useState<PageSize | null>(null);
@@ -60,6 +64,7 @@ export default function PdfPage({ url, page, box, pageSize, tone = "cited", labe
         <div ref={wrapRef} className="relative mx-auto bg-white shadow-[0_1px_4px_rgba(0,0,0,0.18)]" style={{ width: `${zoom * 100}%` }}>
           <Document
             file={url}
+            options={withCredentials ? WITH_CREDENTIALS : undefined}
             loading={<div className="flex h-[480px] items-center justify-center text-sm text-ink-muted">Loading document…</div>}
             error={<div className="flex h-[300px] items-center justify-center px-6 text-center text-sm text-bad">Could not open this PDF.</div>}
             onLoadError={(e) => onError?.(e)}

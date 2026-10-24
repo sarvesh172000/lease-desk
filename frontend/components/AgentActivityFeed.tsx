@@ -1,16 +1,15 @@
 "use client";
 
-import { getAudit } from "@/lib/api";
 import { humanize, timestamp } from "@/lib/format";
+import { useAudit } from "@/lib/hooks";
 import type { AuditEvent } from "@/lib/types";
-import { useQuery } from "@tanstack/react-query";
 import { EmptyState, ErrorState, LoadingBlock } from "./ui/States";
 
 const isMachine = (e: AuditEvent) => e.actor_id.startsWith("agent:") || e.actor_id === "engine" || e.actor_id.startsWith("system");
 
 /** Last action of each agent, read from the audit stream. */
 export function AgentActivityFeed() {
-  const q = useQuery({ queryKey: ["audit", null], queryFn: () => getAudit() });
+  const q = useAudit();
   if (q.isLoading) return <LoadingBlock rows={3} />;
   if (q.isError) return <ErrorState title="Agent activity unavailable" error={q.error} onRetry={() => q.refetch()} />;
   const latest = new Map<string, AuditEvent>();
