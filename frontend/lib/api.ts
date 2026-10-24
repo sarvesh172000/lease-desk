@@ -365,10 +365,26 @@ export function documentUrl(docId: string): string {
   return source === "fixtures" ? fixtureDocumentUrl(docId) : `${API_URL}/api/documents/${encodeURIComponent(docId)}/file`;
 }
 
+/**
+ * The work-item id behind an exception.
+ *
+ * `/api/exceptions` is keyed by `exc_<n>` and `/api/items` by the integer `n`;
+ * they are the same work item. Passing the exception id straight to the items
+ * endpoints returns 422 ("Input should be a valid integer") and leaves the
+ * Approve button dead, which is the one control the whole screen exists for.
+ *
+ * The exception payload carries no `item_id`, so the id is derived here rather
+ * than at each call site. If the API grows an explicit `item_id`, prefer it.
+ */
+export function itemIdOf(exceptionId: string): string {
+  const match = /^exc_(\d+)$/.exec(exceptionId);
+  return match ? match[1] : exceptionId;
+}
+
 /** EXTENSION: GET /api/items/{id}/allowed-actions → {"actions": [...]} */
 export function getAllowedActions(itemId: string): Promise<AllowedActions> {
   return call(
-    () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemId)}/allowed-actions`),
+    () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemIdOf(itemId))}/allowed-actions`),
     () => ({ actions: fxAllowed(itemId) }),
   );
 }

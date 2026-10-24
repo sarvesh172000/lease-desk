@@ -4,8 +4,12 @@
 #   make test                 the whole suite (database tests run when `make up` is)
 #   make prove-roles          the database refusing every forbidden write
 
-PY := $(shell [ -x .venv/bin/python ] && echo $(CURDIR)/.venv/bin/python || echo python3)
+# Quoted: CURDIR can contain spaces (a checkout under "Application Support",
+# "My Documents", or any path a person actually chose). Unquoted, the shell
+# splits it and every target that runs Python dies with "Permission denied".
+PY := $(shell [ -x .venv/bin/python ] && echo '"$(CURDIR)/.venv/bin/python"' || echo python3)
 export PYTHONPATH := $(CURDIR)/backend:$(CURDIR)
+# Same reason: a space in CURDIR would split the ruff invocation below.
 
 -include .env
 export
@@ -76,7 +80,7 @@ dev-passwords:     ## give every seeded person the password `demo` (as lease_gat
 # Developer tooling (not part of the frozen list).
 .PHONY: lint ci
 
-RUFF := $(shell command -v ruff 2>/dev/null || echo $(PY) -m ruff)
+RUFF := $(shell command -v ruff 2>/dev/null || echo $(PY) -m ruff)  # $(PY) is already quoted
 
 lint:              ## ruff on the platform scope set in ruff.toml (pip install ruff)
 	$(RUFF) check
