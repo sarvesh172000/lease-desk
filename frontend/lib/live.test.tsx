@@ -14,6 +14,8 @@ const fake = vi.hoisted(() => {
     onUpdate: [] as Array<(...a: unknown[]) => void>,
     onApplied: undefined as undefined | (() => void),
     connect: undefined as undefined | (() => void),
+    connectError: undefined as undefined | ((ctx: unknown, err: Error, next?: number) => void),
+    disconnected: undefined as undefined | ((ctx: unknown, err?: Error, next?: number) => void),
   };
   const conn = {
     db: {
@@ -42,7 +44,9 @@ const fake = vi.hoisted(() => {
     withUri: () => builder,
     withDatabaseName: () => builder,
     onConnect: (cb: (c: typeof conn) => void) => ((state.connect = () => cb(conn)), builder),
-    onConnectError: () => builder,
+    withAutomaticReconnect: () => builder,
+    onConnectError: (cb: typeof state.connectError) => ((state.connectError = cb), builder),
+    onDisconnect: (cb: typeof state.disconnected) => ((state.disconnected = cb), builder),
     build: () => {
       state.builds += 1;
       return conn;
@@ -56,7 +60,7 @@ vi.mock("./spacetime", () => ({
   tables: { deskStatus: "deskStatus", agentStep: "agentStep" },
 }));
 
-import { LIVE_QUERY_KEYS, useLiveStatus } from "./live";
+import { LIVE_QUERY_KEYS, useLiveConnection, useLiveStatus } from "./live";
 import { Providers } from "@/app/providers";
 
 function wrapperFor(qc: QueryClient) {
@@ -68,7 +72,7 @@ function wrapperFor(qc: QueryClient) {
 beforeEach(() => {
   Object.assign(fake.state, {
     builds: 0, disconnects: 0, subscribed: [], onInsert: [], onUpdate: [],
-    onApplied: undefined, connect: undefined,
+    onApplied: undefined, connect: undefined, connectError: undefined, disconnected: undefined,
   });
   vi.useFakeTimers();
 });
@@ -122,5 +126,43 @@ describe("useLiveStatus", () => {
 
     unmount();
     expect(fake.state.disconnects).toBe(1);
+  });
+
+  it("reports the connection: off without env, then connecting, connected, reconnecting, lost", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SPACETIME_URI", "");
+    vi.stubEnv("NEXT_PUBLIC_SPACETIME_DB", "");
+    const off = renderHook(() => useLiveStatus(), { wrapper: wrapperFor(new QueryClient()) });
+    expect(off.result.current).toBe("off");
+    off.unmount();
+
+    vi.stubEnv("NEXT_PUBLIC_SPACETIME_URI", "wss://maincloud.spacetimedb.com");
+    vi.stubEnv("NEXT_PUBLIC_SPACETIME_DB", "leasedesk-live");
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { result, unmount } = renderHook(() => ({ status: useLiveStatus(), indicator: useLiveConnection() }), {
+      wrapper: wrapperFor(new QueryClient()),
+    });
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+    expect(result.current.status).toBe("connecting");
+
+    act(() => fake.state.connect!());
+    expect(result.current.status).toBe("connecting"); // connected means subscribed
+    act(() => fake.state.onApplied!());
+    expect(result.current).toEqual({ status: "connected", indicator: "connected" });
+
+    act(() => fake.state.disconnected!({}, new Error("socket closed"), 1));
+    expect(result.current.indicator).toBe("reconnecting");
+    act(() => fake.state.connect!());
+    expect(result.current.indicator).toBe("connected");
+    expect(fake.state.subscribed).toHaveLength(2); // the reconnect did not subscribe twice
+    expect(fake.state.onInsert).toHaveLength(1);
+
+    act(() => fake.state.disconnected!({}, new Error("gave up"), undefined));
+    expect(result.current.indicator).toBe("lost");
+
+    unmount();
+    const after = renderHook(() => useLiveConnection());
+    expect(after.result.current).toBe("off");
   });
 });

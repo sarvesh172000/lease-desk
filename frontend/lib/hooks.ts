@@ -23,6 +23,7 @@ import {
   onboardPolicies,
   confirmLeaseVersion,
   getAllowedActions,
+  getApiHealth,
   getAudit,
   getChargeChecks,
   getDataSource,
@@ -43,7 +44,9 @@ import {
   payAsBilledException,
   performAction,
   resetDemo,
+  subscribeApiHealth,
   subscribeDataSource,
+  type ApiHealth,
   type DataSource,
 } from "./api";
 import type {
@@ -52,6 +55,11 @@ import type {
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
+}
+
+/** Whether the live API answered the last call; drives the shell's "API unreachable" banner. */
+export function useApiHealth(): ApiHealth {
+  return useSyncExternalStore(subscribeApiHealth, getApiHealth, getApiHealth);
 }
 
 export function useMe() {

@@ -2,10 +2,13 @@
 
 import { demoSwitch, logout } from "@/lib/api";
 import { humanize } from "@/lib/format";
-import { useDataSource, useDemoActors, useMe } from "@/lib/hooks";
+import { useApiHealth, useDataSource, useDemoActors, useMe } from "@/lib/hooks";
+import { useLiveConnection, type LiveState } from "@/lib/live";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
 import { CommandPalette } from "@/components/ui/CommandPalette";
-import { useQueryClient } from "@tanstack/react-query";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -34,6 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen">
       <CommandPalette />
       <Header pathname={pathname} />
+      <UnreachableBanner />
       <main className="mx-auto w-full max-w-[1400px] px-6 pb-16 pt-6">
         {me.isLoading ? (
           <div className="py-24 text-center text-ink-muted">Checking your session…</div>
@@ -89,6 +93,7 @@ function Header({ pathname }: { pathname: string }) {
               Fixtures
             </span>
           ) : null}
+          <LiveIndicator />
           <RoleSwitcher />
           {me.data ? (
             <div className="flex items-center gap-3 border-l border-line pl-3">
@@ -158,5 +163,64 @@ function RoleSwitcher() {
       </select>
       {err ? <span className="text-bad" role="alert">{err}</span> : null}
     </label>
+  );
+}
+
+/**
+ * The live API could not be reached. Full width and impossible to miss: the
+ * screens below show errors, never fixture numbers in place of real ones.
+ */
+function UnreachableBanner() {
+  const health = useApiHealth();
+  const qc = useQueryClient();
+  const fetching = useIsFetching() > 0;
+  if (health.reachable) return null;
+  return (
+    <div role="alert" className="border-b border-bad-line bg-bad-soft">
+      <div className="mx-auto flex w-full max-w-[1400px] items-center gap-4 px-6 py-3">
+        <WifiOff aria-hidden className="h-5 w-5 shrink-0 text-bad" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-bad">API unreachable. No figures on this page are current.</p>
+          <p className="truncate font-mono text-xs text-ink-soft" title={health.error}>
+            {health.error}
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={fetching}
+          icon={<RefreshCw aria-hidden className="h-3.5 w-3.5" />}
+          onClick={() => void qc.invalidateQueries()}
+        >
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const LIVE: Record<LiveState, { label: string; title: string; dot: string; pulse?: boolean }> = {
+  connected: { label: "Live", title: "Live updates on: changes appear as they are committed", dot: "bg-ok", pulse: true },
+  connecting: { label: "Connecting", title: "Connecting to live updates", dot: "bg-warn", pulse: true },
+  reconnecting: { label: "Reconnecting", title: "Live updates dropped; reconnecting. Screens refresh as usual meanwhile", dot: "bg-warn", pulse: true },
+  lost: { label: "Live unavailable", title: "Could not reach live updates; screens refresh as usual", dot: "bg-ink-faint" },
+  off: { label: "Live off", title: "Live updates are not configured for this deployment; screens refresh as usual", dot: "bg-ink-faint" },
+};
+
+/** The SpacetimeDB mirror's connection. Off is a normal state, shown quietly. */
+function LiveIndicator() {
+  const state = useLiveConnection();
+  const l = LIVE[state];
+  return (
+    <span
+      className="flex items-center gap-1.5 text-xs text-ink-muted"
+      title={l.title}
+      data-testid="live-indicator"
+      data-state={state}
+    >
+      <span aria-hidden className={cn("h-2 w-2 rounded-full", l.dot, l.pulse && "animate-pulse-dot")} />
+      <span>{l.label}</span>
+      <span className="sr-only">: {l.title}</span>
+    </span>
   );
 }

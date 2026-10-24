@@ -20,7 +20,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { DbConnection } from "./spacetime";
 import type { AgentStep } from "./spacetime/types";
 
@@ -49,6 +49,35 @@ export function liveConfig(): LiveConfig | null {
   return uri && database ? { uri, database } : null;
 }
 
+/**
+ * The mirror's connection, for the shell's live indicator.
+ * - off: no env, so no mirror. A normal state, not an error.
+ * - connecting: first connection, not subscribed yet.
+ * - connected: subscribed; changes arrive as they commit.
+ * - reconnecting: the connection dropped and the SDK is retrying.
+ * - lost: could not connect, or gave up; screens refresh as usual.
+ */
+export type LiveState = "off" | "connecting" | "connected" | "reconnecting" | "lost";
+
+let liveState: LiveState = "off";
+const stateListeners = new Set<() => void>();
+
+function setLiveState(next: LiveState) {
+  if (next === liveState) return;
+  liveState = next;
+  stateListeners.forEach((fn) => fn());
+}
+
+function subscribeLiveState(fn: () => void): () => void {
+  stateListeners.add(fn);
+  return () => stateListeners.delete(fn);
+}
+
+/** Read the connection state without joining it (the indicator; useLiveStatus does the joining). */
+export function useLiveConnection(): LiveState {
+  return useSyncExternalStore(subscribeLiveState, () => liveState, () => "off");
+}
+
 interface Listener {
   onStatus?: () => void;
   onSteps?: (steps: AgentStep[]) => void;
@@ -74,10 +103,19 @@ async function connect(cfg: LiveConfig, s: Shared): Promise<void> {
     // The rows that arrive with the subscription itself are history, not news.
     if (s.ready) for (const l of s.listeners) l.onStatus?.();
   };
+  let wired = false;
   s.conn = DbConnection.builder()
     .withUri(cfg.uri)
     .withDatabaseName(cfg.database)
+    .withAutomaticReconnect()
     .onConnect((conn) => {
+      if (s.closed) return;
+      // A reconnect keeps the SDK's handles and subscription; wire once.
+      if (wired) {
+        setLiveState("connected");
+        return;
+      }
+      wired = true;
       conn.db.deskStatus.onInsert(status);
       conn.db.deskStatus.onUpdate(status);
       conn.db.agentStep.onInsert(() => {
@@ -87,12 +125,24 @@ async function connect(cfg: LiveConfig, s: Shared): Promise<void> {
         .subscriptionBuilder()
         .onApplied(() => {
           s.ready = true;
+          setLiveState("connected");
           for (const l of s.listeners) l.onSteps?.(steps(conn));
         })
-        .onError(() => console.warn("live mirror: subscription failed; screens refresh as usual"))
+        .onError(() => {
+          setLiveState("lost");
+          console.warn("live mirror: subscription failed; screens refresh as usual");
+        })
         .subscribe([tables.deskStatus, tables.agentStep]);
     })
-    .onConnectError((_ctx, err) => console.warn("live mirror: could not connect", err))
+    .onConnectError((_ctx, err, nextAttempt) => {
+      if (s.closed) return;
+      setLiveState(nextAttempt === undefined ? "lost" : "reconnecting");
+      console.warn("live mirror: could not connect", err);
+    })
+    .onDisconnect((_ctx, _err, nextAttempt) => {
+      if (s.closed) return;
+      setLiveState(nextAttempt === undefined ? "lost" : "reconnecting");
+    })
     .build();
 }
 
@@ -100,7 +150,11 @@ async function connect(cfg: LiveConfig, s: Shared): Promise<void> {
 function join(cfg: LiveConfig, listener: Listener): () => void {
   if (!shared) {
     const s: Shared = { conn: null, listeners: new Set(), ready: false, closed: false };
-    connect(cfg, s).catch((err) => console.warn("live mirror: could not start", err));
+    setLiveState("connecting");
+    connect(cfg, s).catch((err) => {
+      if (!s.closed) setLiveState("lost");
+      console.warn("live mirror: could not start", err);
+    });
     shared = s;
   }
   const s = shared;
@@ -112,6 +166,7 @@ function join(cfg: LiveConfig, listener: Listener): () => void {
       shared = null;
       s.closed = true;
       s.conn?.disconnect();
+      setLiveState("off");
     }
   };
 }
@@ -120,9 +175,11 @@ function join(cfg: LiveConfig, listener: Listener): () => void {
  * Mount once (app/providers.tsx): while mounted, any change another window,
  * the agent or the gateway commits makes this window's queue, tiles and
  * detail refetch. Coalesced, so a burst of postings is one refetch.
+ * Returns the connection state ("off" when the mirror is not configured).
  */
-export function useLiveStatus(): void {
+export function useLiveStatus(): LiveState {
   const qc = useQueryClient();
+  const state = useLiveConnection();
   useEffect(() => {
     const cfg = liveConfig();
     if (!cfg) return;
@@ -140,6 +197,7 @@ export function useLiveStatus(): void {
       leave();
     };
   }, [qc]);
+  return state;
 }
 
 /** The most recent agent steps (oldest first), live; [] when the mirror is off. */

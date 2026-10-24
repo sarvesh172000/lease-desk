@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.resetModules();
 });
 
@@ -9,23 +10,52 @@ async function freshApi() {
   return await import("./api");
 }
 
-describe("api fixtures fallback", () => {
-  it("serves the §16 fixtures verbatim when the API is unreachable, and stays in fixtures mode", async () => {
+/** Fixtures mode is read from the env at import, so stub it before importing. */
+async function fixturesApi() {
+  vi.stubEnv("NEXT_PUBLIC_USE_FIXTURES", "1");
+  return await freshApi();
+}
+
+describe("api: an unreachable live API is an error, never fixtures", () => {
+  it("throws ApiUnreachableError, stays on the API, and reports the health for the banner", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
     vi.stubGlobal("fetch", fetchMock);
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const api = await freshApi();
-    const { SECTION_16_EXCEPTION_DETAIL, SECTION_16_LEASES } = await import("./fixtures");
 
     expect(api.getDataSource()).toBe("api");
-    const detail = await api.getException("exc_01_jul_amendment");
-    expect(api.getDataSource()).toBe("fixtures");
-    expect(detail.investigation).toEqual(SECTION_16_EXCEPTION_DETAIL.investigation);
-    expect(detail.delta).toBe(-2226.65);
+    expect(api.getApiHealth()).toEqual({ reachable: true });
+    const seen = vi.fn();
+    api.subscribeApiHealth(seen);
 
-    const leases = await api.getLeases();
-    expect(leases[0]).toEqual(SECTION_16_LEASES[0]);
-    expect(fetchMock).toHaveBeenCalledTimes(1); // no retry storm once in fixtures mode
+    await expect(api.getException("exc_01_jul_amendment")).rejects.toBeInstanceOf(api.ApiUnreachableError);
+    expect(api.getDataSource()).toBe("api");
+    expect(api.getApiHealth()).toMatchObject({ reachable: false, error: expect.stringContaining("Failed to fetch") });
+    expect(seen).toHaveBeenCalledTimes(1);
+
+    // every later call still asks the API (a retry can recover), and still fails loudly
+    await expect(api.getLeases()).rejects.toBeInstanceOf(api.ApiUnreachableError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(seen).toHaveBeenCalledTimes(1); // same error, no repeat notification
+  });
+
+  it("clears the unreachable state once the API answers again", async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValue(json([]));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await freshApi();
+    await expect(api.getLeases()).rejects.toBeInstanceOf(api.ApiUnreachableError);
+    expect(api.getApiHealth().reachable).toBe(false);
+    expect(await api.getLeases()).toEqual([]);
+    expect(api.getApiHealth()).toEqual({ reachable: true });
+  });
+
+  it("does not replay fixtures for an investigation when the API is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    const api = await freshApi();
+    const stages: string[] = [];
+    await expect(api.investigate("exc_01_jul_amendment", (e) => stages.push(e.stage), undefined, 0)).rejects.toBeInstanceOf(
+      api.ApiUnreachableError,
+    );
+    expect(stages).toEqual([]);
   });
 
   it("does not mask HTTP errors from a live API", async () => {
@@ -33,22 +63,37 @@ describe("api fixtures fallback", () => {
     const api = await freshApi();
     await expect(api.approveException("exc_01_jul_amendment")).rejects.toMatchObject({ status: 403 });
     expect(api.getDataSource()).toBe("api");
+    expect(api.getApiHealth()).toEqual({ reachable: true }); // a 403 is an answer, not an outage
+  });
+});
+
+describe("api fixtures mode (NEXT_PUBLIC_USE_FIXTURES=1)", () => {
+  it("serves the §16 fixtures verbatim and never calls the network", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await fixturesApi();
+    const { SECTION_16_EXCEPTION_DETAIL, SECTION_16_LEASES } = await import("./fixtures");
+
+    expect(api.getDataSource()).toBe("fixtures");
+    const detail = await api.getException("exc_01_jul_amendment");
+    expect(detail.investigation).toEqual(SECTION_16_EXCEPTION_DETAIL.investigation);
+    expect(detail.delta).toBe(-2226.65);
+    const leases = await api.getLeases();
+    expect(leases[0]).toEqual(SECTION_16_LEASES[0]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("replays the four §16 SSE events in order in fixtures mode", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const api = await freshApi();
-    await api.getLeases(); // trip the fallback
+  it("replays the four §16 SSE events in order", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const api = await fixturesApi();
     const stages: string[] = [];
     await api.investigate("exc_01_jul_amendment", (e) => stages.push(e.stage), undefined, 0);
     expect(stages).toEqual(["searching", "found", "remeasured", "complete"]);
   });
 
-  it("fixtures mode lets a controller approve, and the audit trail records it", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const api = await freshApi();
+  it("lets a controller approve, and the audit trail records it", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const api = await fixturesApi();
     expect((await api.getAllowedActions("exc_01_jul_amendment")).actions).toEqual(["approve", "hold"]);
     expect(await api.approveException("exc_01_jul_amendment")).toEqual({ exception_id: "exc_01_jul_amendment", status: "balanced" });
     expect((await api.getAllowedActions("exc_01_jul_amendment")).actions).toEqual([]);
