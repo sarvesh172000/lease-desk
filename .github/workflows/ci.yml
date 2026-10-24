@@ -1,0 +1,157 @@
+# Lease Desk CI (Phase 1, group 1).
+#
+#   lint       ruff on the platform scope (ruff.toml), same as `make lint`
+#   test       migrations from empty, the whole pytest suite with the database
+#              tests required to run, then the regression eval
+#   gate       a fresh database through `make migrate seed prove-roles`
+#   frontend   lint, build and test frontend/, once it exists
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  RUFF_VERSION: "0.16.9"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  # The Makefile and alembic.ini find the packages through this.
+  PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+  # The service container below. LEASEDESK_DB_* defaults cover the rest.
+  LEASEDESK_DB_HOST: localhost
+  LEASEDESK_DB_PORT: "5432"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install "ruff==${RUFF_VERSION}"
+      - name: ruff check (platform scope)
+        run: ruff check --output-format=github
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: leasedesk
+          POSTGRES_PASSWORD: leasedesk
+          POSTGRES_DB: leasedesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U leasedesk -d leasedesk"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+
+      - name: Migrate from empty
+        working-directory: backend
+        run: python -m alembic upgrade head
+
+      # ci/require_db.py turns a skipped backend/tests/platform test into a
+      # failure, so an unreachable database cannot pass as green.
+      - name: pytest (database tests required)
+        run: python -m pytest -rs -p ci.require_db
+
+      - name: Generate the company
+        run: python -m datagen.build
+
+      # Exits 1 when any section fails, 2 when there is no answer key.
+      - name: Regression eval
+        run: python -m eval.run
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval/report.json
+          if-no-files-found: ignore
+
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: leasedesk
+          POSTGRES_PASSWORD: leasedesk
+          POSTGRES_DB: leasedesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U leasedesk -d leasedesk"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: make migrate
+        run: make migrate
+      - name: make seed
+        run: make seed
+      - name: make prove-roles
+        run: make prove-roles
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # hashFiles() is not available in a job-level `if`, so each step checks.
+    steps:
+      - uses: actions/checkout@v4
+      - name: No frontend yet
+        if: hashFiles('frontend/package.json') == ''
+        run: echo "frontend/package.json not found; skipping the frontend job."
+      - uses: actions/setup-node@v4
+        if: hashFiles('frontend/package.json') != ''
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm ci
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm ci
+      - name: npm run lint
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm run lint
+      - name: npm run build
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm run build
+      - name: npm test
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: npm test

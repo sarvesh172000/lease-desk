@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 15px;
+  }
+  body {
+    @apply bg-paper text-ink antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3 {
+    @apply text-ink;
+    letter-spacing: -0.01em;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-paper;
+  }
+}
+
+@layer components {
+  /* Money and every other figure: tabular, lining, right-aligned by the caller. */
+  .num {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+  .eyebrow {
+    @apply text-2xs font-semibold uppercase tracking-[0.08em] text-ink-muted;
+  }
+  .table-head {
+    @apply border-b border-line bg-sunken/60 text-left text-2xs font-semibold uppercase tracking-[0.06em] text-ink-muted;
+  }
+}
+
+/* react-pdf: we render canvas only (no text/annotation layers). */
+.react-pdf__Page {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+.react-pdf__Page__canvas {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+}
