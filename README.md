@@ -113,27 +113,71 @@ Months already closed on the stale schedule get a rent-expense catch-up.
 | `leasedesk/cli.py` | The demo |
 | `data/` | Sample lease, payment history, and the inbox the amendment hides in |
 
-## Getting started
+## Run it
 
-**Python 3.11 or newer.** macOS ships 3.9, which ReportLab will not run on.
+**Prerequisites:** Python 3.11 or newer (macOS ships 3.9, which ReportLab will
+not run on) and Docker with Compose v2.
 
 ```bash
 git clone https://github.com/sarvesh172000/lease-desk.git
 cd lease-desk
 python3.13 -m venv .venv          # or python3.11 / python3.12
 ./.venv/bin/pip install -r requirements.txt
-./.venv/bin/python -m pytest      # 205 tests, ~5s, no API key needed
+
+make up migrate seed              # Postgres, api and worker; schema and roles; the company
+make prove-roles                  # each role tries a forbidden write; the database refuses
+make test                         # the whole suite
+make api                          # the API on the host with reload, http://localhost:8000
 ```
 
-Then generate the world and score a run:
+The Makefile uses `.venv/bin/python` when it exists. Compose publishes
+Postgres on host port **5433** so it never collides with a local Postgres;
+containers reach it as `db:5432`. Every setting has a default, so `.env` is
+optional (copy `.env.example` to override). The worker restarts until
+`make migrate` has created its role, then settles.
+
+**Database roles.** `make migrate` runs as the owner (`leasedesk`) and creates
+four logins. Each process connects as exactly one:
+
+| Role | For |
+|---|---|
+| `lease_agent` | The worker and agents: reads records, writes ingestion, drafts and work; cannot touch the ledger, outbox or golden tables |
+| `lease_gateway` | The only writer back to records: golden tables, the journal, the outbox, period status |
+| `lease_api` | Serves the UI: writes events and work items, never the ledger |
+| `lease_reader` | The auditor: read-only on everything |
+
+Nobody, the owner included, can rewrite or delete `audit_event`.
+
+**Tests without Postgres.** `backend/tests/platform` migrates a throwaway
+database from empty for each run and drops it afterwards. When no Postgres is
+reachable those tests skip and everything else still runs offline, with no API
+key. Point them elsewhere with `LEASEDESK_DB_HOST` / `LEASEDESK_DB_PORT` (e.g.
+`LEASEDESK_DB_PORT=5432` for a local Postgres 16 whose owner can create
+databases and roles). CI loads `ci/require_db.py`, which turns any such skip
+into a failure.
+
+**The eval.** Generate the world and score a run against the answer key:
 
 ```bash
-./.venv/bin/python -m datagen.build    # 5 leases, a billing month, 2025, the mailbox
-./.venv/bin/python -m eval.run         # scores the run against the answer key
+make eval                         # python -m datagen.build, then python -m eval.run
 ```
 
-Everything runs offline. Only the `--live` paths call the Claude API, and they
-are the only thing that needs `ANTHROPIC_API_KEY`.
+Only the `--live` paths call the Claude API and need `ANTHROPIC_API_KEY`.
+
+**Lint and CI.**
+
+```bash
+./.venv/bin/pip install ruff pre-commit && ./.venv/bin/pre-commit install
+make lint                         # ruff on the platform scope in ruff.toml
+make ci                           # lint, the suite with database tests required, the eval
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs lint; migrations from empty,
+pytest and the eval against a Postgres 16 service; `make migrate seed
+prove-roles` on a fresh database; and the frontend's lint, build and tests once
+`frontend/` exists. Behind a TLS-intercepting proxy, `docker compose build`
+fails at `pip install` with `CERTIFICATE_VERIFY_FAILED`; the image itself is
+fine, the build container just does not trust the proxy's CA.
 
 **Start here:** [`docs/PLAN.md`](docs/PLAN.md) — 27 chunks, who owns each, and
 what counts as done.
