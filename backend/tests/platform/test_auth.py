@@ -11,6 +11,10 @@ import time
 
 import itsdangerous.timed
 import pytest
+from fastapi import APIRouter, Depends
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
 from app.auth import passwords
 from app.auth.deps import (
     SessionActor,
@@ -24,9 +28,6 @@ from app.auth.sessions import COOKIE_NAME, MAX_AGE_SECONDS, issue_token
 from app.main import create_app
 from app.records.golden import load_actors, load_org
 from app.settings import get_settings
-from fastapi import APIRouter, Depends
-from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 SECRET = "test-session-secret"
 CTRL = "priya.raghunathan@northbaypt.example"

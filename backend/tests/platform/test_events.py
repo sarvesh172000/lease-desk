@@ -1,6 +1,5 @@
 """work/events.py: the Python face of the hash chain."""
 
-from sqlalchemy import text
 
 from app.db.bootstrap import execute_raw
 from app.work.events import append_event, events_for, verify_chain

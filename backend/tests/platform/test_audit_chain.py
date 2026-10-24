@@ -44,7 +44,7 @@ def test_first_event_chains_from_genesis(clean):
 
 def test_each_event_links_to_the_one_before(clean):
     rows = [append(clean["lease_agent"], subject=str(i)) for i in range(5)]
-    for previous, current in zip(rows, rows[1:]):
+    for previous, current in zip(rows, rows[1:], strict=False):
         assert current.prev_hash == previous.hash
         assert current.seq > previous.seq
     assert broken(clean["lease_reader"]) is None

@@ -9,13 +9,18 @@ SQL is test_roles.py's job.)
 from datetime import date
 from decimal import Decimal
 
+import ledger_world as w
 import pytest
 from sqlalchemy.exc import ProgrammingError
 
-import ledger_world as w
 from app.work.events import events_for, verify_chain
 from app.work.gateway import (
-    GatewayError, PeriodClosed, PostingError, WrongState, post_approved_charge, post_journal,
+    GatewayError,
+    PeriodClosed,
+    PostingError,
+    WrongState,
+    post_approved_charge,
+    post_journal,
 )
 
 JAN, DEC = date(2026, 1, 1), date(2025, 12, 1)

@@ -10,8 +10,18 @@ them.
 """
 
 from sqlalchemy import (
-    ARRAY, BigInteger, Boolean, Column, Date, Float, Integer, MetaData, Numeric,
-    Table, Text, TIMESTAMP,
+    ARRAY,
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    Float,
+    Integer,
+    MetaData,
+    Numeric,
+    Table,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 

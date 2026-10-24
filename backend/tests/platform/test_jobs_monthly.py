@@ -20,8 +20,14 @@ from app.engine.charges import Proof
 from app.jobs import handlers
 from app.jobs.handlers import ABSTRACTION_SKIPPED, HandlerError, ingest
 from app.jobs.monthly import (
-    MonthlyRunError, charge_ids_by_source_id, check_period, job_key, load_charges,
-    parse_period, record_findings, run_month,
+    MonthlyRunError,
+    charge_ids_by_source_id,
+    check_period,
+    job_key,
+    load_charges,
+    parse_period,
+    record_findings,
+    run_month,
 )
 from app.jobs.worker import drain
 from app.records.ingest import stable_id

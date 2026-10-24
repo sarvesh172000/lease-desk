@@ -11,10 +11,10 @@ import time
 from datetime import date
 from decimal import Decimal
 
+import ledger_world as w
 import pytest
 from sqlalchemy import text
 
-import ledger_world as w
 from app.work import gateway
 from app.work.events import events_for, verify_chain
 from app.work.gateway import GatewayError, NotAllowed, release_batch, send_outbox

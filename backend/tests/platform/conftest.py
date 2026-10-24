@@ -67,7 +67,8 @@ def database():
             # FORCE must end other roles' connections, which needs superuser or
             # pg_signal_backend. Compose and CI have it; a hand-made local owner
             # may not. A leftover test database is not a test failure.
-            warnings.warn("could not drop %s: %s" % (name, str(exc.orig).splitlines()[0]))
+            warnings.warn("could not drop %s: %s" % (name, str(exc.orig).splitlines()[0]),
+                          stacklevel=2)
         admin.dispose()
 
 

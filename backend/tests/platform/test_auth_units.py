@@ -4,11 +4,12 @@ import time
 
 import itsdangerous.timed
 import pytest
+from argon2 import PasswordHasher
+
 from app.auth import passwords
 from app.auth.deps import require_role
 from app.auth.sessions import MAX_AGE_SECONDS, issue_token, read_token
 from app.settings import DEV_SESSION_SECRET, get_settings
-from argon2 import PasswordHasher
 
 SECRET = "unit-test-secret"
 

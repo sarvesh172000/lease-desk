@@ -28,7 +28,6 @@ from ..settings import get_settings
 from .golden import load_actors, load_leases, load_org, standardize_charges, standardize_payments
 from .ingest import IngestError, ingest_all
 
-
 COUNTED = (m.source_document, m.raw_row, m.clinic, m.actor, m.lease, m.landlord_charge,
            m.payment, m.account, m.period)
 

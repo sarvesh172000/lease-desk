@@ -19,8 +19,9 @@ def test_ready_reports_the_chain_verified(engines, monkeypatch):
 
 
 def test_ready_is_503_when_the_database_is_unreachable(monkeypatch):
-    import app.main as main
     from sqlalchemy import create_engine
+
+    import app.main as main
 
     dead = create_engine("postgresql+psycopg://x:y@127.0.0.1:1/none",
                          connect_args={"connect_timeout": 1})

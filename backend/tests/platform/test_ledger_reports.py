@@ -11,11 +11,11 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import ledger_world as w
 import pytest
 from beancount import loader
 from beancount.core import data as bc
 
-import ledger_world as w
 from app.db.bootstrap import execute_raw
 from app.ledger.export_beancount import beancount_account, export, render
 from app.ledger.trial_balance import OutOfBalance, trial_balance
@@ -132,6 +132,7 @@ def test_export_writes_the_file(posted, tmp_path):
 def test_make_export_ledger_runs_as_the_reader(posted, tmp_path):
     """The CLI behind `make export-ledger` connects as lease_reader."""
     import os
+
     from app.settings import get_settings
 
     env = dict(os.environ, PYTHONPATH="%s/backend:%s" % (ROOT, ROOT),

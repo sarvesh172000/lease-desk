@@ -8,7 +8,7 @@
 # scope, so nothing here rewrites a teammate's files. Widen `include` when a
 # package's owner opts in.
 
-line-length = 100
+line-length = 120
 target-version = "py311"
 
 include = [
@@ -46,6 +46,8 @@ force-exclude = true
 # pycodestyle, pyflakes, import order, bugbear. No pyupgrade: the code uses
 # %-formatting and typing generics on purpose.
 select = ["E", "W", "F", "I", "B"]
+# `l` is the idiomatic name for a journal line in this codebase.
+ignore = ["E741"]
 
 [lint.isort]
 known-first-party = ["app", "leasedesk", "datagen", "eval"]
@@ -58,3 +60,8 @@ known-first-party = ["app", "leasedesk", "datagen", "eval"]
 # Not enforced yet: the platform code is hand-aligned and 17 files would be
 # rewritten. Run `pre-commit run --hook-stage manual ruff-format` to see it.
 quote-style = "double"
+
+[lint.flake8-bugbear]
+# FastAPI's dependency markers are meant to sit in argument defaults.
+extend-immutable-calls = ["app.auth.deps.require_role", "fastapi.Depends", "fastapi.Query", "fastapi.Path",
+                          "fastapi.Body", "fastapi.Cookie", "fastapi.Header"]
