@@ -1,47 +1,123 @@
 @tailwind base;
-@tailwind components;
 @tailwind utilities;
+@tailwind components;
 
+/*
+ * Dark is the default: this is a tool people sit in front of for an hour.
+ * Light stays available because finance people print.
+ */
 @layer base {
+  :root,
+  :root[data-theme="dark"] {
+    --bg: 10 11 13;
+    --surface: 18 20 24;
+    --raised: 26 29 34;
+    --sunken: 14 16 19;
+    --line: 38 42 49;
+    --line-strong: 56 62 71;
+
+    --ink: 237 239 243;
+    --ink-soft: 174 180 190;
+    --ink-muted: 132 139 150;
+    --ink-faint: 99 106 117;
+
+    --accent: 94 234 212;
+    --accent-soft: 17 48 46;
+    --accent-strong: 45 212 191;
+    --accent-ink: 8 10 12;
+
+    --ok: 52 211 153;   --ok-soft: 12 46 36;   --ok-line: 23 85 66;
+    --bad: 248 113 113; --bad-soft: 56 19 19;  --bad-line: 108 36 36;
+    --warn: 251 191 36; --warn-soft: 52 38 8;  --warn-line: 102 73 14;
+    --esc: 167 139 250; --esc-soft: 38 29 64;  --esc-line: 76 57 125;
+
+    --shadow: 0 0 0;
+    color-scheme: dark;
+  }
+
+  :root[data-theme="light"] {
+    --bg: 246 245 241;
+    --surface: 255 255 255;
+    --raised: 255 255 255;
+    --sunken: 239 237 231;
+    --line: 222 219 210;
+    --line-strong: 199 195 184;
+
+    --ink: 27 31 36;
+    --ink-soft: 69 75 83;
+    --ink-muted: 107 112 121;
+    --ink-faint: 145 150 160;
+
+    --accent: 15 92 90;
+    --accent-soft: 227 239 238;
+    --accent-strong: 10 68 66;
+    --accent-ink: 255 255 255;
+
+    --ok: 29 107 61;   --ok-soft: 228 241 232;  --ok-line: 169 210 183;
+    --bad: 168 38 31;  --bad-soft: 251 233 231; --bad-line: 234 177 171;
+    --warn: 138 90 0;  --warn-soft: 251 240 217;--warn-line: 230 200 134;
+    --esc: 91 58 154;  --esc-soft: 239 233 249; --esc-line: 201 184 234;
+
+    --shadow: 27 31 36;
+    color-scheme: light;
+  }
+
   html {
     font-size: 15px;
+    -webkit-text-size-adjust: 100%;
   }
   body {
-    @apply bg-paper text-ink antialiased;
+    @apply bg-bg text-ink antialiased;
     font-feature-settings: "cv11", "ss01";
   }
-  h1, h2, h3 {
+  h1, h2, h3, h4 {
     @apply text-ink;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
   }
   :focus-visible {
-    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-paper;
+    @apply outline-none ring-2 ring-accent/70 ring-offset-2 ring-offset-bg;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.25);
   }
 }
 
 @layer components {
-  /* Money and every other figure: tabular, lining, right-aligned by the caller. */
+  /* Money and every other figure: tabular, so nothing shifts width while it
+     animates. Right-aligned by the caller. */
   .num {
     font-variant-numeric: tabular-nums lining-nums;
     font-feature-settings: "tnum" 1, "lnum" 1;
   }
   .eyebrow {
-    @apply text-2xs font-semibold uppercase tracking-[0.08em] text-ink-muted;
+    @apply text-2xs font-semibold uppercase tracking-[0.1em] text-ink-muted;
   }
   .table-head {
-    @apply border-b border-line bg-sunken/60 text-left text-2xs font-semibold uppercase tracking-[0.06em] text-ink-muted;
+    @apply border-b border-line bg-sunken/60 text-left text-2xs font-semibold uppercase tracking-[0.08em] text-ink-muted;
+  }
+  /* A hairline that fades at both ends — used to separate sections without
+     drawing a hard rule across the page. */
+  .rule-soft {
+    @apply h-px w-full;
+    background: linear-gradient(90deg, transparent, rgb(var(--line-strong)), transparent);
+  }
+  .glass {
+    background: rgb(var(--surface) / 0.72);
+    backdrop-filter: blur(12px) saturate(140%);
+  }
+}
+
+/* Nothing moves for anyone who asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 /* react-pdf: we render canvas only (no text/annotation layers). */
-.react-pdf__Page {
-  width: 100% !important;
-  min-width: 0 !important;
-  height: auto !important;
-  min-height: 0 !important;
-}
-.react-pdf__Page__canvas {
-  display: block;
-  width: 100% !important;
-  height: auto !important;
-}
+.react-pdf__Page { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 0 !important; }
+.react-pdf__Page__canvas { display: block; width: 100% !important; height: auto !important; }

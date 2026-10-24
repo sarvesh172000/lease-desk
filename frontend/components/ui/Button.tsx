@@ -1,41 +1,77 @@
-import { cn } from "@/lib/utils";
-import { forwardRef, type ButtonHTMLAttributes } from "react";
+"use client";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+import { forwardRef } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Tooltip } from "./Tooltip";
+
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "quiet";
 type Size = "sm" | "md" | "lg";
 
-const variants: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:bg-accent-strong border border-accent-strong",
-  secondary: "bg-surface text-ink border border-line-strong hover:bg-sunken",
-  ghost: "bg-transparent text-ink-soft hover:bg-sunken border border-transparent",
-  danger: "bg-surface text-bad border border-bad-line hover:bg-bad-soft",
+const VARIANT: Record<Variant, string> = {
+  primary:
+    "bg-accent text-accent-ink hover:bg-accent-strong shadow-raised " +
+    "hover:shadow-glow active:translate-y-px",
+  secondary:
+    "bg-raised text-ink border border-line hover:border-line-strong hover:bg-surface",
+  ghost: "text-ink-soft hover:text-ink hover:bg-raised",
+  danger: "bg-bad/10 text-bad border border-bad-line hover:bg-bad/20",
+  quiet: "text-ink-muted hover:text-ink",
 };
-const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-sm",
-  md: "h-9 px-4 text-sm",
-  lg: "h-11 px-5 text-[0.95rem]",
+
+const SIZE: Record<Size, string> = {
+  sm: "h-8 px-3 text-xs gap-1.5 rounded-xs",
+  md: "h-10 px-4 text-sm gap-2 rounded-sm",
+  lg: "h-12 px-6 text-base gap-2.5 rounded-md",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
+  loading?: boolean;
+  /**
+   * Why the button is disabled. A disabled control with no explanation is the
+   * commonest way a UI wastes somebody's time — this one says so on hover.
+   */
+  disabledReason?: string;
+  icon?: ReactNode;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = "secondary", size = "md", type = "button", ...props },
+  { variant = "secondary", size = "md", loading, disabledReason, icon, className,
+    children, disabled, type = "button", ...rest },
   ref,
 ) {
-  return (
+  const isDisabled = disabled || loading || Boolean(disabledReason);
+
+  const button = (
     <button
       ref={ref}
       type={type}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        variants[variant],
-        sizes[size],
+        "inline-flex select-none items-center justify-center font-medium",
+        "transition-all duration-fast ease-out",
+        "disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none",
+        "disabled:hover:translate-y-0 disabled:hover:bg-inherit",
+        VARIANT[variant],
+        SIZE[size],
         className,
       )}
-      {...props}
-    />
+      {...rest}
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : icon}
+      {children}
+    </button>
+  );
+
+  return disabledReason ? (
+    <Tooltip label={disabledReason}>
+      <span className="inline-flex">{button}</span>
+    </Tooltip>
+  ) : (
+    button
   );
 });
