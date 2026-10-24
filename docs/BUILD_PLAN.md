@@ -1,3 +1,6 @@
+> **Superseded by [`PLAN.md`](PLAN.md)**, which follows Jenil's phase structure.
+> Kept for the fixtures in Stage 0 and the cut list.
+
 # Build Plan — Sarvesh + Jenil
 
 36 hours, two people, frontend and backend in parallel. Stage gates, not a
