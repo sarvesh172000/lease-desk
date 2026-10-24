@@ -9,13 +9,14 @@ whose owner can create databases and roles.
 
 import os
 import uuid
+import warnings
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.db.bootstrap import execute_raw
 from app.db.engine import make_engine
@@ -59,8 +60,14 @@ def database():
     try:
         yield name
     finally:
-        with admin.connect() as conn:
-            conn.execute(text('DROP DATABASE IF EXISTS "%s" WITH (FORCE)' % name))
+        try:
+            with admin.connect() as conn:
+                conn.execute(text('DROP DATABASE IF EXISTS "%s" WITH (FORCE)' % name))
+        except DBAPIError as exc:
+            # FORCE must end other roles' connections, which needs superuser or
+            # pg_signal_backend. Compose and CI have it; a hand-made local owner
+            # may not. A leftover test database is not a test failure.
+            warnings.warn("could not drop %s: %s" % (name, str(exc.orig).splitlines()[0]))
         admin.dispose()
 
 

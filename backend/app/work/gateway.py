@@ -78,6 +78,12 @@ def post_journal(conn: Connection, item_id: int, lines: Iterable[Any], idempoten
         return _replay(earlier, item_id, idempotency_key)
 
     item = _lock_item(conn, item_id)
+    # Look again now that the lock is held: a concurrent post with the same key
+    # may have committed while we waited, and READ COMMITTED now shows it. Only
+    # then does a POSTED item mean the wrong state rather than "already done".
+    earlier = posting.existing_entry(conn, idempotency_key)
+    if earlier is not None:
+        return _replay(earlier, item_id, idempotency_key)
     if item["state"] != "APPROVED":
         raise WrongState("work item %s is %s; only APPROVED items post"
                          % (item_id, item["state"]))
