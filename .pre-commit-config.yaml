@@ -1,0 +1,29 @@
+# pre-commit install            once per clone
+# pre-commit run --all-files    what CI's lint job runs
+#
+# Ruff is scoped by ruff.toml and by the `files:` regex below to the platform
+# code, so it never touches leasedesk/, datagen/, eval/ or the agent packages.
+# Prettier only sees frontend/ and uses frontend's own config when it has one.
+
+default_install_hook_types: [pre-commit]
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      - id: ruff-check
+        files: &platform ^backend/(app/(db|work|auth|ledger|jobs|records|api)/|app/main\.py$|app/settings\.py$|tests/platform/)
+      # Format check is manual until the platform code is reformatted once
+      # (17 hand-aligned files would change). Run it with:
+      #   pre-commit run --hook-stage manual ruff-format --all-files
+      - id: ruff-format
+        args: [--check, --diff]
+        files: *platform
+        stages: [manual]
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.9
+    hooks:
+      - id: prettier
+        files: ^frontend/
+        exclude: ^frontend/(package-lock\.json|\.next/|node_modules/|out/|coverage/)
