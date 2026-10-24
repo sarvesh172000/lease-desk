@@ -357,3 +357,31 @@ def test_rounding_in_the_cash_is_not_a_disagreement(doc, tmp_path):
     result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
     cross_check_history(result, {"2025-06": 19_055.50})
     assert result.disagreements == []
+
+
+# --- units: a percentage must be a fraction ---------------------------------
+
+def test_a_whole_number_percentage_is_named_not_divided():
+    from app.agents.abstraction import percent_unit_problem
+
+    assert percent_unit_problem("fixed_percent", 0.03) is None
+    assert percent_unit_problem("fixed_step", 275.0) is None
+    problem = percent_unit_problem("fixed_percent", 3.0)
+    assert problem and "not a fraction" in problem and "3.0" in problem
+
+
+def test_the_schema_puts_the_unit_on_the_number_the_model_fills_in():
+    from app.agents.abstraction import AbstractedLease
+
+    defs = AbstractedLease.model_json_schema()["$defs"]
+    assert "never 3" in defs["CitedEscalationAmount"]["properties"]["value"]["description"]
+    assert defs["CitedEscalationKind"]["properties"]["value"]["enum"] == ["fixed_percent", "fixed_step"]
+
+
+def test_a_whole_number_rate_makes_the_reading_unusable_until_a_person_looks(doc):
+    misread = good_model()
+    misread.escalation_amount.value = 3.0           # "3.00% per annum" read as 3
+    result = check(misread, doc, "LEASE-01")
+    assert not result.is_usable
+    assert any("not a fraction" in f for f in result.flags)
+    assert check(good_model(), doc, "LEASE-01").is_usable

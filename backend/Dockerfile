@@ -19,6 +19,9 @@ COPY backend backend
 COPY datagen datagen
 COPY leasedesk leasedesk
 COPY eval eval
+# Reference data the code reads: EDGAR exhibits, BLS series, and the committed
+# model answers the demo replays (app/llm/client.py REPLAY_DIR). About 350 KB.
+COPY data/reference data/reference
 
 RUN useradd --create-home --uid 10001 app
 USER app

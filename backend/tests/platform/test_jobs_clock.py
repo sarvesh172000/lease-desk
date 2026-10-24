@@ -83,3 +83,39 @@ def test_a_corrupt_stored_value_is_named(agent):
                      {"s": SOURCE})
         with pytest.raises(ClockError, match="'soon'"):
             today(conn)
+
+
+# --- the API reads it, and the demo sets it from the command line ---------------
+
+def test_the_api_reads_the_stored_business_date(clean):
+    from app.api.deps import DEFAULT_BUSINESS_DATE, get_business_date
+
+    api = clean["lease_api"]
+    assert get_business_date(api) == DEFAULT_BUSINESS_DATE      # unset: not the calendar
+    with clean["lease_agent"].begin() as conn:
+        set_today(conn, date(2026, 7, 1))
+    assert get_business_date(api) == date(2026, 7, 1)
+
+
+def test_the_command_line_sets_and_shows_it_as_the_agent(agent, monkeypatch, capsys):
+    from app.db import engine as db_engine
+    from app.jobs import clock
+
+    roles = []
+    monkeypatch.setattr(db_engine, "engine", lambda role: roles.append(role) or agent)
+    assert clock.main(["set", "2026-07-01"]) == 0
+    assert "business date: 2026-07-01" in capsys.readouterr().out
+    assert clock.main(["show"]) == 0
+    assert "business date: 2026-07-01" in capsys.readouterr().out
+    assert set(roles) == {"lease_agent"}
+
+
+def test_the_command_line_refuses_a_non_date(agent, monkeypatch):
+    from app.db import engine as db_engine
+    from app.jobs import clock
+
+    monkeypatch.setattr(db_engine, "engine", lambda role: agent)
+    with pytest.raises(SystemExit):
+        clock.main(["set", "July"])
+    with agent.connect() as conn:
+        assert stored(conn) is None

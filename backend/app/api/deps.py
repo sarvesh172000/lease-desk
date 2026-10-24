@@ -22,11 +22,11 @@ from sqlalchemy.engine import Engine
 from ..auth.deps import api_engine
 from ..db.engine import engine
 from ..docs.storage import LocalStorage
+from ..jobs import clock
 from ..settings import get_settings
 
-# The business date when nothing better is known. The generated world bills
+# The business date when the clock was never set. The generated world bills
 # January 2026, so that is the month the portfolio is "as of" by default.
-# TODO(A7): read the stored business date from jobs/clock.py once it lands.
 DEFAULT_BUSINESS_DATE = date(2026, 1, 1)
 
 
@@ -53,8 +53,13 @@ def get_data_dir() -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
-def get_business_date() -> date:
-    return DEFAULT_BUSINESS_DATE
+def get_business_date(eng: Engine = Depends(get_engine)) -> date:
+    """The stored business date (jobs/clock.py), so the portfolio is read as
+    of the month the system has run to. Not clock.today(): an unset clock falls
+    back to the calendar there, which would move the demo's "as of" to the day
+    it is shown on, so here it falls back to DEFAULT_BUSINESS_DATE."""
+    with eng.connect() as conn:
+        return clock.stored(conn) or DEFAULT_BUSINESS_DATE
 
 
 def get_storage(data_dir: Path = Depends(get_data_dir)) -> Optional[LocalStorage]:
