@@ -1,0 +1,8 @@
+# The ASI:One agents. Separate from the backend's requirements.txt so the API,
+# the worker and CI do not install the agent framework.
+#
+#     python3.13 -m venv fetch/.venv && fetch/.venv/bin/pip install -r fetch/requirements.txt
+
+uagents==0.26.1
+uagents-core==0.4.12
+httpx>=0.27
