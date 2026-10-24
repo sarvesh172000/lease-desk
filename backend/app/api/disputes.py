@@ -49,6 +49,7 @@ from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
 from ..work import disputes, gateway
+from ..work.events import append_event
 from ..work.transitions import Denied, IllegalTransition, transition
 from .deps import get_engine, get_gateway_engine
 from .items import in_scope, scope_sql, work_actor
@@ -207,6 +208,22 @@ def dispute_detail(dispute_id: str = DisputeId, actor: SessionActor = Depends(cu
         return _detail(conn, actor, dispute_id)
 
 
+# Roles that may read the register but never change it. The refusal is
+# committed on its own before any lookup, so an auditor is refused (and on
+# record) whether or not the dispute exists.
+READ_ONLY_ROLES = ("auditor",)
+
+
+def _refuse_read_only(eng: Engine, actor: SessionActor, dispute_id: str, action: str) -> None:
+    if actor.role not in READ_ONLY_ROLES:
+        return
+    why = "role %s may read disputes but never change them" % actor.role
+    with eng.begin() as conn:
+        append_event(conn, actor_id=actor.id, action=action, subject_type="dispute",
+                     subject_id=dispute_id, allowed=False, reason=why)
+    raise HTTPException(403, why)
+
+
 # --- writes -----------------------------------------------------------------------
 
 @router.post("/disputes/{dispute_id}/approve", response_model=DisputeDetail)
@@ -214,6 +231,7 @@ def approve_letter(dispute_id: str = DisputeId, body: Optional[ApproveBody] = No
                    actor: SessionActor = Depends(current_actor), eng: Engine = Depends(get_engine),
                    gateway_engine: Engine = Depends(get_gateway_engine)) -> DisputeDetail:
     body = body or ApproveBody()
+    _refuse_read_only(eng, actor, dispute_id, "approve")
     with eng.connect() as conn:
         with _errors():
             with conn.begin():
@@ -229,6 +247,7 @@ def approve_receivable(dispute_id: str = DisputeId, body: Optional[ApproveBody] 
                        eng: Engine = Depends(get_engine),
                        gateway_engine: Engine = Depends(get_gateway_engine)) -> DisputeDetail:
     body = body or ApproveBody()
+    _refuse_read_only(eng, actor, dispute_id, "approve_receivable")
     with eng.connect() as conn:
         with _errors():
             with conn.begin():
@@ -241,6 +260,7 @@ def approve_receivable(dispute_id: str = DisputeId, body: Optional[ApproveBody] 
 def record_reply(body: ReplyBody, dispute_id: str = DisputeId,
                  actor: SessionActor = Depends(current_actor), eng: Engine = Depends(get_engine),
                  gateway_engine: Engine = Depends(get_gateway_engine)) -> DisputeDetail:
+    _refuse_read_only(eng, actor, dispute_id, "reply")
     with eng.connect() as conn:
         with _errors():
             with conn.begin():

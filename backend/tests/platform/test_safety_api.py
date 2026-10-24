@@ -30,7 +30,7 @@ SECRET = "test-safety-secret"
 AUDITOR = "PER-AUD"
 CHECKER = Actor("agent:checker", "agent", None, None)
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-BODY = {"reason": "safety test", "entity_id": "ENT-CA"}
+BODY = {"reason": "safety test", "entity_id": "ENT-CA", "outcome": "acknowledged"}
 
 # Write routes that are not "a write behind a session", and why.
 SIGN_IN = {
@@ -40,13 +40,15 @@ SIGN_IN = {
 }
 READ_ONLY = {
     "/api/exceptions/{exc_id}/investigate": "streams evidence already on the item; writes nothing",
+    "/api/items/{item_id}/why": "POST only to carry a question; answers from read-only queries as lease_reader",
+    "/api/evidence-packs": "POST only to carry the subject; builds a PDF as lease_reader, writes nothing",
 }
 
 # A value for each path parameter a write route may have. A Literal-typed
 # parameter (the queue's {action}) is expanded to every value it allows.
 ITEM = 1
 PARAMS = {"item_id": str(ITEM), "exc_id": "exc_%d" % ITEM, "period": "2026-01",
-          "lease_id": "LEASE-01"}
+          "lease_id": "LEASE-01", "dispute_id": "DSP-000001"}
 
 
 def _write_routes():
@@ -179,12 +181,15 @@ def test_a_write_by_an_auditor_is_403_on_record_and_changes_nothing_else(world, 
 
 @pytest.mark.parametrize("path", sorted(READ_ONLY))
 def test_a_read_only_post_needs_a_session_and_writes_nothing_even_for_an_auditor(world, path):
-    path = path.replace("{exc_id}", PARAMS["exc_id"])
+    path = path.replace("{exc_id}", PARAMS["exc_id"]).replace("{item_id}", PARAMS["item_id"])
     client = make_client(world)
     before = footprint(world)
     assert call(client, "POST", path).status_code == 401
     client.cookies.set(COOKIE_NAME, issue_token(SECRET, AUDITOR))
-    assert call(client, "POST", path).status_code == 200
+    # The auditor may use a read-only POST: never refused for being an auditor
+    # (a 404 or 422 for this test's placeholder subject is fine), and nothing,
+    # not even an audit event, is written.
+    assert call(client, "POST", path).status_code not in (401, 403)
     assert footprint(world) == before
 
 
