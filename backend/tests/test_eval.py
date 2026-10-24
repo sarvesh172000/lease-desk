@@ -146,9 +146,18 @@ def test_a_missing_answer_key_is_a_clear_failure(tmp_path):
                  "--history", str(tmp_path / "h.csv")]) == 2
 
 
+def cold(monkeypatch, tmp_path):
+    """No key, an empty cache, and none of the repository's committed answers."""
+    from app.llm import client as llm_client
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(llm_client, "_default_cache_dir", lambda: str(tmp_path / "cold-cache"))
+    monkeypatch.setattr(llm_client, "REPLAY_DIR", tmp_path / "no-committed-answers")
+
+
 def test_sections_needing_a_model_are_skipped_not_failed(tmp_path, monkeypatch):
     """Without a warm cache or a key, the eval says so rather than scoring zero."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cold(monkeypatch, tmp_path)
     key_path = write(tmp_path / "answer_key.json")
     out = tmp_path / "report.json"
 
@@ -159,6 +168,21 @@ def test_sections_needing_a_model_are_skipped_not_failed(tmp_path, monkeypatch):
     assert report["sections"]["investigation"]["skipped"]
     assert report["sections"]["extraction"]["skipped"]
     assert report["passed"], "a skipped section must not fail the run"
+
+
+def test_the_investigation_is_scored_from_the_committed_answers(tmp_path, monkeypatch):
+    """No key, but the repository's answers: the July story is scored, not skipped."""
+    from app.llm import client as llm_client
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(llm_client, "_default_cache_dir", lambda: str(tmp_path / "own-cache"))
+    key_path = write(tmp_path / "answer_key.json")
+    out = tmp_path / "report.json"
+
+    main(["--key", str(key_path), "--out", str(out), "--history", str(tmp_path / "h.csv")])
+
+    section = json.loads(out.read_text())["sections"]["investigation"]
+    assert not section["skipped"] and section["passed"], section
 
 
 # --- the held-out company (chunk B8) ---------------------------------------
