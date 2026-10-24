@@ -268,3 +268,17 @@ def test_changing_the_output_schema_is_a_cache_miss():
 
     assert schema_ref(Shape) != before
     assert schema_ref(Shape).startswith("Shape@")
+
+
+def test_the_replay_directory_can_be_moved(tmp_path):
+    """The image keeps the committed answers at /app/reference (Compose mounts
+    generated data over /app/data); the variable says where they are."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, LEASEDESK_LLM_REPLAY_DIR=str(tmp_path / "answers"))
+    out = subprocess.run([sys.executable, "-c", "from app.llm.client import REPLAY_DIR; print(REPLAY_DIR)"],
+                         env=env, capture_output=True, text=True, check=True,
+                         cwd=str(Path(__file__).resolve().parents[1]))
+    assert out.stdout.strip() == str(tmp_path / "answers")

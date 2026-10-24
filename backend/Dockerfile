@@ -19,9 +19,11 @@ COPY backend backend
 COPY datagen datagen
 COPY leasedesk leasedesk
 COPY eval eval
-# Reference data the code reads: EDGAR exhibits, BLS series, and the committed
-# model answers the demo replays (app/llm/client.py REPLAY_DIR). About 350 KB.
-COPY data/reference data/reference
+# Reference data: EDGAR exhibits, BLS series, and the committed model answers
+# the demo replays (app/llm/client.py REPLAY_DIR). About 350 KB. Not under
+# /app/data: Compose mounts the generated data there, which would hide it.
+COPY data/reference reference
+ENV LEASEDESK_LLM_REPLAY_DIR=/app/reference/llm_cache
 
 RUN useradd --create-home --uid 10001 app
 USER app

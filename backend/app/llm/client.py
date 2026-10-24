@@ -22,6 +22,7 @@ Two deviations from the Phase 1 plan, both forced by the current API:
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type, TypeVar
@@ -92,8 +93,11 @@ def _default_cache_dir() -> str:
 
 # Committed answers (cache.ResponseCache's `replay`): the repository's, so it
 # resolves from this file rather than from whatever directory the process
-# started in. In the container this is /app/data/reference/llm_cache.
-REPLAY_DIR = Path(__file__).resolve().parents[3] / "data" / "reference" / "llm_cache"
+# started in. LEASEDESK_LLM_REPLAY_DIR moves it: the image keeps it at
+# /app/reference/llm_cache, because Compose mounts the generated data over
+# /app/data and would hide anything the image put there.
+REPLAY_DIR = Path(os.environ.get("LEASEDESK_LLM_REPLAY_DIR")
+                  or Path(__file__).resolve().parents[3] / "data" / "reference" / "llm_cache")
 
 
 class LLM:
