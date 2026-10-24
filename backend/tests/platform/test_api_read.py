@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.api.deps import get_data_dir, get_engine
+from app.auth.deps import SessionActor, current_actor
 from app.main import create_app
 from app.records.seed import seed
 from app.work.events import append_event
@@ -39,9 +40,16 @@ def seeded(clean, generated):
     return clean
 
 
+# The read routes need a session; who it is does not matter to them (any
+# signed-in person may read). test_api_write.py covers 401 and real cookies.
+READER = SessionActor(id="PER-CTRL", name="Priya Raghunathan", role="controller",
+                      region_id=None, entity_id=None)
+
+
 def make_client(engines, data_dir) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_engine] = lambda: engines["lease_api"]
+    app.dependency_overrides[current_actor] = lambda: READER
     app.dependency_overrides[get_data_dir] = lambda: Path(data_dir)
     return TestClient(app)
 

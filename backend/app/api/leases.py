@@ -38,11 +38,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
-from .deps import get_business_date, get_data_dir, get_engine, require_reader
+from ..auth.deps import current_actor
+from .deps import get_business_date, get_data_dir, get_engine
 from .exceptions import open_exceptions
 from .schemas import LeaseSummary, Schedule, ScheduleRow
 
-router = APIRouter(prefix="/api", tags=["leases"], dependencies=[Depends(require_reader)])
+router = APIRouter(prefix="/api", tags=["leases"], dependencies=[Depends(current_actor)])
 
 AMENDMENT_FIELDS = ("base_rent_monthly", "expiration", "escalation_kind",
                     "escalation_amount", "discount_rate")

@@ -17,12 +17,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi import Path as PathParam
 
+from ..auth.deps import current_actor
 from ..docs.pipeline import DEFAULT_DPI, extract, render_page_png
 from ..docs.storage import LocalStorage
-from .deps import get_storage, require_reader
+from .deps import get_storage
 from .schemas import DocumentPages, PageSize
 
-router = APIRouter(prefix="/api", tags=["documents"], dependencies=[Depends(require_reader)])
+router = APIRouter(prefix="/api", tags=["documents"], dependencies=[Depends(current_actor)])
 
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 

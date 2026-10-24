@@ -30,14 +30,16 @@ import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
-from .deps import get_engine, require_reader
-from .schemas import Entry, Evidence, ExceptionDetail, ExceptionSummary, Investigation
+from ..auth.deps import SessionActor, current_actor
+from .deps import get_engine, get_gateway_engine
+from .items import perform
+from .schemas import ApproveResult, Entry, Evidence, ExceptionDetail, ExceptionSummary, Investigation
 
-router = APIRouter(prefix="/api", tags=["exceptions"], dependencies=[Depends(require_reader)])
+router = APIRouter(prefix="/api", tags=["exceptions"], dependencies=[Depends(current_actor)])
 
 STATUS_BY_STATE = {
     "NEW": "exception",
@@ -104,6 +106,31 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine)) -> ExceptionDe
                                 "actual", "delta", "status")},
         investigation=_investigation(flat["evidence"].get("investigation")),
     )
+
+
+class ApproveBody(BaseModel):
+    reason: Optional[str] = Field(None, max_length=4000)
+
+
+@router.post("/exceptions/{exc_id}/approve", response_model=ApproveResult)
+def approve_exception(exc_id: str, body: Optional[ApproveBody] = None,
+                      actor: SessionActor = Depends(current_actor),
+                      eng: Engine = Depends(get_engine),
+                      gateway_engine: Engine = Depends(get_gateway_engine)) -> ApproveResult:
+    """§16 #4, sign-off: the same approve as POST /api/items/{id}/actions/approve
+    (transition() as the session actor, then the gateway post), answered in
+    the four statuses the exception screen knows. 403 refused (and on record),
+    409 not awaiting review, 404 not an exception."""
+    match = _ID.match(exc_id)
+    if match is None:
+        raise HTTPException(404, "no exception %r" % exc_id)
+    item_id = int(match.group(1))
+    with eng.connect() as conn:
+        if conn.execute(text(_SELECT + " AND w.id = :id"), {"id": item_id}).first() is None:
+            raise HTTPException(404, "no exception %r" % exc_id)
+    result = perform(eng, gateway_engine, actor, item_id, "approve",
+                     reason=(body or ApproveBody()).reason)
+    return ApproveResult(status=STATUS_BY_STATE[result.state])
 
 
 # --- shaping ---------------------------------------------------------------------

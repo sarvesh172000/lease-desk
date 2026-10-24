@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_data_dir
+from app.auth.deps import SessionActor, current_actor
 from app.docs.storage import LocalStorage
 from app.main import create_app
 
@@ -29,6 +30,8 @@ def generated(tmp_path_factory):
 def client_for(data_dir) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_data_dir] = lambda: Path(data_dir)
+    app.dependency_overrides[current_actor] = lambda: SessionActor(
+        id="PER-AUD", name="Auditor", role="auditor", region_id=None, entity_id=None)
     return TestClient(app)
 
 
