@@ -19,6 +19,18 @@ Each job runs in three short transactions:
 
 On SIGTERM it finishes the job in hand and stops. While idle it logs a
 heartbeat so a stuck worker is visible in `make logs`.
+
+Recovery (C3, `recovery.py`). Claim and run share one connection, which holds
+the job's liveness lock from the claim until the job is recorded done, failed
+or held, so a worker killed mid-job is visible to the database the moment its
+connection drops. Every `drain()` and `serve()` starts by putting such jobs
+back, and `serve()` looks again on every heartbeat, so a restarted worker
+resumes the month where the dead one stopped: the dead job's writes rolled
+back with its transaction, and it runs again from the start. A handler that
+raises `JobHeld` (the model provider is down) is requeued for later without
+spending an attempt. A lost database connection fails the job with no
+backoff, so it is retried as soon as the database answers; while it does not,
+`serve()` waits and keeps going instead of exiting.
 """
 
 import argparse
@@ -33,7 +45,9 @@ from typing import Callable, List, Mapping, Optional
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 
+from . import recovery
 from .handlers import HANDLERS, Handler, handler_for
 from .queue import BACKOFF_BASE, MAX_ATTEMPTS, Job, claim, complete, fail, release_stale
 
@@ -50,7 +64,7 @@ class WorkerError(RuntimeError):
 @dataclass(frozen=True)
 class Outcome:
     job: Job
-    status: str                 # done, failed or dead
+    status: str                 # done, failed, dead or held
     result: Optional[dict] = None
     error: Optional[str] = None
 
@@ -75,24 +89,91 @@ def run_one(
     base: timedelta = BACKOFF_BASE,
 ) -> Optional[Outcome]:
     """Claim and run one job. None when nothing is ready."""
-    with eng.begin() as conn:
-        job = claim(conn, worker_id)
-    if job is None:
-        return None
+    with eng.connect() as conn:
+        _prepare(conn)
+        with conn.begin():
+            job = claim(conn, worker_id)
+            if job is not None:
+                recovery.hold_liveness(conn, job.id)     # before the claim commits
+        if job is None:
+            return None
+        try:
+            outcome = _run(eng, conn, job, registry, max_attempts, base)
+        finally:
+            _let_go(conn, job.id)
+    _publish_breakers(eng)
+    return outcome
 
+
+def _run(eng: Engine, conn, job: Job, registry: Mapping[str, Handler],
+         max_attempts: int, base: timedelta) -> Outcome:
     try:
-        with eng.begin() as conn:
+        with conn.begin():
             result = handler_for(job.kind, registry)(conn, job.payload) or {}
             complete(conn, job.id, result)
+    except recovery.JobHeld as held:
+        with eng.begin() as own:
+            recovery.hold(own, job.id, held.reason, held.delay)
+        log.warning("job #%d %s held for %s: %s", job.id, job.kind, held.delay, held.reason)
+        return Outcome(job, "held", error=held.reason)
     except Exception as exc:  # noqa: BLE001 - any handler failure is the job's, not the worker's
         error = "%s: %s" % (type(exc).__name__, exc)
-        with eng.begin() as conn:
-            status = fail(conn, job.id, error, max_attempts=max_attempts, base=base)
+        # A dropped connection is the database's failure, not the job's: retry
+        # as soon as it answers instead of backing off. (If it does not answer,
+        # fail() raises too; the job stays running with no live worker, and
+        # recovery puts it back.)
+        retry_base = timedelta(0) if _disconnected(exc) else base
+        with eng.begin() as own:
+            status = fail(own, job.id, error, max_attempts=max_attempts, base=retry_base)
         log.warning("job #%d %s %s (attempt %d): %s", job.id, job.kind, status, job.attempts, error)
         return Outcome(job, status, error=error)
 
     log.info("job #%d %s done: %s", job.id, job.kind, result)
     return Outcome(job, "done", result=result)
+
+
+def _prepare(conn) -> None:
+    try:
+        recovery.prepare(conn)
+        conn.commit()
+    except DBAPIError as exc:
+        if _disconnected(exc):
+            raise
+        conn.rollback()                 # a server without the setting still works
+
+
+def _let_go(conn, job_id: int) -> None:
+    """Drop the liveness lock. On a dead connection it is already gone."""
+    try:
+        recovery.release_liveness(conn, job_id)
+        conn.commit()
+    except Exception:  # noqa: BLE001 - a broken connection: drop it, the lock went with it
+        try:
+            conn.invalidate()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _disconnected(exc: BaseException) -> bool:
+    return isinstance(exc, DBAPIError) and bool(exc.connection_invalidated)
+
+
+def _publish_breakers(eng: Engine) -> None:
+    from ..work.breaker import publish_if_changed
+
+    try:
+        publish_if_changed(eng)
+    except DBAPIError as exc:         # visibility must never stop work
+        log.warning("could not publish breaker state: %s", exc)
+
+
+def recover(eng: Engine) -> List[int]:
+    """Put back the jobs of workers that died mid-run (see recovery.py)."""
+    with eng.begin() as conn:
+        ids = recovery.recover(conn)
+    if ids:
+        log.warning("put back %d job(s) whose worker died mid-run: %s", len(ids), ids)
+    return ids
 
 
 def drain(eng: Engine, worker_id: Optional[str] = None,
@@ -101,6 +182,7 @@ def drain(eng: Engine, worker_id: Optional[str] = None,
     for a later run."""
     assert_agent(eng)
     worker_id = worker_id or default_worker_id()
+    recover(eng)
     outcomes = []
     while True:
         outcome = run_one(eng, worker_id, registry, **kwargs)
@@ -126,16 +208,32 @@ def serve(eng: Engine, should_stop: Callable[[], bool], worker_id: Optional[str]
     with eng.begin() as conn:
         released = release_stale(conn)
     log.info("worker %s connected as %s; released %d stale job(s)", worker_id, ROLE, released)
+    recover(eng)
 
     last_beat = 0.0
     while not should_stop():
-        if run_one(eng, worker_id, registry) is not None:
-            continue
-        if time.monotonic() - last_beat >= HEARTBEAT_SECONDS:
-            log.info("heartbeat: idle")
-            last_beat = time.monotonic()
+        try:
+            if run_one(eng, worker_id, registry) is not None:
+                continue
+            if time.monotonic() - last_beat >= HEARTBEAT_SECONDS:
+                recover(eng)
+                log.info("heartbeat: idle")
+                last_beat = time.monotonic()
+        except DBAPIError as exc:
+            if not _disconnected(exc) and not _unreachable(exc):
+                raise
+            # The database went away. Keep the process: wait, then look for
+            # jobs orphaned by the outage as soon as it answers again.
+            log.warning("database unavailable, waiting: %s", str(exc).splitlines()[0])
+            last_beat = 0.0
         time.sleep(POLL_SECONDS)
     log.info("stopped")
+
+
+def _unreachable(exc: DBAPIError) -> bool:
+    from sqlalchemy.exc import OperationalError
+
+    return isinstance(exc, OperationalError)
 
 
 def main(argv=None) -> int:
