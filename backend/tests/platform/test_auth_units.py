@@ -70,8 +70,13 @@ def test_tampered_token_is_rejected():
     rest = token.split(".", 1)[1]
     forged = issue_token(SECRET, "PER-CTRL").split(".", 1)[0] + "." + rest
     assert read_token(SECRET, forged) is None
-    flipped = token[:-1] + ("A" if token[-1] != "A" else "B")
-    assert read_token(SECRET, flipped) is None
+    # Change a character in the middle of the signature. Not the last one: 20
+    # signature bytes are 27 base64 characters, so the final character carries
+    # only 2 real bits and some substitutions decode to the very same bytes.
+    payload, stamp, signature = token.split(".")
+    i = len(signature) // 2
+    tampered = signature[:i] + ("A" if signature[i] != "A" else "B") + signature[i + 1:]
+    assert read_token(SECRET, ".".join([payload, stamp, tampered])) is None
 
 
 def test_token_from_another_secret_is_rejected():
