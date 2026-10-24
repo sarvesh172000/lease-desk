@@ -89,6 +89,9 @@ function redirectToLogin() {
  * and the queue (/api/items) takes the bare `<work_item.id>`. Fixture ids
  * (`exc_01_jul_amendment`) are not work items and pass through unchanged.
  */
+/** Same as itemIdFor; the name main used for the same fix. */
+export const itemIdOf = (exceptionId: string): string => itemIdFor(exceptionId);
+
 export function itemIdFor(exceptionId: string): string {
   const m = /^exc_([1-9][0-9]*)$/.exec(exceptionId);
   return m ? m[1] : exceptionId;

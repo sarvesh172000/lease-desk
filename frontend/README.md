@@ -1,5 +1,9 @@
 # Lease Desk — web app
 
+**Building the UI?** Start with [`UI_PLAN.md`](UI_PLAN.md) — what to
+install, what to build and in what order — and
+[`DESIGN_BRIEF.md`](DESIGN_BRIEF.md) for how it should feel.
+
 Next.js (App Router) + TypeScript + Tailwind, TanStack Query and Table,
 react-pdf. The UI only formats and asserts: every figure comes from the API
 (or the frozen fixtures). Nothing in here does lease accounting.
