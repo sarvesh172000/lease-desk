@@ -1,0 +1,42 @@
+[
+ {
+  "lease_id": "LEASE-02",
+  "clinic_id": "CLINIC-02",
+  "location": "Northbay PT — Serramonte Hand Therapy — Suite 115",
+  "lessor": "Serramonte Retail Partners LLC",
+  "status": "balanced",
+  "monthly_rent": 9700.0,
+  "liability": 226648.77,
+  "end": "2028-06-30"
+ },
+ {
+  "lease_id": "LEASE-03",
+  "clinic_id": "CLINIC-03",
+  "location": "Northbay PT — San Mateo — Suite 100",
+  "lessor": "Pacific Crest Properties LLC",
+  "status": "balanced",
+  "monthly_rent": 17270.11,
+  "liability": 536597.42,
+  "end": "2029-03-31"
+ },
+ {
+  "lease_id": "LEASE-04",
+  "clinic_id": "CLINIC-04",
+  "location": "Northbay PT — Bayview Sports Medicine — Suite 240",
+  "lessor": "Pacific Crest Properties LLC",
+  "status": "balanced",
+  "monthly_rent": 13680.0,
+  "liability": 534058.37,
+  "end": "2029-12-31"
+ },
+ {
+  "lease_id": "LEASE-05",
+  "clinic_id": "CLINIC-05",
+  "location": "Northbay PT — Bayview Aquatic — Suite 305",
+  "lessor": "Pacific Crest Properties LLC",
+  "status": "balanced",
+  "monthly_rent": 8343.3,
+  "liability": 123062.33,
+  "end": "2027-09-30"
+ }
+]
