@@ -17,6 +17,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import lease_world as lw
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -54,8 +55,11 @@ def generated(tmp_path_factory):
 
 
 @pytest.fixture
-def jan(clean, generated):
+def jan(clean, generated, monkeypatch):
     seed(Path(generated), clean["lease_agent"], clean["lease_gateway"])
+    # The checker only uses confirmed leases: draft and confirm them first.
+    lw.use_documents(monkeypatch, generated)
+    lw.draft_and_confirm(clean, generated)
     with clean["lease_agent"].begin() as conn:
         run_month(conn, ENTITY, "2026-01")
     drain(clean["lease_agent"], "resolution")
