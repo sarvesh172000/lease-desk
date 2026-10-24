@@ -80,3 +80,21 @@ def test_migration_downgrades_and_upgrades_cleanly(database):
     cfg.set_main_option("sqlalchemy.url", get_settings().db_url("owner", database))
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
+
+
+def test_actor_roles_include_system_for_the_gateway(engines):
+    """Migration 0003: `post` belongs to role 'system', held by system:gateway."""
+    with engines["owner"].connect() as conn:
+        check = conn.execute(text("""
+            SELECT pg_get_constraintdef(oid) FROM pg_constraint
+             WHERE conname = 'actor_role_check'""")).scalar_one()
+    for role in models.ACTOR_ROLES:
+        assert "'%s'" % role in check
+
+
+def test_journal_entry_work_item_key_is_deferrable_for_replay(engines):
+    with engines["owner"].connect() as conn:
+        deferrable = conn.execute(text("""
+            SELECT condeferrable FROM pg_constraint
+             WHERE conname = 'journal_entry_work_item_id_fkey'""")).scalar_one()
+    assert deferrable

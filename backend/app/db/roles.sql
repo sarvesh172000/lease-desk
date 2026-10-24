@@ -86,8 +86,15 @@ BEGIN
     END IF;
 END $$;
 
--- Sequences behind serial columns. Identity columns need no grant.
+-- Sequences behind serial columns. Identity columns need no grant for a
+-- plain INSERT.
 GRANT USAGE ON SEQUENCE audit_event_seq_seq TO lease_agent, lease_gateway, lease_api;
+
+-- Except where the id must exist before the row does: work/transitions.py
+-- draws a work item's (and a question's) id first, so the event that creates
+-- it can carry the id and replay can recreate the row with the same one. Only
+-- agents create items and ask questions.
+GRANT USAGE ON SEQUENCE work_item_id_seq, question_id_seq TO lease_agent;
 
 -- Migration bookkeeping is nobody's business but the owner's. ALL TABLES
 -- above sweeps it in, so take it back out.

@@ -173,3 +173,16 @@ def test_everyone_can_verify_the_chain(engines):
                 conn.execute(text("SELECT * FROM audit_verify_chain()")).all()
             except DBAPIError as exc:  # pragma: no cover - the assertion message is the point
                 pytest.fail("%s cannot verify the chain: %s" % (role, exc.orig))
+
+
+def test_only_agents_may_draw_work_item_and_question_ids(engines):
+    """transitions.py draws an id before the row exists, so the creating
+    event can carry it. Only agents create items and ask questions."""
+    with engines["owner"].connect() as conn:
+        rows = conn.execute(text("""
+            SELECT r.rolname, s.relname FROM pg_class s, pg_roles r
+             WHERE s.relkind = 'S' AND s.relname IN ('work_item_id_seq', 'question_id_seq')
+               AND r.rolname LIKE 'lease\\_%' AND has_sequence_privilege(r.oid, s.oid, 'USAGE')
+        """)).all()
+    assert {tuple(row) for row in rows} == {("lease_agent", "work_item_id_seq"),
+                                             ("lease_agent", "question_id_seq")}

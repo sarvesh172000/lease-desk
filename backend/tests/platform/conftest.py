@@ -8,6 +8,7 @@ whose owner can create databases and roles.
 """
 
 import os
+import time
 import uuid
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.db.bootstrap import execute_raw
 from app.db.engine import make_engine
@@ -59,9 +60,24 @@ def database():
     try:
         yield name
     finally:
-        with admin.connect() as conn:
-            conn.execute(text('DROP DATABASE IF EXISTS "%s" WITH (FORCE)' % name))
+        _drop(admin, name)
         admin.dispose()
+
+
+def _drop(admin, name):
+    """Drop the throwaway database. The role engines were just disposed, but
+    a server process exits a moment after its client hangs up, and an owner
+    who is not superuser may not FORCE-terminate another role's process. So
+    give stragglers a few tries to go."""
+    for attempt in range(20):
+        try:
+            with admin.connect() as conn:
+                conn.execute(text('DROP DATABASE IF EXISTS "%s" WITH (FORCE)' % name))
+            return
+        except ProgrammingError:
+            if attempt == 19:
+                raise
+            time.sleep(0.1)
 
 
 @pytest.fixture(scope="session")
