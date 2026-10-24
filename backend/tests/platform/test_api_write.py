@@ -392,7 +392,10 @@ def test_exception_approve_returns_the_new_status(client, world):
     c = as_(client, "PER-RM-BAY")
     assert c.get("/api/exceptions/exc_%d" % exc).json()["status"] == "pending_review"
     response = c.post("/api/exceptions/exc_%d/approve" % exc)
-    assert response.status_code == 200 and response.json() == {"status": "balanced"}
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["status"], body["exception_id"], body["state"]) == ("balanced", "exc_%d" % exc, "POSTED")
+    assert body["posting"]["status"] == "posted" and body["posting"]["journal_entry_id"] > 0
     assert state(world, exc) == "POSTED"
     assert c.post("/api/exceptions/exc_%d/approve" % exc).status_code == 409, "already done"
 
@@ -411,10 +414,24 @@ def test_exception_approve_of_no_exception_is_404(client, world, exc_id):
     assert as_(client, "PER-CTRL").post("/api/exceptions/%s/approve" % exc_id).status_code == 404
 
 
-def test_exception_approve_of_an_approve_proposal_is_404(client, world):
-    item = open_item(world, w.RENT)            # proposal approve: not an exception
-    assert as_(client, "PER-CTRL").post("/api/exceptions/exc_%d/approve" % item).status_code == 404
-    assert state(world, item) == "PROPOSED"
+def test_exception_approve_of_an_approve_proposal_signs_off_the_charge_check(client, world):
+    """A charge the checker found correct opens on the money screen too, and
+    approving it there is the queue's approve: posted by the gateway."""
+    item = open_item(world, w.RENT)            # proposal approve: not listed as an exception
+    body = as_(client, "PER-CTRL").post("/api/exceptions/exc_%d/approve" % item).json()
+    assert (body["status"], body["state"], body["posting"]["status"]) == ("balanced", "POSTED", "posted")
+    assert state(world, item) == "POSTED"
+
+
+def test_exception_actions_on_a_work_item_that_is_not_a_charge_check_are_404(client, world):
+    with world["owner"].begin() as conn:
+        other = conn.execute(w.text("""
+            INSERT INTO work_item (kind, state, subject_type, subject_id, title)
+            VALUES ('LEASE_VERSION', 'PROPOSED', 'lease', 'LEASE-01', 'v2') RETURNING id
+        """)).scalar_one()
+    for action in ("approve", "hold"):
+        assert as_(client, "PER-CTRL").post("/api/exceptions/exc_%d/%s" % (other, action)).status_code == 404
+    assert state(world, other) == "PROPOSED"
 
 
 # --- POST /api/batches/{period}/release ---------------------------------------------

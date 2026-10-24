@@ -191,10 +191,15 @@ class ChargeEntry:
     lines: List[Line]
 
 
-def entry_for_charge(conn: Connection, charge_id: str) -> ChargeEntry:
+def entry_for_charge(conn: Connection, charge_id: str, *, amount: Optional[Decimal] = None,
+                     key_suffix: str = "", memo_note: str = "") -> ChargeEntry:
     """Build the entry for an approved landlord charge with the engine's own
     journal rules (engine/journal.py), so the books and the engine agree on
-    accounts and entry type."""
+    accounts and entry type.
+
+    `amount` posts less than was billed: the undisputed part of a held charge
+    (work/charges.py). `key_suffix` keeps that entry's idempotency key apart
+    from an as-billed one, so the two can never be mistaken for each other."""
     row = conn.execute(text("""
         SELECT c.id, c.invoice_id, c.lease_id, c.clinic_id, c.period, c.charge_type,
                c.suite, c.amount, c.description, k.entity_id
@@ -206,13 +211,19 @@ def entry_for_charge(conn: Connection, charge_id: str) -> ChargeEntry:
     if row["amount"] <= 0:
         raise PostingError("charge %s has amount %s; only positive charges post as cost"
                            % (charge_id, row["amount"]))
+    if amount is not None:
+        if not isinstance(amount, Decimal) or not Decimal("0") < amount <= row["amount"]:
+            raise PostingError("charge %s: cannot post %r of a %s charge"
+                               % (charge_id, amount, row["amount"]))
+        row = dict(row, amount=amount)
     entries = engine_journal.entries_for([_approved_finding(row)])
     if not entries:
         raise PostingError("charge type %r of charge %s has no journal rule"
                            % (row["charge_type"], charge_id))
     entry = entries[0]
-    return ChargeEntry(entity_id=row["entity_id"], period=entry.period, memo=entry.memo,
-                       entry_type=entry.entry_type, idempotency_key=entry.idempotency_key(),
+    return ChargeEntry(entity_id=row["entity_id"], period=entry.period,
+                       memo=entry.memo + memo_note, entry_type=entry.entry_type,
+                       idempotency_key=entry.idempotency_key() + key_suffix,
                        lines=normalize_lines(entry.lines))
 
 

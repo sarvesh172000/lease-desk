@@ -24,7 +24,8 @@ from .schemas import AuditEvent, AuditTrail
 
 router = APIRouter(prefix="/api", tags=["audit"], dependencies=[Depends(current_actor)])
 
-_COLUMNS = "seq, at, actor_id, action, subject_type, subject_id, allowed, reason"
+_COLUMNS = ("e.seq, e.at, e.actor_id, e.action, e.subject_type, e.subject_id, e.allowed, e.reason, "
+            "e.hash, e.prev_hash, a.name AS actor_name")
 
 _FOR_LEASE = """
     (e.subject_type = 'lease' AND e.subject_id = :lease_id)
@@ -72,12 +73,16 @@ def audit_trail(
         broken = verify_chain(conn)
         rows = conn.execute(text("""
             SELECT * FROM (
-                SELECT %s FROM audit_event e WHERE %s ORDER BY seq DESC LIMIT :limit
+                SELECT %s FROM audit_event e LEFT JOIN actor a ON a.id = e.actor_id
+                 WHERE %s ORDER BY e.seq DESC LIMIT :limit
             ) newest ORDER BY seq
         """ % (_COLUMNS, " AND ".join(where))), params).mappings().all()
 
+    broken_seq = broken.seq if broken else None
     return AuditTrail(
         chain_verified=broken is None,
-        broken_seq=broken.seq if broken else None,
-        events=[AuditEvent(**r) for r in rows],
+        broken_seq=broken_seq,
+        broken_at=broken_seq,
+        events=[AuditEvent(**dict(r, hash=(r["hash"] or "").strip() or None,
+                                  prev_hash=(r["prev_hash"] or "").strip() or None)) for r in rows],
     )

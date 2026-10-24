@@ -1,8 +1,13 @@
 """Phase 1's Definition of Done, end to end, on the session's throwaway database.
 
-    datagen.build -> seed -> run_month + worker -> a regional manager approves
-    -> the gateway posts -> the AP clerk releases -> the outbox writes the CSV
-    -> trial balance, Beancount, verify_chain() and replay all agree
+    datagen.build -> seed -> run_month + worker (drafts the five lease versions,
+    checks nothing against unconfirmed terms) -> a regional manager confirms
+    the leases -> run_month again checks the twelve charges -> the manager
+    approves the good charges and upholds the holds -> the gateway posts what
+    is owed (the billed amount of a good charge, only the undisputed amount of
+    a held one, nothing for a charge nothing supports) -> the AP clerk releases
+    -> the outbox writes the CSV -> trial balance, Beancount, verify_chain() and
+    replay all agree, and not one disputed dollar is in the books
 
 Every step runs as the database role its process really uses: the worker as
 lease_agent, people through lease_api, the gateway as lease_gateway, the
@@ -18,6 +23,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import lease_world as lw
 import pytest
 from beancount import loader
 from beancount.core import data as bc
@@ -28,6 +34,7 @@ from app.jobs.worker import drain
 from app.ledger.export_beancount import render
 from app.ledger.trial_balance import trial_balance
 from app.records.seed import seed
+from app.work.charges import approve_charge
 from app.work.events import events_for, verify_chain
 from app.work.gateway import post_approved, release_batch, send_outbox
 from app.work.replay import replay
@@ -40,6 +47,8 @@ ENTITY = "ENT-CA"
 RM_BAY = "PER-RM-BAY"
 RM_DESERT = "PER-RM-DESERT"
 AP = "PER-AP"
+CTRL = "PER-CTRL"
+HELD_TOTAL = Decimal("25736.36")   # 4,820 + 19,626.65 + 516.66 + 543.61 + 229.44
 
 
 @pytest.fixture(scope="module")
@@ -51,8 +60,9 @@ def generated(tmp_path_factory):
 
 
 @pytest.fixture
-def seeded(clean, generated):
+def seeded(clean, generated, monkeypatch):
     seed(Path(generated), clean["lease_agent"], clean["lease_gateway"])
+    lw.use_documents(monkeypatch, generated)
     # A manager from another region, to be refused. Phase 1 seeds one region.
     with clean["owner"].begin() as conn:
         conn.execute(text("INSERT INTO region (id, name) VALUES ('REG-DESERT', 'Desert')"))
@@ -90,13 +100,46 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
     eng = seeded
     reader = eng["lease_reader"]
 
-    # 1. The month: three jobs, every charge checked, every finding proposed.
+    # 1. The month: three jobs. Abstraction drafts lease_version 1 of each of
+    #    the five leases, every term boxed on its page, and proposes one
+    #    LEASE_ABSTRACTION item each. Nothing is confirmed yet, so the checker
+    #    proposes nothing: the twelve charges wait, and the job says why.
     outcomes = month(eng)
     assert [(o.job.kind, o.status) for o in outcomes] == [
         ("ingest", "done"), ("abstraction", "done"), ("checking", "done")]
+    assert outcomes[1].result["versions"] == 5
+    assert set(outcomes[1].result["paths"].values()) == {"abstraction:generator"}
+    assert (outcomes[2].result["created"], outcomes[2].result["waiting"]) == (0, 12)
+    assert q(reader, "SELECT count(*) FROM work_item WHERE kind = 'CHARGE_CHECK'") == 0
+    with reader.connect() as conn:
+        drafts = conn.execute(text("""
+            SELECT w.id, w.state, w.proposed_by, v.id AS version_id, v.lease_id
+              FROM work_item w JOIN lease_version v ON v.id::text = w.subject_id
+             WHERE w.kind = 'LEASE_ABSTRACTION' ORDER BY v.lease_id
+        """)).mappings().all()
+        boxed = conn.execute(text(
+            "SELECT count(*) FROM lease_term WHERE bbox IS NOT NULL AND page IS NOT NULL")).scalar()
+    assert len(drafts) == 5 and {d["state"] for d in drafts} == {"PROPOSED"}
+    assert {d["proposed_by"] for d in drafts} == {"agent:abstraction"}
+    assert boxed == 5 * 13
+
+    # 1b. A Desert manager may not confirm a Bay Area lease; the Bay Area
+    #     manager confirms all five, each one a hash-chained approve.
+    with pytest.raises(Denied, match="region"):
+        act(eng, "lease_api", RM_DESERT, drafts[0]["id"], "approve")
+    for d in drafts:
+        assert act(eng, "lease_api", RM_BAY, d["id"], "approve")["state"] == "APPROVED"
+    assert q(reader, "SELECT count(*) FROM lease_version WHERE confirmed_by = :rm",
+             rm=RM_BAY) == 5
+
+    # 1c. The month again: one more checking job, now against the confirmed
+    #     terms. Every charge checked, every finding proposed.
+    outcomes = month(eng)
+    assert [(o.job.kind, o.status) for o in outcomes] == [("checking", "done")]
+    assert (outcomes[0].result["created"], outcomes[0].result["holds"]) == (12, 5)
     with reader.connect() as conn:
         items = conn.execute(text("""
-            SELECT w.id, w.state, w.proposal, w.subject_id, c.amount
+            SELECT w.id, w.state, w.proposal, w.subject_id, c.amount, w.evidence
               FROM work_item w JOIN landlord_charge c ON c.id = w.subject_id
              WHERE w.kind = 'CHARGE_CHECK' ORDER BY w.id
         """)).mappings().all()
@@ -104,57 +147,90 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
     good = [i for i in items if i["proposal"] == "approve"]
     held = [i for i in items if i["proposal"] == "hold"]
     assert (len(good), len(held)) == (7, 5)
+    supported = {i["id"]: Decimal(str(i["evidence"]["supported"])) for i in held}
+    disputed = {i["id"]: i["amount"] - supported[i["id"]] for i in held}
+    assert sum(disputed.values(), Decimal("0")) == HELD_TOTAL      # the dollars held
 
     # 2. A Desert manager may not approve a Bay Area item: Denied, and on record.
     with pytest.raises(Denied, match="region"):
         act(eng, "lease_api", RM_DESERT, good[0]["id"], "approve")
     with reader.connect() as conn:
         refused = [e for e in events_for(conn, "work_item", good[0]["id"]) if not e.allowed]
+        assert all(e["evidence"]["lease_version_id"] in {d["version_id"] for d in drafts}
+                   for e in conn.execute(text(
+                       "SELECT evidence FROM work_item WHERE kind = 'CHARGE_CHECK'")).mappings())
     assert [(e.actor_id, e.action) for e in refused] == [(RM_DESERT, "approve")]
     assert "REG-DESERT" in refused[0].reason
 
     # 3. Separation of duties: the manager answers a question on a held item,
     #    and may then not approve that item.
-    disputed = held[0]["id"]
-    act(eng, "lease_agent", "agent:checker", disputed, "ask",
+    disputed_id = held[0]["id"]
+    act(eng, "lease_agent", "agent:checker", disputed_id, "ask",
         patch={"asked_to": RM_BAY, "body": "Did the clinic move suites?"})
-    act(eng, "lease_api", RM_BAY, disputed, "answer", patch={"answer": "No, same suite."})
+    act(eng, "lease_api", RM_BAY, disputed_id, "answer", patch={"answer": "No, same suite."})
     with pytest.raises(Denied, match="separation of duties"):
-        act(eng, "lease_api", RM_BAY, disputed, "approve")
+        act(eng, "lease_api", RM_BAY, disputed_id, "approve")
     with reader.connect() as conn:
-        last = events_for(conn, "work_item", disputed)[-1]
+        last = events_for(conn, "work_item", disputed_id)[-1]
     assert (last.actor_id, last.action, last.allowed) == (RM_BAY, "approve", False)
 
-    # 4. The Bay Area manager approves the seven good items.
+    # 4. The Bay Area manager approves the seven good items, and upholds the
+    #    holds: approving a hold agrees with it. The one they answered a
+    #    question on is upheld by the controller (separation of duties).
     for i in good:
         assert act(eng, "lease_api", RM_BAY, i["id"], "approve")["state"] == "APPROVED"
+    for i in held:
+        who = CTRL if i["id"] == disputed_id else RM_BAY
+        with eng["lease_api"].begin() as conn:
+            row = approve_charge(conn, load_actor(conn, who), i["id"])
+        assert row["state"] == "APPROVED" and row["evidence"]["resolution"] == "upheld"
 
-    # 5. The gateway posts them; nothing held reaches the ledger.
+    # 5. The gateway posts what is owed: every good charge as billed, the
+    #    undisputed part of the three partly wrong charges, nothing of the
+    #    duplicate rent or the unleased suite (closed, nothing to pay).
     with eng["lease_gateway"].begin() as conn:
         posted = post_approved(conn, ENTITY, JAN)
-    assert sorted(p.work_item_id for p in posted) == sorted(i["id"] for i in good)
-    approved_total = sum((i["amount"] for i in good), Decimal("0"))
+    assert sorted(p.work_item_id for p in posted) == sorted(i["id"] for i in items)
+    entries = [p for p in posted if p.journal_entry_id is not None]
+    unpayable = sorted(i for i, s_ in supported.items() if s_ == 0)
+    assert sorted(p.work_item_id for p in posted if p.journal_entry_id is None) == unpayable
+    approved_total = (sum((i["amount"] for i in good), Decimal("0"))
+                      + sum(supported.values(), Decimal("0")))
+    billed_total = sum((i["amount"] for i in items), Decimal("0"))
+    assert approved_total == billed_total - HELD_TOTAL
     assert q(reader, "SELECT sum(debit) FROM journal_line") == approved_total
     assert q(reader, "SELECT sum(credit) FROM journal_line") == approved_total
-    assert q(reader, "SELECT count(*) FROM journal_entry WHERE work_item_id = ANY(:ids)",
-             ids=[i["id"] for i in held]) == 0
-    assert q(reader, "SELECT count(*) FROM work_item WHERE state = 'POSTED'") == 7
+    for i in held:                                   # the ledger holds no disputed dollar
+        assert q(reader, """
+            SELECT coalesce(sum(l.debit), 0) FROM journal_line l
+              JOIN journal_entry e ON e.id = l.journal_entry_id WHERE e.work_item_id = :i
+        """, i=i["id"]) == supported[i["id"]]
+        if supported[i["id"]] > 0:   # (the duplicate's figure is the real rent, rightly posted once)
+            assert q(reader, "SELECT count(*) FROM journal_line WHERE debit = :d OR credit = :d "
+                     "OR debit = :b OR credit = :b", d=disputed[i["id"]], b=i["amount"]) == 0
+    assert q(reader, "SELECT count(*) FROM work_item WHERE state = 'POSTED'") == 10
+    assert q(reader, "SELECT count(*) FROM work_item WHERE state = 'CLOSED'") == 2
     with reader.connect() as conn:
-        for p in posted:
+        for p in entries:
             post_event = events_for(conn, "work_item", p.work_item_id)[-1]
             assert (post_event.actor_id, post_event.action) == ("system:gateway", "post")
-            assert post_event.evidence == {"journal_entry_id": p.journal_entry_id}
+            if p.work_item_id in supported:
+                assert post_event.evidence["resolution"] == "upheld"
+                assert post_event.evidence["journal_entry_id"] == p.journal_entry_id
+            else:
+                assert post_event.evidence == {"journal_entry_id": p.journal_entry_id}
 
     # 6. The AP clerk releases the batch; the outbox writes the CSV once.
     with eng["lease_gateway"].begin() as conn:
         batch = release_batch(conn, JAN, AP, entity_id=ENTITY)
-    assert batch.created and batch.item_count == 7 and batch.total == approved_total
+    assert batch.created and batch.item_count == 10 and batch.total == approved_total
     with eng["lease_gateway"].connect() as conn:
         assert send_outbox(conn, tmp_path) == [batch.outbox_id]
     files = list(tmp_path.glob("*.csv"))
     assert [f.name for f in files] == ["ap_batch_ENT-CA_2026-01.csv"]
     lines = list(csv.DictReader(io.StringIO(files[0].read_text())))
-    assert sorted(l["charge_id"] for l in lines) == sorted(i["subject_id"] for i in good)
+    assert sorted(l["charge_id"] for l in lines) == sorted(
+        i["subject_id"] for i in items if i["id"] not in unpayable)
     assert sum(Decimal(l["amount"]) for l in lines) == approved_total
 
     # 7. The books: balanced, loadable by Beancount, and the chain intact.
@@ -162,10 +238,10 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
         tb = trial_balance(conn, ENTITY, JAN)
         assert tb.total_debits == tb.total_credits == approved_total
         assert tb.row("Accounts payable").credit == approved_total
-        entries, errors, _ = loader.load_string(render(conn))
+        beans, errors, _ = loader.load_string(render(conn))
         assert verify_chain(conn) is None
     assert errors == []
-    assert len([e for e in entries if isinstance(e, bc.Transaction)]) == 7
+    assert len([e for e in beans if isinstance(e, bc.Transaction)]) == 10
 
     # 8. Replay rebuilds exactly the live state.
     with eng["owner"].connect() as conn:
@@ -173,7 +249,7 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
             report = replay(conn)
             tx.rollback()
     assert report.identical, report.differences[:5]
-    assert report.rows["work_item"] == 12 and report.rows["question"] == 1
+    assert report.rows["work_item"] == 17 and report.rows["question"] == 1
 
     # 9. January again: no new jobs, items, entries, outbox rows or events.
     before = footprint(eng)

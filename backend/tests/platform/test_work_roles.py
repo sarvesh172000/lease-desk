@@ -22,7 +22,7 @@ def test_every_actor_role_has_a_row_in_the_matrix():
     ("RM-BAY", "approve"), ("RM-BAY", "reject"), ("RM-BAY", "answer"), ("RM-BAY", "hold"),
     ("RM-BAY", "resume"),
     ("CTRL", "approve"), ("CTRL", "reject"), ("CTRL", "close"),
-    ("system:gateway", "post"),
+    ("system:gateway", "post"), ("system:gateway", "close"),
 ])
 def test_the_matrix_allows(actor, action):
     assert can(A[actor], action, BAY) == (True, "allowed")

@@ -21,6 +21,7 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   loading,
+  confirmDisabled,
   tone = "primary",
 }: {
   open: boolean;
@@ -30,6 +31,8 @@ export function ConfirmDialog({
   confirmLabel: string;
   onConfirm: () => void;
   loading?: boolean;
+  /** The confirm stays disabled until the dialog has what it needs (e.g. a reason). */
+  confirmDisabled?: boolean;
   tone?: "primary" | "danger";
 }) {
   return (
@@ -53,7 +56,13 @@ export function ConfirmDialog({
                 Cancel
               </Button>
             </Dialog.Close>
-            <Button variant={tone === "danger" ? "danger" : "primary"} loading={loading} onClick={onConfirm}>
+            <Button
+              variant={tone === "danger" ? "danger" : "primary"}
+              loading={loading}
+              disabled={confirmDisabled}
+              data-testid="confirm-action"
+              onClick={onConfirm}
+            >
               {confirmLabel}
             </Button>
           </div>

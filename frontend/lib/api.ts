@@ -14,14 +14,17 @@ import type {
   Actor,
   AllowedActions,
   AuditResponse,
+  ChargeCheck,
   DocumentPages,
   ExceptionDetail,
   ExceptionSummary,
   InvestigationEvent,
   ItemAction,
   LeaseSummary,
+  LeaseVersion,
   Schedule,
   Status,
+  Summary,
 } from "./types";
 import {
   FIXTURE_ACTORS,
@@ -75,6 +78,31 @@ export class ApiError extends Error {
 
 class Unreachable extends Error {}
 
+/** A live API answered 401 on a data call: the session is gone, so sign in again. */
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  const here = window.location.pathname + window.location.search;
+  if (window.location.pathname.startsWith("/login")) return;
+  window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+}
+
+/**
+ * Exception ids vs work item ids. The live API names an exception `exc_<work_item.id>`
+ * and the queue (/api/items) takes the bare `<work_item.id>`. Fixture ids
+ * (`exc_01_jul_amendment`) are not work items and pass through unchanged.
+ */
+/** Same as itemIdFor; the name main used for the same fix. */
+export const itemIdOf = (exceptionId: string): string => itemIdFor(exceptionId);
+
+export function itemIdFor(exceptionId: string): string {
+  const m = /^exc_([1-9][0-9]*)$/.exec(exceptionId);
+  return m ? m[1] : exceptionId;
+}
+
+export function exceptionIdFor(itemId: number | string): string {
+  return `exc_${itemId}`;
+}
+
 async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -91,6 +119,7 @@ async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
   } finally {
     clearTimeout(timer);
   }
+  if (res.status === 401 && !path.startsWith("/api/auth/")) redirectToLogin();
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -203,12 +232,85 @@ export function getExceptions(): Promise<ExceptionSummary[]> {
 /** 3. GET /api/exceptions/{id} */
 export function getException(id: string): Promise<ExceptionDetail> {
   return call(
-    () => http<ExceptionDetail>(`/api/exceptions/${encodeURIComponent(id)}`),
+    async () => normalizeDetail(await http<ExceptionDetail>(`/api/exceptions/${encodeURIComponent(id)}`)),
     () => {
       const d = FIXTURE_EXCEPTION_DETAILS[id];
       if (!d) throw new ApiError(404, `404 exception ${id} not found`);
       return { ...clone(d), status: fxStatus(id, d.status) };
     },
+  );
+}
+
+/**
+ * The live API always sends an `investigation` object, all nulls when nothing
+ * has been investigated; the screens read `null` as "not investigated yet".
+ */
+function normalizeDetail(d: ExceptionDetail): ExceptionDetail {
+  const inv = d.investigation;
+  const empty = !!inv && inv.root_cause == null && !inv.evidence?.length && !inv.entries?.length && inv.liability_before == null;
+  return empty ? { ...d, investigation: null } : d;
+}
+
+/** EXTENSION: GET /api/summary — dashboard tiles, every figure summed by the API. */
+export function getSummary(): Promise<Summary> {
+  return call(
+    () => http<Summary>("/api/summary"),
+    () => {
+      // Offline stand-in only: the fixture rows, in cents. Over-bills only, like the API.
+      const open = FIXTURE_EXCEPTIONS.filter((e) => fxStatus(e.exception_id, e.status) !== "balanced");
+      const over = open.filter((e) => e.delta > 0);
+      return {
+        as_of: "2026-07-01",
+        active_leases: FIXTURE_LEASES.length,
+        open_exceptions: open.length,
+        pending_review: open.filter((e) => fxStatus(e.exception_id, e.status) === "pending_review").length,
+        held_total: over.reduce((s, e) => s + Math.round(e.delta * 100), 0) / 100,
+        held_count: over.length,
+        portfolio_liability: FIXTURE_LEASES.reduce((s, l) => s + Math.round(l.liability * 100), 0) / 100,
+      };
+    },
+  );
+}
+
+interface QueueResponse {
+  counts: Record<string, number>;
+  total: number;
+  items: Array<{ id: number; kind: string; state: string; title: string; clinic_id: string | null; period: string | null; amount: number | null; proposal: string | null; reason: string | null }>;
+}
+
+/** EXTENSION: every charge check of a month (GET /api/items?kind=CHARGE_CHECK), holds and correct charges alike. */
+export function getChargeChecks(period?: string): Promise<ChargeCheck[]> {
+  const q = new URLSearchParams({ kind: "CHARGE_CHECK" });
+  if (period) q.set("period", period);
+  return call<ChargeCheck[]>(
+    async () => {
+      const res = await http<QueueResponse>(`/api/items?${q.toString()}`);
+      return res.items
+        .map((i): ChargeCheck => ({
+          exception_id: exceptionIdFor(i.id),
+          item_id: i.id,
+          state: i.state,
+          title: i.title,
+          clinic_id: i.clinic_id,
+          period: i.period,
+          amount: i.amount,
+          proposal: i.proposal,
+          reason: i.reason,
+        }))
+        .sort((a, b) => (a.item_id ?? 0) - (b.item_id ?? 0));
+    },
+    () =>
+      FIXTURE_EXCEPTIONS.map((e) => ({
+        exception_id: e.exception_id,
+        item_id: null,
+        state: fxStatus(e.exception_id, e.status) === "balanced" ? "APPROVED" : "PROPOSED",
+        title: `${e.clinic_id} ${e.charge_type}`,
+        clinic_id: e.clinic_id,
+        period: e.period,
+        amount: e.actual,
+        proposal: "hold",
+        reason: null,
+      })),
   );
 }
 
@@ -238,30 +340,53 @@ const STATUS_BY_STATE: Record<string, Status> = {
 };
 
 /**
- * Any action other than approve: POST /api/items/{item_id}/actions/{action}.
+ * Any other action: POST /api/items/{item_id}/actions/{action}.
  *
- * There is no /api/exceptions/{id}/hold — holding through that path 404s and
- * leaves the button dead. The queue's own action route takes every human
- * action the state machine has (hold, resume, reject, close), as the same
- * `perform()` the approve route uses, so the answer allowed-actions gave the
- * button is the answer the press gets.
+ * The queue's own action route takes every human action the state machine has
+ * (resume, reject, close, ...), as the same `perform()` the approve route
+ * uses, so the answer allowed-actions gave the button is the answer the press
+ * gets. Approve, hold and pay-as-billed have exception routes of their own,
+ * which also answer with the work state and the posting.
  */
 export function performAction(exceptionId: string, action: ItemAction): Promise<ActionResult> {
   return call(
-    async () => {
+    async (): Promise<ActionResult> => {
       const res = await http<{ state: string }>(
         `/api/items/${encodeURIComponent(itemIdOf(exceptionId))}/actions/${encodeURIComponent(action)}`,
         { method: "POST" },
       );
-      return { exception_id: exceptionId, status: STATUS_BY_STATE[res.state] ?? "pending_review" };
+      return { exception_id: exceptionId, status: STATUS_BY_STATE[res.state] ?? "pending_review", state: res.state };
     },
     () => fxAct(exceptionId, action),
   );
 }
 
-/** Hold, through the item action route. */
+/** EXTENSION: POST /api/exceptions/{id}/hold — not in §16; the queue's hold, answered with the work state. */
 export function holdException(id: string): Promise<ActionResult> {
-  return performAction(id, "hold");
+  return call(
+    () => http<ActionResult>(`/api/exceptions/${encodeURIComponent(id)}/hold`, { method: "POST" }),
+    () => fxAct(id, "hold"),
+  );
+}
+
+/**
+ * EXTENSION: POST /api/exceptions/{id}/pay-as-billed {reason}, the controller's
+ * override: approve a held charge and pay the billed amount anyway. Anyone
+ * else gets 403 (and the refusal is on record); no reason is 422.
+ */
+export function payAsBilledException(id: string, reason: string): Promise<ActionResult> {
+  return call(
+    () =>
+      http<ActionResult>(`/api/exceptions/${encodeURIComponent(id)}/pay-as-billed`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    () => {
+      if (!reason.trim()) throw new ApiError(422, "422 paying a disputed charge as billed needs a reason");
+      // Not a controller: fxAct records the refusal and throws 403.
+      return fxAct(id, fx.actor?.role === "controller" ? "approve" : "pay_as_billed");
+    },
+  );
 }
 
 /**
@@ -350,6 +475,31 @@ export function getSchedule(leaseId: string, version?: number): Promise<Schedule
   );
 }
 
+/**
+ * EXTENSION: GET /api/leases/{id}/versions — each version's abstracted terms
+ * (page, box, quote, confidence) and who confirmed it. The fixtures carry no
+ * abstraction, so fixtures mode has none.
+ */
+export function getLeaseVersions(leaseId: string): Promise<LeaseVersion[]> {
+  return call(
+    () => http<LeaseVersion[]>(`/api/leases/${encodeURIComponent(leaseId)}/versions`),
+    () => [],
+  );
+}
+
+/**
+ * EXTENSION: confirm a lease version = approve its LEASE_ABSTRACTION work item
+ * (POST /api/items/{id}/actions/approve). The server's can() decides.
+ */
+export function confirmLeaseVersion(itemId: number): Promise<{ state: string }> {
+  return call(
+    () => http<{ state: string }>(`/api/items/${itemId}/actions/approve`, { method: "POST" }),
+    () => {
+      throw new ApiError(409, "409 lease versions cannot be confirmed in fixtures mode");
+    },
+  );
+}
+
 /** 7. GET /api/audit?lease_id= */
 export function getAudit(leaseId?: string): Promise<AuditResponse> {
   const q = leaseId ? `?lease_id=${encodeURIComponent(leaseId)}` : "";
@@ -417,7 +567,7 @@ export function getDocumentPages(docId: string): Promise<DocumentPages> {
   );
 }
 
-/** EXTENSION: GET /api/documents/{sha}/file — the PDF bytes. */
+/** EXTENSION: GET /api/documents/{doc_id}/file — the PDF bytes (doc_id: sha256 or source_document id). */
 export function documentUrl(docId: string): string {
   return source === "fixtures" ? fixtureDocumentUrl(docId) : `${API_URL}/api/documents/${encodeURIComponent(docId)}/file`;
 }
@@ -437,26 +587,13 @@ export function pageImageUrl(docId: string, page: number): string {
 }
 
 /**
- * The work-item id behind an exception.
- *
- * `/api/exceptions` is keyed by `exc_<n>` and `/api/items` by the integer `n`;
- * they are the same work item. Passing the exception id straight to the items
- * endpoints returns 422 ("Input should be a valid integer") and leaves the
- * Approve button dead, which is the one control the whole screen exists for.
- *
- * The exception payload carries no `item_id`, so the id is derived here rather
- * than at each call site. If the API grows an explicit `item_id`, prefer it.
+ * EXTENSION: GET /api/items/{id}/allowed-actions → {"actions": [...]}.
+ * Takes the exception id the screens hold (`exc_42`) and asks for work item `42`.
  */
-export function itemIdOf(exceptionId: string): string {
-  const match = /^exc_(\d+)$/.exec(exceptionId);
-  return match ? match[1] : exceptionId;
-}
-
-/** EXTENSION: GET /api/items/{id}/allowed-actions → {"actions": [...]} */
-export function getAllowedActions(itemId: string): Promise<AllowedActions> {
+export function getAllowedActions(exceptionId: string): Promise<AllowedActions> {
   return call(
-    () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemIdOf(itemId))}/allowed-actions`),
-    () => ({ actions: fxAllowed(itemId) }),
+    () => http<AllowedActions>(`/api/items/${encodeURIComponent(itemIdFor(exceptionId))}/allowed-actions`),
+    () => ({ actions: fxAllowed(exceptionId) }),
   );
 }
 

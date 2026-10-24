@@ -46,6 +46,7 @@ from sqlalchemy.engine import Connection
 
 from ..ledger import posting
 from ..ledger.posting import PeriodClosed, PostingError  # noqa: F401  re-exported
+from . import charges
 from .events import append_event
 from .roles import GATEWAY_ACTOR, ensure_gateway_actor, load_actor
 from .transitions import transition
@@ -53,6 +54,7 @@ from .transitions import transition
 AP_CLERK = "ap_clerk"
 CHARGE_CHECK = "CHARGE_CHECK"
 RELEASABLE_STATES = ("APPROVED", "POSTED")
+ACCOUNTS_PAYABLE = "Accounts payable"
 MAX_SEND_ATTEMPTS = 3
 
 
@@ -72,7 +74,8 @@ class NotAllowed(GatewayError):
 
 def post_journal(conn: Connection, item_id: int, lines: Iterable[Any], idempotency_key: str,
                  *, entity_id: str, date: date, period: date, memo: str,
-                 entry_type: str = "standard") -> int:
+                 entry_type: str = "standard",
+                 post_evidence: Optional[Mapping] = None) -> int:
     """Post a balanced entry for an APPROVED work item and move it to POSTED.
 
     `lines` name accounts by their chart name ("Lease cost"); see
@@ -111,30 +114,107 @@ def post_journal(conn: Connection, item_id: int, lines: Iterable[Any], idempoten
         lines=checked)
     if not result.created:                                   # lost a race to the same key
         return _replay(posting.existing_entry(conn, idempotency_key), item_id, idempotency_key)
-    _mark_posted(conn, item_id, result.entry_id)
+    _mark_posted(conn, item_id, result.entry_id, post_evidence)
     return result.entry_id
 
 
-def post_approved_charge(conn: Connection, item_id: int) -> int:
+def post_approved_charge(conn: Connection, item_id: int) -> Optional[int]:
     """Post the engine's entry for an approved CHARGE_CHECK item: an approved
     January rent charge becomes Dr Lease cost / Cr Accounts payable, entry
     type `phase1_period_cost` (engine/journal.py says why that is a
-    placeholder)."""
+    placeholder).
+
+    How much posts is charges.payable(): what was billed for a charge the
+    checker found correct; for a hold a person upheld, only the undisputed
+    (`supported`) amount, under its own `|supported` key; the billed amount
+    of a hold only when a controller's pay-as-billed override is on record,
+    under `|as_billed`. A hold upheld on a wholly unsupported charge has
+    nothing to post: the item is closed and None returned. The disputed
+    dollars never reach the ledger.
+    """
     item = _item(conn, item_id)
     if item["kind"] != CHARGE_CHECK or item["subject_type"] != "landlord_charge":
         raise GatewayError("work item %s is a %s on %s, not a landlord charge check"
                            % (item_id, item["kind"], item["subject_type"]))
-    entry = posting.entry_for_charge(conn, item["subject_id"])
+    billed = conn.execute(text("SELECT amount FROM landlord_charge WHERE id = :id"),
+                          {"id": item["subject_id"]}).scalar()
+    pay = charges.payable(item, billed)
+    if pay.basis == charges.PAY_AS_BILLED:
+        _require_override_on_record(conn, item_id)
+    if pay.basis == "supported" and pay.amount <= 0:
+        return _close_unpayable(conn, item_id, pay)
+
+    entry = posting.entry_for_charge(
+        conn, item["subject_id"], amount=None if pay.basis != "supported" else pay.amount,
+        key_suffix=pay.key_suffix, memo_note=_MEMO_NOTE.get(pay.basis, ""))
+    _refuse_a_second_entry(conn, item_id, entry.idempotency_key)
+    extra = None
+    if charges.is_disputed(item):
+        extra = {"resolution": charges.PAY_AS_BILLED if pay.basis == charges.PAY_AS_BILLED
+                 else charges.UPHELD,
+                 "posted_amount": str(pay.amount), "disputed_amount": str(pay.disputed)}
     return post_journal(
         conn, item_id, entry.lines, entry.idempotency_key, entity_id=entry.entity_id,
-        date=entry.period, period=entry.period, memo=entry.memo, entry_type=entry.entry_type)
+        date=entry.period, period=entry.period, memo=entry.memo, entry_type=entry.entry_type,
+        post_evidence=extra)
 
 
-def _mark_posted(conn: Connection, item_id: int, entry_id: int) -> None:
+_MEMO_NOTE = {"supported": " (undisputed portion; disputed amount held)",
+              "pay_as_billed": " (paid as billed over a hold, controller override)"}
+
+
+def _require_override_on_record(conn: Connection, item_id: int) -> None:
+    """The gateway's own check of a pay-as-billed resolution: the item's last
+    allowed approve must be a controller's, recording the override and a
+    reason. An evidence field set any other way releases nothing."""
+    row = conn.execute(text("""
+        SELECT e.actor_id, e.reason, e.evidence, a.role
+          FROM audit_event e LEFT JOIN actor a ON a.id = e.actor_id
+         WHERE e.subject_type = 'work_item' AND e.subject_id = :sid
+           AND e.action = 'approve' AND e.allowed
+         ORDER BY e.seq DESC LIMIT 1
+    """), {"sid": str(item_id)}).mappings().first()
+    evidence = (row or {}).get("evidence") or {}
+    if (row is None or row["role"] != charges.OVERRIDE_ROLE
+            or evidence.get("resolution") != charges.PAY_AS_BILLED
+            or not (row["reason"] or "").strip()):
+        raise GatewayError("work item %s is a disputed charge with no controller's pay-as-billed "
+                           "approval on record; only the undisputed amount may post" % item_id)
+
+
+def _refuse_a_second_entry(conn: Connection, item_id: int, key: str) -> None:
+    """One entry per item. An item that already posted under another key (its
+    supported amount, say, before someone tried to pay it as billed) posts
+    nothing more."""
+    other = conn.execute(text("""
+        SELECT id, idempotency_key FROM journal_entry
+         WHERE work_item_id = :id AND idempotency_key <> :key ORDER BY id LIMIT 1
+    """), {"id": item_id, "key": key}).mappings().first()
+    if other is not None:
+        raise GatewayError("work item %s already posted entry %s under %r; refusing to post %r too"
+                           % (item_id, other["id"], other["idempotency_key"], key))
+
+
+def _close_unpayable(conn: Connection, item_id: int, pay: charges.Payable) -> None:
+    """An upheld hold on a charge the lease does not support at all: nothing
+    is owed, so nothing posts. APPROVED -> CLOSED as system:gateway, with the
+    disputed amount on the event."""
+    item = _lock_item(conn, item_id)
+    if item["state"] != "APPROVED":
+        raise WrongState("work item %s is %s; only APPROVED items post" % (item_id, item["state"]))
+    transition(conn, _gateway_actor(conn), item_id, "close",
+               reason="hold upheld: nothing in this charge is supported, nothing is paid",
+               evidence={"resolution": charges.UPHELD, "posted_amount": "0.00",
+                         "disputed_amount": str(pay.disputed)})
+    return None
+
+
+def _mark_posted(conn: Connection, item_id: int, entry_id: int,
+                 extra: Optional[Mapping] = None) -> None:
     """APPROVED -> POSTED through the work layer, as system:gateway. The
     item is already locked and checked APPROVED by post_journal()."""
     transition(conn, _gateway_actor(conn), item_id, "post",
-               evidence={"journal_entry_id": entry_id})
+               evidence=dict(extra or {}, journal_entry_id=entry_id))
 
 
 def _gateway_actor(conn: Connection):
@@ -147,7 +227,7 @@ def _gateway_actor(conn: Connection):
 @dataclass(frozen=True)
 class PostedItem:
     work_item_id: int
-    journal_entry_id: int
+    journal_entry_id: Optional[int]   # None: an upheld hold with nothing to post, now CLOSED
 
 
 def post_approved(conn: Connection, entity_id: str, period: date) -> List[PostedItem]:
@@ -157,7 +237,8 @@ def post_approved(conn: Connection, entity_id: str, period: date) -> List[Posted
     Idempotent: POSTED items are no longer APPROVED, so a second call finds
     nothing, and post_approved_charge() itself returns the original entry for
     a key that already posted. Held, proposed and rejected items are never
-    touched. Returns what this call posted.
+    touched. Returns what this call did, item by item: an upheld hold with
+    nothing to post comes back with journal_entry_id None (it was closed).
     """
     _require_text(entity_id, "entity_id")
     if not isinstance(period, date) or period.day != 1:
@@ -184,7 +265,7 @@ def _item(conn: Connection, item_id: int, lock: bool = False) -> Mapping:
     if isinstance(item_id, bool) or not isinstance(item_id, int):
         raise GatewayError("work item id must be an integer, got %r" % (item_id,))
     row = conn.execute(text(
-        "SELECT id, kind, state, subject_type, subject_id, entity_id, period "
+        "SELECT id, kind, state, subject_type, subject_id, entity_id, period, proposal, evidence "
         "FROM work_item WHERE id = :id" + (" FOR UPDATE" if lock else "")),
         {"id": item_id}).mappings().first()
     if row is None:
@@ -214,7 +295,7 @@ class Batch:
 
 
 CSV_COLUMNS = ("work_item_id", "charge_id", "invoice_id", "landlord_id", "landlord_name",
-               "lease_id", "clinic_id", "charge_type", "period", "amount")
+               "lease_id", "clinic_id", "charge_type", "period", "amount", "billed")
 
 
 def release_batch(conn: Connection, period: date, actor_id: str,
@@ -223,7 +304,8 @@ def release_batch(conn: Connection, period: date, actor_id: str,
 
     Only an active actor with role `ap_clerk` may; anyone else is refused and
     the refusal is recorded. The batch holds every APPROVED or POSTED charge
-    check of the period. `entity_id` defaults to the clerk's own entity.
+    check of the period, each for what may be paid (see _releasable): the
+    undisputed amount of an upheld hold, never the disputed part. `entity_id` defaults to the clerk's own entity.
     Releasing again returns the batch already released and adds nothing.
     """
     if not isinstance(period, date) or period.day != 1:
@@ -293,11 +375,20 @@ def _actor(conn: Connection, actor_id: Any) -> Optional[Dict]:
     return dict(row) if row else None
 
 
-def _releasable(conn: Connection, entity_id: str, period: date) -> List[Mapping]:
-    return conn.execute(text("""
+def _releasable(conn: Connection, entity_id: str, period: date) -> List[Dict]:
+    """The period's approved and posted charge checks, each with the amount AP
+    may pay: what the gateway actually credited to Accounts payable for it,
+    or, for an item approved but not yet posted, what charges.payable() says
+    it will post. A disputed amount is never in it, and an item with nothing
+    payable is left out. `billed` keeps what the landlord asked for."""
+    rows = conn.execute(text("""
         SELECT w.id AS work_item_id, c.id AS charge_id, c.invoice_id, l.landlord_id,
                d.name AS landlord_name, c.lease_id, c.clinic_id, c.charge_type,
-               c.period, c.amount
+               c.period, c.amount AS billed, w.kind, w.proposal, w.evidence,
+               (SELECT sum(jl.credit) FROM journal_entry je
+                  JOIN journal_line jl ON jl.journal_entry_id = je.id
+                  JOIN account a ON a.id = jl.account_id
+                 WHERE je.work_item_id = w.id AND a.name = :ap) AS posted
           FROM work_item w
           JOIN landlord_charge c ON c.id = w.subject_id
           JOIN clinic k ON k.id = c.clinic_id
@@ -307,10 +398,17 @@ def _releasable(conn: Connection, entity_id: str, period: date) -> List[Mapping]
            AND w.state IN ('APPROVED', 'POSTED')
            AND c.period = :period AND coalesce(w.entity_id, k.entity_id) = :entity
          ORDER BY d.name, c.clinic_id, c.invoice_id, c.id
-    """), {"kind": CHARGE_CHECK, "period": period, "entity": entity_id}).mappings().all()
+    """), {"kind": CHARGE_CHECK, "period": period, "entity": entity_id,
+           "ap": ACCOUNTS_PAYABLE}).mappings().all()
+    out = []
+    for r in rows:
+        amount = r["posted"] if r["posted"] is not None else charges.payable(r, r["billed"]).amount
+        if amount > 0:
+            out.append(dict(r, amount=amount))
+    return out
 
 
-def _batch_payload(rows: List[Mapping], entity_id: str, period: date, actor_id: str) -> Dict:
+def _batch_payload(rows: List[Dict], entity_id: str, period: date, actor_id: str) -> Dict:
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(CSV_COLUMNS)
@@ -446,7 +544,9 @@ def main(argv=None) -> int:
                 """), {"kind": CHARGE_CHECK, "e": entity_id, "p": month}).all()
             label = "%s %s" % (entity_id, month.strftime("%Y-%m"))
             print("  %s  posted %d item(s)%s" % (label, len(posted), "".join(
-                "  #%d->entry %d" % (p.work_item_id, p.journal_entry_id) for p in posted)))
+                "  #%d->entry %d" % (p.work_item_id, p.journal_entry_id)
+                if p.journal_entry_id is not None else "  #%d->closed (hold upheld, nothing owed)"
+                % p.work_item_id for p in posted)))
             print("  %s  items by state: %s" % (
                 label, ", ".join("%s=%d" % tuple(r) for r in states) or "none"))
     except (GatewayError, PostingError) as exc:

@@ -12,13 +12,14 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import lease_world as lw
 import pytest
 from sqlalchemy import text
 
 from app.agents.checker import APPROVE, Charge, Finding
 from app.engine.charges import Proof
 from app.jobs import handlers
-from app.jobs.handlers import ABSTRACTION_SKIPPED, HandlerError, ingest
+from app.jobs.handlers import HandlerError, ingest
 from app.jobs.monthly import (
     MonthlyRunError,
     charge_ids_by_source_id,
@@ -51,9 +52,21 @@ def generated(tmp_path_factory):
 
 
 @pytest.fixture
-def seeded(clean, generated):
+def seeded(clean, generated, monkeypatch):
     seed(Path(generated), clean["lease_agent"], clean["lease_gateway"])
+    lw.use_documents(monkeypatch, generated)
     return clean
+
+
+@pytest.fixture
+def confirmed(seeded, generated):
+    """Seeded, with the five leases drafted and confirmed by the Bay Area
+    manager: the checker reads only confirmed lease versions."""
+    lw.draft_and_confirm(seeded, generated)
+    return seeded
+
+
+CHECKS = "SELECT count(*) FROM work_item WHERE kind = 'CHARGE_CHECK'"
 
 
 @pytest.fixture
@@ -160,31 +173,35 @@ def test_no_charges_for_another_entity_or_month(seeded):
 
 # ------------------------------------------------------ record_findings
 
-def test_record_findings_proposes_one_item_per_charge_as_the_checker(seeded):
-    agent = seeded["lease_agent"]
+def test_record_findings_proposes_one_item_per_charge_as_the_checker(confirmed):
+    agent = confirmed["lease_agent"]
     with agent.begin() as conn:
         counts = check_period(conn, ENTITY, JAN)
     assert counts["charges"] == counts["findings"] == counts["created"] == 12
     assert counts["holds"] == 5
     assert q(agent, "SELECT count(*) FROM work_item WHERE state = 'PROPOSED' "
                     "AND kind = 'CHARGE_CHECK' AND subject_type = 'landlord_charge'") == 12
-    assert q(agent, "SELECT count(*) FROM work_item WHERE proposal = 'hold'") == 5
-    assert q(agent, "SELECT count(*) FROM work_item WHERE proposal = 'approve'") == 7
-    assert q(agent, "SELECT count(DISTINCT proposed_by) FROM work_item") == 1
-    assert q(agent, "SELECT min(proposed_by) FROM work_item") == "agent:checker"
+    assert q(agent, CHECKS + " AND proposal = 'hold'") == 5
+    assert q(agent, CHECKS + " AND proposal = 'approve'") == 7
+    assert q(agent, "SELECT count(DISTINCT proposed_by) FROM work_item "
+                    "WHERE kind = 'CHARGE_CHECK'") == 1
+    assert q(agent, "SELECT min(proposed_by) FROM work_item "
+                    "WHERE kind = 'CHARGE_CHECK'") == "agent:checker"
     orphans = q(agent, """SELECT count(*) FROM work_item w
-                          LEFT JOIN landlord_charge c ON c.id = w.subject_id WHERE c.id IS NULL""")
+                          LEFT JOIN landlord_charge c ON c.id = w.subject_id
+                          WHERE c.id IS NULL AND w.kind = 'CHARGE_CHECK'""")
     assert orphans == 0, "every item's subject is a real landlord_charge id"
     assert q(agent, "SELECT count(*) FROM work_item WHERE region_id IS NULL "
                     "OR entity_id IS NULL") == 0
 
 
-def test_every_item_is_made_by_events_create_then_propose(seeded):
-    agent = seeded["lease_agent"]
+def test_every_item_is_made_by_events_create_then_propose(confirmed):
+    agent = confirmed["lease_agent"]
     with agent.begin() as conn:
         check_period(conn, ENTITY, JAN)
     with agent.connect() as conn:
-        ids = list(conn.execute(text("SELECT id FROM work_item ORDER BY id")).scalars())
+        ids = list(conn.execute(text(
+            "SELECT id FROM work_item WHERE kind = 'CHARGE_CHECK' ORDER BY id")).scalars())
         for item_id in ids:
             events = events_for(conn, "work_item", item_id)
             assert [(e.actor_id, e.action) for e in events] == [
@@ -192,12 +209,12 @@ def test_every_item_is_made_by_events_create_then_propose(seeded):
         assert verify_chain(conn) is None
         last = conn.execute(text("SELECT count(*) FROM work_item w WHERE w.last_event_seq = "
                                  "(SELECT max(seq) FROM audit_event a WHERE a.subject_id = "
-                                 "w.id::text)")).scalar()
+                                 "w.id::text) AND w.kind = 'CHARGE_CHECK'")).scalar()
     assert len(ids) == last == 12
 
 
-def test_evidence_has_the_shape_the_read_api_documents(seeded):
-    agent = seeded["lease_agent"]
+def test_evidence_has_the_shape_the_read_api_documents(confirmed):
+    agent = confirmed["lease_agent"]
     with agent.begin() as conn:
         check_period(conn, ENTITY, JAN)
     with agent.connect() as conn:
@@ -217,8 +234,8 @@ def test_evidence_has_the_shape_the_read_api_documents(seeded):
             assert abs(ev["billed"] - ev["supported"]) < 1
 
 
-def test_a_duplicate_items_evidence_points_at_the_original_by_database_id(seeded):
-    agent = seeded["lease_agent"]
+def test_a_duplicate_items_evidence_points_at_the_original_by_database_id(confirmed):
+    agent = confirmed["lease_agent"]
     with agent.begin() as conn:
         check_period(conn, ENTITY, JAN)
     with agent.connect() as conn:
@@ -230,15 +247,16 @@ def test_a_duplicate_items_evidence_points_at_the_original_by_database_id(seeded
     assert dup["charge_ref"].endswith(("-L1", "-L2", "-L3"))
 
 
-def test_record_findings_twice_adds_nothing(seeded):
-    agent = seeded["lease_agent"]
+def test_record_findings_twice_adds_nothing(confirmed):
+    agent = confirmed["lease_agent"]
+    events = q(agent, "SELECT count(*) FROM audit_event")
     with agent.begin() as conn:
         check_period(conn, ENTITY, JAN)
     with agent.begin() as conn:
         again = check_period(conn, ENTITY, JAN)
     assert (again["created"], again["skipped"]) == (0, 12)
-    assert q(agent, "SELECT count(*) FROM work_item") == 12
-    assert q(agent, "SELECT count(*) FROM audit_event") == 24
+    assert q(agent, CHECKS) == 12
+    assert q(agent, "SELECT count(*) FROM audit_event") == events + 24
 
 
 def test_record_findings_with_nothing_to_record(agent):
@@ -254,12 +272,13 @@ def test_a_finding_for_a_charge_the_database_never_saw_is_refused(seeded):
     assert q(seeded["lease_agent"], "SELECT count(*) FROM work_item") == 0
 
 
-def test_without_the_checker_actor_nothing_is_written(seeded):
+def test_without_the_checker_actor_nothing_is_written(confirmed):
+    seeded = confirmed
     with seeded["owner"].begin() as conn:
         conn.execute(text("UPDATE actor SET active = false WHERE id = 'agent:checker'"))
     with seeded["lease_agent"].begin() as conn, pytest.raises(UnknownActor, match="agent:checker"):
         check_period(conn, ENTITY, JAN)
-    assert q(seeded["lease_agent"], "SELECT count(*) FROM work_item") == 0
+    assert q(seeded["lease_agent"], CHECKS) == 0
 
 
 # ------------------------------------------------------------- handlers
@@ -293,24 +312,32 @@ def test_january_end_to_end_then_again_adds_no_jobs_and_no_items(seeded):
     outcomes = _month(agent)
     assert [(o.job.kind, o.status) for o in outcomes] == [
         ("ingest", "done"), ("abstraction", "done"), ("checking", "done")]
-    assert outcomes[1].result == {"status": "skipped", "reason": ABSTRACTION_SKIPPED}
-    assert outcomes[2].result["created"] == 12
-    items, jobs = (q(agent, "SELECT count(*) FROM work_item"), q(agent, "SELECT count(*) FROM job"))
+    assert outcomes[1].result["status"] == "drafted" and outcomes[1].result["versions"] == 5
+    assert outcomes[2].result["created"] == 0 and outcomes[2].result["waiting"] == 12
+    assert q(agent, "SELECT count(*) FROM work_item WHERE kind = 'LEASE_ABSTRACTION'") == 5
+    assert q(agent, CHECKS) == 0, "nothing is checked against unconfirmed terms"
 
-    assert _month(agent) == [], "nothing is ready the second time"
-    assert q(agent, "SELECT count(*) FROM work_item") == items == 12
-    assert q(agent, "SELECT count(*) FROM job") == jobs == 3
+    lw.confirm(seeded)
+    again = _month(agent)
+    assert [(o.job.kind, o.status) for o in again] == [("checking", "done")]
+    assert again[0].result["created"] == 12
+    items, jobs = (q(agent, CHECKS), q(agent, "SELECT count(*) FROM job"))
+
+    assert _month(agent) == [], "nothing is ready the third time"
+    assert q(agent, CHECKS) == items == 12
+    assert q(agent, "SELECT count(*) FROM job") == jobs == 4
 
 
-def test_a_failing_checking_job_leaves_nothing_half_written(seeded):
-    agent = seeded["lease_agent"]
-    with seeded["owner"].begin() as conn:
+def test_a_failing_checking_job_leaves_nothing_half_written(confirmed):
+    agent = confirmed["lease_agent"]
+    events = q(agent, "SELECT count(*) FROM audit_event")
+    with confirmed["owner"].begin() as conn:
         conn.execute(text("UPDATE actor SET active = false WHERE id = 'agent:checker'"))
     outcomes = _month(agent)
     assert [o.status for o in outcomes] == ["done", "done", "failed"]
     assert "UnknownActor" in outcomes[2].error
-    assert q(agent, "SELECT count(*) FROM work_item") == 0
-    assert q(agent, "SELECT count(*) FROM audit_event") == 0
+    assert q(agent, CHECKS) == 0
+    assert q(agent, "SELECT count(*) FROM audit_event") == events
 
 
 def test_an_unseeded_month_dead_ends_at_ingest_and_never_checks(clean, monkeypatch):

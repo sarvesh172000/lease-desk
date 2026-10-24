@@ -26,6 +26,7 @@ from fakes import FakeClient, FakeResponse  # noqa: E402
 
 from app.agents import investigation_run  # noqa: E402
 from app.agents.modification import AmendmentSearch, Candidate  # noqa: E402
+from app.api.exceptions import sse_delay  # noqa: E402
 from app.llm.cache import ResponseCache  # noqa: E402
 from app.llm.client import LLM  # noqa: E402
 from app.llm.registry import PromptRegistry  # noqa: E402
@@ -44,6 +45,12 @@ THE_AMENDMENT = AmendmentSearch(
 
 NOTHING_FOUND = AmendmentSearch(
     none_explain=True, note="Nothing in the corpus accounts for it.", candidates=[])
+
+
+@pytest.fixture(autouse=True)
+def unpaced(client):
+    """No pause between frames: the pacing is for people, not tests."""
+    client.app.dependency_overrides[sse_delay] = lambda: 0.0
 
 
 @pytest.fixture
@@ -105,7 +112,8 @@ def test_nothing_found_is_a_short_stream_not_an_error(client, july_variance, fak
     """Unexplained is a valid outcome: searched, found nothing, proposed nothing."""
     fake_model(NOTHING_FOUND)
     found = stages(client.post("/api/exceptions/exc_%d/investigate" % july_variance))
-    assert [e["stage"] for e in found] == ["searching"]
+    assert [e["stage"] for e in found] == ["searching", "not_found", "complete"]
+    assert found[-1] == {"stage": "complete", "entries": 0, "balanced": None}
     body = client.get("/api/exceptions/exc_%d" % july_variance).json()
     assert body["investigation"]["explains_variance"] is False
     assert body["investigation"]["entries"] == []
@@ -156,8 +164,11 @@ def test_no_model_is_a_stage_not_a_500(client, july_variance, monkeypatch):
     monkeypatch.setattr(investigation_run, "build_llm", no_model)
     res = client.post("/api/exceptions/exc_%d/investigate" % july_variance)
     assert res.status_code == 200
-    [event] = stages(res)
-    assert event["stage"] == "error" and "cached" in event["message"]
+    got = stages(res)
+    # The checker's own evidence (no clause cited on this item), then why the
+    # mailbox was not searched; no remeasurement is made up.
+    assert [e["stage"] for e in got] == ["searching", "not_found", "error"]
+    assert "cached" in got[-1]["message"]
 
 
 def test_a_cold_cache_reads_as_missing_credentials(client, july_variance, monkeypatch):
@@ -166,9 +177,23 @@ def test_a_cold_cache_reads_as_missing_credentials(client, july_variance, monkey
     def unauthorized():
         raise RuntimeError("ANTHROPIC_API_KEY missing or rejected: Error code: 401")
     monkeypatch.setattr(investigation_run, "build_llm", unauthorized)
-    [event] = stages(client.post("/api/exceptions/exc_%d/investigate" % july_variance))
+    event = stages(client.post("/api/exceptions/exc_%d/investigate" % july_variance))[-1]
     assert event["stage"] == "error"
     assert "ANTHROPIC_API_KEY" in event["message"]
+
+
+def test_a_second_run_replays_what_was_recorded(client, july_variance, fake_model, monkeypatch):
+    """Once recorded, the investigation is replayed, not asked again: the same
+    frames, with no model at all."""
+    fake_model(THE_AMENDMENT)
+    first = stages(client.post("/api/exceptions/exc_%d/investigate" % july_variance))
+
+    def no_model():
+        raise investigation_run.NoModel("must not be asked")
+    monkeypatch.setattr(investigation_run, "build_llm", no_model)
+    again = stages(client.post("/api/exceptions/exc_%d/investigate" % july_variance))
+    assert [e["stage"] for e in again] == [e["stage"] for e in first]
+    assert again[1:] == first[1:]
 
 
 def test_unknown_exception_is_404(client):

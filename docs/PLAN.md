@@ -33,18 +33,15 @@ then move.
 
 | | |
 |---|---|
-| **Complete** | **A1–A4 (all of Person A's Block A)** · 48 of 526 hours |
-| **Partial** | B1, B3, B4, B8, B10 · **A5–A8** — gates pass in tests on `claude/a5-platform` ([PR #2](https://github.com/sarvesh172000/lease-desk/pull/2)), not yet on `main` |
-| **Tests** | 800+ passing with Postgres 16 (the database tests skip without one), no API key · `python -m eval.run` passes |
-| **Next (Sarvesh)** | **B3** — the mess: scans, invoice formats, tracker, parsers |
-| **Next (Jenil)** | Merge PR #2, then **A8** — the web app on the live API (it runs on the §16 fixtures today) |
-| **Partial** | B1, B3, B5, B10 (started early for the demo moment) |
-| **Tests** | 476 passing, offline, no API key · `python -m eval.run` passes |
-| **Next (Sarvesh)** | Block B is done bar human labelling. **Pair on A5–A8** — nothing is visible yet |
-| **Next (Jenil)** | **A5** — Compose, Postgres schema, the four DB roles |
+| **Complete** | **Block A: A1–A8** — A1–A4 (Sarvesh), A5–A8 (Jenil) |
+| **Partial** | B1, B3, B4, B8, B10 |
+| **Tests** | 1,000+ with Postgres 16 (database tests skip without one), no API key · `python -m eval.run` passes · CI on every push |
+| **Open on `main`** | 10 EDGAR tests fail on a fresh clone: `data/reference/edgar/*.txt` is gitignored (Sarvesh fixing) |
+| **Next (Sarvesh)** | EDGAR corpus into git; then Block B tail |
+| **Next (Jenil)** | The UI redesign (`frontend/DESIGN_BRIEF.md`, `frontend/UI_PLAN.md`); then B6 policies, B7 disputes |
 
-**Jenil is the critical path.** A1–A4 are backend no judge can see until A5–A8
-land.
+**Block A gate met:** a January run goes from lease PDFs to posted entries, a
+person approves in the browser, and the eval scores it.
 
 ---
 
@@ -56,10 +53,10 @@ land.
 | **A2** | The generated world | 12 | A | P1 g8 | `make seed` produces 5 leases, a billing month and the answer key, byte-reproducibly | **DONE** |
 | **A3** | Reading leases | 10 | A | P1 g9 | 13 fields extracted, every one cited to a box, invented quotes rejected | **DONE** |
 | **A4** | Checking charges | 10 | A | P1 g10, g12 | `make eval` reports 5/5 caught, 0 false holds, from a fresh clone | **DONE** |
-| **A5** | Platform & database | 20 | B | P1 g1, g2 | `make up migrate seed` from a fresh clone; `lease_agent` denied on `journal_entry` | **Partial** — schema, triggers, the four roles (`make check-grants` exact), seed, Compose, CI workflow, `make prove-roles`; agent denied on `journal_entry` is tested. Left: `make up` from a fresh clone not yet proven on a clean machine; CI not yet green on `main` |
-| **A6** | Work layer & permissions | 14 | B | P1 g3 | `verify_chain()` names a tampered row; nobody approves their own proposal | **Partial** — gate passes: hash chain, `can()` with region and separation of duties, the 8-state machine, `make replay` byte-identical, Hypothesis properties; the monthly run proposes through `transition()` (12 items, 5 holds). Left: approve/hold over HTTP (in progress), lease_version confirmation by a person (needs A3 wired) |
-| **A7** | Gateway & ledger | 16 | B | P1 g4, g5 | Only the gateway posts; unbalanced entries rejected; Fava opens the books | **Partial** — gate passes in tests: posting is the work layer's `post` as `system:gateway`, idempotent `make post M=`, AP batch through the outbox, trial balance, Beancount export loads with 0 errors; queue, worker and clock run January twice with nothing new. Left: Fava opened on the Compose profile by hand; abstraction step still skipped in the run |
-| **A8** | The thin slice | 12 | B | P1 g11 | One variance visible in a browser, with its evidence, end to end | **Partial** — web app in `frontend/` on the §16 fixtures; read and write API with login done; wiring the two left |
+| **A5** | Platform & database | 20 | B | P1 g1, g2 | `make up migrate seed` from a fresh clone; `lease_agent` denied on `journal_entry` | **DONE** — schema, triggers, the four roles (`make check-grants` exact), Compose, seed, CI, `make prove-roles`; `make up migrate seed` run end to end on a clean machine and in CI's gate job |
+| **A6** | Work layer & permissions | 14 | B | P1 g3 | `verify_chain()` names a tampered row; nobody approves their own proposal | **DONE** — hash chain, `can()` with region and separation of duties, the 8-state machine, `make replay` byte-identical, Hypothesis properties; actions over HTTP; a regional manager confirms each drafted lease version, and the checker uses confirmed leases only |
+| **A7** | Gateway & ledger | 16 | B | P1 g4, g5 | Only the gateway posts; unbalanced entries rejected; Fava opens the books | **DONE** — only the gateway posts (`system:gateway`), idempotent `make post M=`, AP batch through the outbox, trial balance; Fava opened on the export (0 Beancount errors, books = the approved charges); a held charge pays only its undisputed part unless a controller overrides with a reason |
+| **A8** | The thin slice | 12 | B | P1 g11 | One variance visible in a browser, with its evidence, end to end | **DONE** — the web app on the live API: real invoice and lease PDFs boxed, approve or uphold through to the ledger, denied attempts in the audit trail; `make demo` |
 
 **Block A gate:** a January run goes from lease PDFs to posted entries, a human
 approves in the UI, and the eval scores it. *This is the floor everything else
@@ -170,8 +167,6 @@ depends on the other person's work says so in its gate.
 
 ## Standing risks
 
-- **The web app is not on the live API yet.** It runs on the §16 fixtures; until
-  A8 lands, nothing a judge sees comes from the database.
 - **Everything runs against a fake model client.** Proven against what a model
   returns, not that Claude returns it. One real API run settles it — do it
   before B2.

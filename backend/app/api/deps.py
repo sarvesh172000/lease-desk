@@ -39,10 +39,18 @@ def get_gateway_engine() -> Engine:
     return engine("lease_gateway")
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
 def get_data_dir() -> Path:
     """Where `make seed` reads the generated company: the lease register
-    (`leases/*.json`) and the content-addressed store (`documents/`)."""
-    return Path(get_settings().data_dir)
+    (`leases/*.json`) and the content-addressed store (`documents/`).
+
+    A relative LEASEDESK_DATA_DIR is relative to the repository root, where
+    `make seed` runs, so the API finds the same files whether it is started
+    from the root or from backend/ (`make api`)."""
+    path = Path(get_settings().data_dir)
+    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def get_business_date() -> date:

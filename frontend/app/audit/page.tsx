@@ -3,10 +3,11 @@
 import { ChainLink, ChainVerdict } from "@/components/data/HashChain";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
-import { getAudit } from "@/lib/api";
+import { exceptionIdFor } from "@/lib/api";
 import { humanize, timestamp } from "@/lib/format";
+import { useAudit } from "@/lib/hooks";
+import type { AuditEvent } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -19,12 +20,19 @@ export default function AuditPage() {
   );
 }
 
+/** Fixture events name an exception; live events name the work item behind it. */
+function subjectLink(e: AuditEvent): string | null {
+  if (e.subject_type === "exception") return `/exceptions/${encodeURIComponent(e.subject_id)}`;
+  if (e.subject_type === "work_item" && /^\d+$/.test(e.subject_id)) return `/exceptions/${exceptionIdFor(e.subject_id)}`;
+  return null;
+}
+
 function AuditTrail() {
   const params = useSearchParams();
   const router = useRouter();
   const leaseId = params.get("lease_id") || undefined;
   const [onlyDenied, setOnlyDenied] = useState(false);
-  const q = useQuery({ queryKey: ["audit", leaseId ?? null], queryFn: () => getAudit(leaseId) });
+  const q = useAudit(leaseId);
   const events = (q.data?.events ?? []).filter((e) => !onlyDenied || !e.allowed).slice().sort((a, b) => b.seq - a.seq);
 
   return (
@@ -37,7 +45,7 @@ function AuditTrail() {
         {q.data ? (
           <ChainVerdict
             verified={q.data.chain_verified}
-            brokenAt={q.data.broken_at}
+            brokenAt={q.data.broken_at ?? q.data.broken_seq}
             count={q.data.events?.length ?? 0}
           />
         ) : null}
@@ -96,8 +104,8 @@ function AuditTrail() {
                     {e.human_approved ? <span className="ml-2 rounded bg-ok-soft px-1.5 py-px text-2xs font-semibold text-ok">human approved</span> : null}
                   </td>
                   <td className="px-3 py-2.5">
-                    {e.subject_type === "exception" ? (
-                      <Link className="font-mono text-xs hover:text-accent hover:underline" href={`/exceptions/${encodeURIComponent(e.subject_id)}`}>
+                    {subjectLink(e) ? (
+                      <Link className="font-mono text-xs hover:text-accent hover:underline" href={subjectLink(e)!}>
                         {e.subject_id}
                       </Link>
                     ) : (

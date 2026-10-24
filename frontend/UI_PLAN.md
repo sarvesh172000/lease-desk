@@ -309,7 +309,11 @@ own PNG renders; and the page-size lookup compared `page` against the API's
 
 `POST /api/exceptions/{id}/investigate` is now built: it runs the modification
 agent over the mailbox, streams the four stages, and records what it found on
-the work item so the screen survives a reload.
+the work item so the screen survives a reload. A recorded investigation is
+replayed rather than asked again; when no model can run, the stream shows the
+checker's own evidence (the cited clause, boxed on the lease) and then an
+`error` stage saying why the mailbox was not searched. It never invents a
+remeasurement.
 
 **Two things stand between it and the moment on live data:**
 

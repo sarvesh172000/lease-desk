@@ -1,9 +1,8 @@
 "use client";
 
-import { getDocumentPages } from "@/lib/api";
 import { isValidBox } from "@/lib/bbox";
+import { useDocumentPages } from "@/lib/hooks";
 import type { Box } from "@/lib/types";
-import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { useState, type ReactNode } from "react";
 import { Skeleton } from "./ui/States";
@@ -50,12 +49,7 @@ export function DocumentViewer({
   toolbar?: ReactNode;
 }) {
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const pages = useQuery({
-    queryKey: ["document-pages", docId],
-    queryFn: () => getDocumentPages(docId!),
-    enabled: !!docId,
-    retry: false,
-  });
+  const pages = useDocumentPages(docId);
   const pageNo = page ?? 1;
   const size = pages.data?.pages.find((p) => p.page === pageNo) ?? null;
   const validBox = isValidBox(box) ? box : null;

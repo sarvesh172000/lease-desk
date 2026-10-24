@@ -58,7 +58,7 @@ replay:            ## rebuild work_item and question from audit_event; fail if t
 api:               ## the API on the host, with reload, against the Compose database
 	cd backend && $(PY) -m uvicorn app.main:app --reload --port 8000
 
-run-month:         ## M=2026-01: enqueue ingest, abstraction, checking; run the worker until drained
+run-month:         ## M=2026-01: enqueue ingest, abstraction, checking (+ a re-check once leases are confirmed); drain
 	@test -n "$(M)" || { echo "usage: make run-month M=YYYY-MM" >&2; exit 2; }
 	$(PY) -m app.jobs.monthly --period $(M)
 	$(PY) -m app.jobs.worker --once
@@ -76,6 +76,40 @@ post:              ## M=2026-01: post every APPROVED charge check of the month (
 .PHONY: dev-passwords
 dev-passwords:     ## give every seeded person the password `demo` (as lease_gateway)
 	$(PY) -m app.auth.passwords set-dev-passwords
+
+# The judge-ready local stack (A8; not part of the frozen list). Point it at a
+# database of its own so it never touches your working one, e.g.
+#
+#   LEASEDESK_DB_PORT=5432 LEASEDESK_DB_NAME=leasedesk_demo make demo
+#
+# demo-data creates the database if missing, migrates, seeds, sets the dev
+# passwords and runs January; all of it is idempotent, so running it again
+# changes nothing. demo then serves the API on :8000 and the web app on :3000
+# (live mode against the API) until Ctrl-C, which stops both.
+.PHONY: demo demo-data
+DEMO_MONTH ?= 2026-01
+# The first run drafts the five lease versions and checks nothing against
+# unconfirmed terms. With DEMO_CONFIRM=1 (the default) the Bay Area manager
+# then confirms them (the same approve the lease page's Confirm button sends,
+# demo mode only) and the month runs again, so the demo opens on checked
+# charges. DEMO_CONFIRM=0 leaves them for you to confirm on screen.
+DEMO_CONFIRM ?= 1
+
+demo-data:         ## database (created if missing), migrate, seed, dev passwords, run DEMO_MONTH
+	$(PY) -m app.db.ensure_database
+	$(MAKE) migrate seed dev-passwords
+	$(MAKE) run-month M=$(DEMO_MONTH)
+	@if [ "$(DEMO_CONFIRM)" != "0" ]; then \
+	  $(PY) -m app.work.confirm_leases --as PER-RM-BAY && $(MAKE) run-month M=$(DEMO_MONTH); \
+	fi
+
+demo: demo-data    ## demo-data, then the API on :8000 and the web app on :3000 until Ctrl-C
+	@test -d frontend/node_modules || (cd frontend && npm ci)
+	@echo "Lease Desk: http://localhost:3000  (sign in as dana.whitfield@northbaypt.example / demo)"
+	@trap 'kill 0' INT TERM EXIT; \
+	  (cd backend && $(PY) -m uvicorn app.main:app --port 8000) & \
+	  (cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev) & \
+	  wait
 
 # Developer tooling (not part of the frozen list).
 .PHONY: lint ci

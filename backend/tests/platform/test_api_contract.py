@@ -4,6 +4,10 @@ The frontend is built against the JSON fixtures in DESIGN.md §16. This parses
 each `GET` fixture from the markdown itself, so editing the doc or the API
 without the other fails here: same keys at every level, same JSON value types
 (int and float are both "number", as JSON has one number type).
+
+A response may carry keys the fixture does not: the contract is frozen
+against renames and removals, and fields may be added (frontend/README.md
+lists the ones the web app reads). A missing or retyped key still fails.
 """
 
 import json
@@ -62,9 +66,8 @@ def same_shape(expected, actual, path="$"):
                 % (path, kind(expected), kind(actual), actual)]
     problems = []
     if isinstance(expected, dict):
-        if set(expected) != set(actual):
-            return ["%s: keys differ, missing %s, extra %s"
-                    % (path, sorted(set(expected) - set(actual)), sorted(set(actual) - set(expected)))]
+        if set(expected) - set(actual):
+            return ["%s: keys missing %s" % (path, sorted(set(expected) - set(actual)))]
         for key in expected:
             problems += same_shape(expected[key], actual[key], "%s.%s" % (path, key))
     elif isinstance(expected, list) and expected:
@@ -126,7 +129,14 @@ def test_exception_detail_matches_the_fixture(client, as_in_the_fixtures):
     body = client.get("/api/exceptions/exc_%d" % as_in_the_fixtures).json()
     fixture = FIXTURES["GET /api/exceptions/{id}"]
     assert same_shape(fixture, body) == []
-    assert {**body, "exception_id": fixture["exception_id"]} == fixture
+    assert {**{k: body[k] for k in fixture}, "exception_id": fixture["exception_id"]} == fixture
+    # The additions the web app reads; no box is invented for rows with no documents.
+    # (§16 itself now names clinic_id, charge_type, confidence, invoice_line
+    # and lease_citation.)
+    assert set(body) - set(fixture) == {"item_id", "state", "proposal", "reason", "rule",
+                                        "payable", "disputed", "resolution", "resolved_by",
+                                        "override_reason"}
+    assert body["invoice_line"] is None and body["lease_citation"] is None
 
 
 def test_the_live_checker_output_has_the_fixture_shape(client, checked):
@@ -145,3 +155,4 @@ def test_the_shape_check_itself_catches_drift():
     assert same_shape(fixture, [dict(fixture[0], monthly_rent="19626.65")])
     assert same_shape(fixture, [dict(fixture[0], end="31/12/2028")])
     assert same_shape(fixture, [dict(fixture[0], liability=559665)]) == []
+    assert same_shape(fixture, [dict(fixture[0], added_later="ok")]) == [], "additions are allowed"

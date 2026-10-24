@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckerFindingCard } from "@/components/CheckerFindingCard";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { ConfidenceMeter, EvidenceCard } from "@/components/EvidenceCard";
 import { InvestigationTimeline } from "@/components/InvestigationTimeline";
@@ -10,12 +11,13 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingBlock, Skeleton } from "@/components/ui/States";
-import { ApiError, approveException, getAllowedActions, getException, getSchedule, performAction } from "@/lib/api";
+import { WorkStateBadge } from "@/components/WorkStateBadge";
+import { ApiError } from "@/lib/api";
 import { day, humanize, money, period, signedMoney, STATUS_LABEL } from "@/lib/format";
+import { useAllowedActions, useException, useExceptionAction, useMe, usePayAsBilled, useSchedule } from "@/lib/hooks";
 import { journalTotals } from "@/lib/journal";
-import type { Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
+import type { ActionResult, Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -23,7 +25,7 @@ import { useState } from "react";
 export default function ExceptionPage() {
   const { id } = useParams<{ id: string }>();
   const exceptionId = decodeURIComponent(id);
-  const q = useQuery({ queryKey: ["exception", exceptionId], queryFn: () => getException(exceptionId) });
+  const q = useException(exceptionId);
 
   if (q.isLoading) return <MoneyScreenSkeleton />;
   if (q.isError) {
@@ -55,8 +57,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   const [remeasured, setRemeasured] = useState<Extract<InvestigationEvent, { stage: "remeasured" }> | null>(null);
   const hasEntries = !!inv?.entries.length;
 
-  const before = useQuery({ queryKey: ["schedule", ex.lease_id, 1], queryFn: () => getSchedule(ex.lease_id, 1), enabled: hasEntries, retry: false });
-  const after = useQuery({ queryKey: ["schedule", ex.lease_id, 2], queryFn: () => getSchedule(ex.lease_id, 2), enabled: hasEntries, retry: false });
+  const before = useSchedule(ex.lease_id, 1, hasEntries);
+  const after = useSchedule(ex.lease_id, 2, hasEntries);
 
   // right-hand pane: each evidence document, then the lease clause
   type Source = { key: string; tab: string; eyebrow: string; title: string; docId: string; page: number; box: Box; text: string };
@@ -75,7 +77,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
       ? [{
           key: "lease",
           tab: "Lease clause",
-          eyebrow: "Lease · what the schedule expects",
+          eyebrow: "Lease · what the lease supports",
           title: ex.lease_citation.label,
           docId: ex.lease_citation.doc_id,
           page: ex.lease_citation.page,
@@ -98,6 +100,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               {ex.charge_type ? humanize(ex.charge_type) : "Variance"} · {period(ex.period)}
             </h1>
             <StatusBadge status={ex.status} size="lg" />
+            {ex.state ? <WorkStateBadge state={ex.state} /> : null}
           </div>
           <p className="mt-0.5 text-ink-muted">
             <Link href={`/leases/${encodeURIComponent(ex.lease_id)}`} className="hover:text-accent hover:underline">
@@ -110,8 +113,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
 
       {/* the calculation */}
       <div className="grid grid-cols-[1fr_1fr_1fr_1.4fr] overflow-hidden rounded-md border border-line bg-surface shadow-card">
-        <Figure label="Expected · schedule" value={money(ex.expected)} />
-        <Figure label="Actual · received" value={money(ex.actual)} />
+        <Figure label="Expected · lease supports" value={money(ex.expected)} />
+        <Figure label="Actual · billed" value={money(ex.actual)} />
         <Figure label="Variance" value={signedMoney(ex.delta)} tone={ex.delta === 0 ? undefined : "bad"} />
         <div className="border-l border-line px-5 py-3.5">
           <div className="eyebrow">Explanation</div>
@@ -124,6 +127,16 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                 </div>
               </div>
               <ConfidenceMeter value={inv.confidence} />
+            </div>
+          ) : ex.reason ? (
+            <div className="mt-1.5">
+              <div className="font-semibold">
+                {humanize(ex.rule)} · checker proposes{" "}
+                <span className={ex.proposal === "hold" ? "text-bad" : "text-ok"}>{ex.proposal ?? "—"}</span>
+              </div>
+              <div className="line-clamp-2 text-sm text-ink-soft" title={ex.reason}>
+                {ex.reason}
+              </div>
             </div>
           ) : (
             <div className="mt-1.5 text-ink-muted">No investigation on record yet.</div>
@@ -194,6 +207,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                 onSelect={() => setSourceKey(`ev${i}`)}
               />
             ))
+          ) : ex.reason || ex.lease_citation ? (
+            <CheckerFindingCard ex={ex} selected={source?.key === "lease"} onSelect={() => setSourceKey("lease")} />
           ) : (
             <EmptyState title="No evidence attached.">
               {inv ? "The investigation found nothing that explains this variance." : "Run the investigation to search the document corpus."}
@@ -210,12 +225,24 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
         <div className="space-y-5">
           <Card>
             <CardHeader
-              eyebrow="Proposed · not posted"
+              eyebrow={inv ? "Proposed · not posted" : "Adjusting entries"}
               title="Journal entries"
               actions={inv ? <span className="text-sm text-ink-muted">{inv.entries.length} lines</span> : null}
             />
             <CardBody>
-              <JournalEntryTable entries={inv?.entries ?? []} balanced={inv?.balanced} />
+              {inv ? (
+                <JournalEntryTable entries={inv.entries} balanced={inv.balanced} />
+              ) : (
+                <EmptyState title="No entries proposed.">
+                  {ex.resolution === "pay_as_billed"
+                    ? `Paid as billed by ${ex.resolved_by ?? "the controller"} over the hold: ${ex.override_reason ?? "reason on record"}.`
+                    : ex.resolution === "upheld"
+                      ? `Hold upheld by ${ex.resolved_by ?? "a reviewer"}. ${(ex.payable ?? 0) > 0 ? `Only the undisputed ${money(ex.payable)} posts` : "Nothing is paid"}; the disputed ${money(ex.disputed)} never reaches the ledger.`
+                      : ex.proposal === "hold"
+                        ? "A charge check proposes no adjusting entries. Upholding the hold posts only the undisputed amount through the gateway (Dr expense, Cr accounts payable); the disputed amount stays out of the ledger."
+                        : "A charge check proposes no adjusting entries. Approving it posts the billed charge to the ledger through the gateway (Dr lease cost, Cr accounts payable)."}
+                </EmptyState>
+              )}
             </CardBody>
           </Card>
           <Card>
@@ -227,7 +254,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                     diff={{
                       ...inv,
                       liability_delta: inv.liability_delta ?? remeasured?.liability_delta,
-                      rou_delta: inv.rou_delta ?? remeasured?.rou_delta,
+                      rou_delta: inv.rou_delta ?? remeasured?.rou_delta ?? undefined,
                     }}
                     before={before.data}
                     after={after.data}
@@ -260,31 +287,99 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
 }
 
 const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold", reject: "Reject" };
-const ACTION_DONE: Record<string, string> = { approve: "Approved", hold: "Held", reject: "Rejected", resume: "Resumed", close: "Closed" };
+// The money screen offers sign-off, hold and reject; the rest of the queue's
+// actions (resume, close, ...) live on the queue.
+const SCREEN_ACTIONS = new Set(["approve", "hold", "reject"]);
+const ACTION_DONE: Record<string, string> = { approve: "Approved", hold: "Held", reject: "Rejected" };
+
+/** What confirms before it acts: everything that moves money or closes the decision. */
+type Pending = "approve" | "reject" | "pay_as_billed";
+
+function outcome(action: ItemAction, res: ActionResult, did?: string): string {
+  did = did ?? ACTION_DONE[action] ?? humanize(action);
+  const state = res.state ? ` · ${res.state}` : ` · now ${STATUS_LABEL[res.status] ?? res.status}`;
+  const p = res.posting;
+  const kept = p?.disputed ? `; ${money(p.disputed)} stays held` : "";
+  if (p?.status === "posted") {
+    const amount = p.amount != null ? `${money(p.amount)} ` : "";
+    return `${did} · ${amount}posted to the ledger (journal entry #${p.journal_entry_id})${kept}${state}`;
+  }
+  if (p?.status === "closed") return `${did} · nothing paid${kept}${state}`;
+  if (p?.status === "pending") return `${did} · posting pending${p.error ? ` (${p.error})` : ""}${state}`;
+  return `${did}${state}`;
+}
+
+/** A held charge: what "Uphold hold" does with the money, in one line. */
+function upholdCopy(ex: ExceptionDetail): string {
+  const payable = ex.payable ?? ex.expected ?? 0;
+  const disputed = ex.disputed ?? ex.delta ?? 0;
+  return payable > 0
+    ? `Posts the undisputed ${money(payable)}; ${money(disputed)} stays held.`
+    : `Nothing is paid; the ${money(disputed)} stays held.`;
+}
 
 function ActionBar({ ex }: { ex: ExceptionDetail }) {
-  const qc = useQueryClient();
-  const allowed = useQuery({ queryKey: ["allowed-actions", ex.exception_id], queryFn: () => getAllowedActions(ex.exception_id) });
+  const allowed = useAllowedActions(ex.exception_id);
+  const m = useExceptionAction(ex.exception_id);
+  const override = usePayAsBilled(ex.exception_id);
+  const me = useMe();
   const [done, setDone] = useState<string | null>(null);
-  const m = useMutation({
-    mutationFn: (action: ItemAction) =>
-      action === "approve" ? approveException(ex.exception_id) : performAction(ex.exception_id, action),
-    onSuccess: (res, action) => {
-      setConfirming(null);
-      setDone(`${ACTION_DONE[action] ?? humanize(action)} \u00b7 now ${STATUS_LABEL[res.status] ?? res.status}`);
-    },
-    onSettled: () => {
-      for (const k of ["exception", "exceptions", "leases", "audit", "allowed-actions"]) void qc.invalidateQueries({ queryKey: [k] });
-    },
-  });
+  const [confirming, setConfirming] = useState<Pending | null>(null);
+  const [why, setWhy] = useState("");
+
   const inv = ex.investigation;
+  const actions = (allowed.data?.actions ?? []).filter((a) => SCREEN_ACTIONS.has(a));
   const blockApprove = !!inv && (!inv.balanced || !inv.explains_variance);
-  // Approve posts entries and Reject closes the item: both restate the money
-  // first. Hold only parks it, so it acts straight away.
-  const [confirming, setConfirming] = useState<ItemAction | null>(null);
-  const needsConfirming = (a: ItemAction) => a === "approve" || a === "reject";
-  const act = (a: ItemAction) => (needsConfirming(a) ? setConfirming(a) : m.mutate(a));
+  const isHold = ex.proposal === "hold";
+  const canOverride = isHold && actions.includes("approve") && me.data?.role === "controller";
+  const busy = m.isPending || override.isPending;
+  const error = m.error ?? override.error;
   const totals = inv ? journalTotals(inv.entries) : null;
+  const label = (a: string) => (a === "approve" && isHold ? "Uphold hold" : ACTION_LABEL[a] ?? humanize(a));
+
+  const close = () => {
+    setConfirming(null);
+    setWhy("");
+  };
+  const run = (a: ItemAction) => {
+    override.reset();
+    m.mutate(a, {
+      onSuccess: (res) => {
+        close();
+        setDone(outcome(a, res, a === "approve" && isHold ? "Hold upheld" : undefined));
+      },
+      onError: () => {
+        close();
+        setDone(null);
+      },
+    });
+  };
+  const payAsBilled = () => {
+    if (!why.trim()) return;
+    m.reset();
+    override.mutate(why.trim(), {
+      onSuccess: (res) => {
+        close();
+        setDone(outcome("approve", res, "Paid as billed (controller override)"));
+      },
+      onError: () => {
+        close();
+        setDone(null);
+      },
+    });
+  };
+  // Approve (and so Uphold hold), Reject and Pay as billed restate the money
+  // first. Hold only parks the item, so it acts straight away.
+  const press = (a: ItemAction) => (a === "approve" || a === "reject" ? setConfirming(a) : run(a));
+
+  const dialog: Record<Pending, { title: string; confirm: string; tone: "primary" | "danger" }> = {
+    approve: isHold
+      ? { title: "Uphold the hold?", confirm: "Uphold hold", tone: "primary" }
+      : { title: "Approve and post?", confirm: "Approve", tone: "primary" },
+    reject: { title: "Reject this charge?", confirm: "Reject", tone: "danger" },
+    pay_as_billed: { title: "Pay as billed?", confirm: "Pay as billed", tone: "danger" },
+  };
+  const d = confirming ? dialog[confirming] : null;
 
   return (
     <div className="sticky bottom-0 z-20 -mx-6 mt-1 border-t border-line bg-surface/92 px-6 py-3 backdrop-blur-md">
@@ -294,25 +389,31 @@ function ActionBar({ ex }: { ex: ExceptionDetail }) {
             <span className="num font-semibold">{signedMoney(ex.delta)}</span> variance
             {inv ? (
               <>
-                {" \u00b7 "}
+                {" · "}
                 {inv.entries.length} proposed {inv.entries.length === 1 ? "entry" : "entries"}
-                {" \u00b7 "}
+                {" · "}
                 <span className={cn("font-medium", inv.balanced ? "text-ok" : "text-bad")}>{inv.balanced ? "balanced" : "out of balance"}</span>
               </>
             ) : (
-              <span className="text-ink-muted">{" \u00b7 "}no investigation on record</span>
+              <span className="text-ink-muted">{" · "}no investigation on record</span>
             )}
           </div>
-          <div className="text-xs text-ink-muted">Nothing posts to the ledger until you approve. The decision is recorded in the audit trail.</div>
+          {isHold && actions.includes("approve") && !done ? (
+            <div data-testid="uphold-copy" className="text-xs text-ink-soft">
+              Uphold hold: {upholdCopy(ex)}
+            </div>
+          ) : (
+            <div className="text-xs text-ink-muted">Nothing posts to the ledger until you approve. The decision is recorded in the audit trail.</div>
+          )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
-          {m.isError ? (
+        <div className="flex shrink-0 items-center gap-3" data-testid="actions">
+          {error ? (
             <span role="alert" className="max-w-xs text-right text-sm text-bad">
-              {(m.error as Error).message}
+              {(error as Error).message}
             </span>
           ) : done ? (
-            <span role="status" className="text-sm font-medium text-ok">
+            <span role="status" data-testid="action-result" className="max-w-md text-right text-sm font-medium text-ok">
               {done}
             </span>
           ) : null}
@@ -320,43 +421,93 @@ function ActionBar({ ex }: { ex: ExceptionDetail }) {
             <Skeleton className="h-11 w-56" />
           ) : allowed.isError ? (
             <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
-          ) : allowed.data?.actions.length ? (
-            allowed.data.actions.map((a) => (
-              <Button
-                key={a}
-                size="lg"
-                variant={a === "approve" ? "primary" : "secondary"}
-                loading={m.isPending && m.variables === a}
-                disabled={m.isPending}
-                disabledReason={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
-                onClick={() => act(a)}
-              >
-                {ACTION_LABEL[a] ?? humanize(a)}
-              </Button>
-            ))
+          ) : actions.length ? (
+            <>
+              {actions.map((a) => (
+                <Button
+                  key={a}
+                  size="lg"
+                  variant={a === "approve" ? "primary" : a === "reject" ? "danger" : "secondary"}
+                  loading={m.isPending && m.variables === a}
+                  disabled={busy}
+                  disabledReason={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
+                  title={a === "approve" && isHold ? `Agree the charge is wrong. ${upholdCopy(ex)}` : undefined}
+                  onClick={() => press(a)}
+                >
+                  {label(a)}
+                </Button>
+              ))}
+              {canOverride ? (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  disabled={busy}
+                  loading={override.isPending}
+                  data-testid="pay-as-billed"
+                  onClick={() => setConfirming("pay_as_billed")}
+                  title={`Controller override: pay the billed ${money(ex.actual)}, disputed amount included`}
+                >
+                  Pay as billed…
+                </Button>
+              ) : null}
+            </>
           ) : (
-            <span className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
-              {ex.status === "balanced" ? "Approved \u2014 nothing to do" : "No actions available to your role"}
+            <span data-testid="no-actions" className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
+              {ex.status === "balanced" ? `${ex.state ? humanize(ex.state.toLowerCase()) : "Approved"} — nothing to do` : "No actions available to your role"}
             </span>
           )}
         </div>
       </div>
 
       <ConfirmDialog
-        open={confirming !== null}
-        onOpenChange={(open) => !open && setConfirming(null)}
-        title={confirming === "reject" ? "Reject this charge?" : "Approve and post?"}
-        confirmLabel={confirming === "reject" ? "Reject" : "Approve"}
-        tone={confirming === "reject" ? "danger" : "primary"}
-        loading={m.isPending}
+        open={d !== null}
+        onOpenChange={(open) => !open && close()}
+        title={d?.title ?? ""}
+        confirmLabel={d?.confirm ?? ""}
+        tone={d?.tone ?? "primary"}
+        loading={busy}
+        confirmDisabled={confirming === "pay_as_billed" && !why.trim()}
         onConfirm={() => {
-          if (confirming) m.mutate(confirming);
+          if (confirming === "pay_as_billed") payAsBilled();
+          else if (confirming) run(confirming);
         }}
       >
-        {confirming === "reject" ? (
+        {confirming === "pay_as_billed" ? (
+          <div data-testid="pay-as-billed-form">
+            <p>
+              {(ex.payable ?? ex.expected ?? 0) > 0 ? (
+                <>
+                  This pays the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span>, including the disputed{" "}
+                  <span className="num font-semibold text-ink">{money(ex.disputed ?? ex.delta)}</span> the lease does not support.
+                </>
+              ) : (
+                <>
+                  This pays the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span>. None of it is supported by the lease.
+                </>
+              )}
+            </p>
+            <label htmlFor="override-reason" className="mt-3 block text-sm font-medium text-ink">
+              Reason <span className="text-ink-muted">(required, recorded in the audit trail)</span>
+            </label>
+            <textarea
+              id="override-reason"
+              required
+              rows={3}
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+              placeholder="Why the disputed amount is being paid"
+              className="mt-1 w-full rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink"
+            />
+          </div>
+        ) : confirming === "reject" ? (
           <p>
             This closes <span className="font-mono">{ex.exception_id}</span> against the billed{" "}
             <span className="num font-semibold text-ink">{money(ex.actual)}</span>. Nothing posts to the ledger.
+          </p>
+        ) : isHold ? (
+          <p>
+            You agree the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span> is wrong. {upholdCopy(ex)}{" "}
+            The disputed amount never reaches the ledger.
           </p>
         ) : totals && inv && inv.entries.length ? (
           <p>
@@ -367,9 +518,15 @@ function ActionBar({ ex }: { ex: ExceptionDetail }) {
           </p>
         ) : (
           <p>
-            This accepts the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span> — a variance of{" "}
-            <span className="num font-semibold text-ink">{signedMoney(ex.delta)}</span> — with no proposed entries, so
-            nothing is posted to correct it.
+            This posts the billed <span className="num font-semibold text-ink">{money(ex.payable ?? ex.actual)}</span> to the ledger through the
+            gateway (Dr lease cost, Cr accounts payable)
+            {ex.delta ? (
+              <>
+                {" "}
+                — a variance of <span className="num font-semibold text-ink">{signedMoney(ex.delta)}</span>, with no proposed entries to correct it
+              </>
+            ) : null}
+            .
           </p>
         )}
         <p className="mt-2 text-ink-muted">Recorded in the audit trail under your name, and not reversible from this screen.</p>

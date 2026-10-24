@@ -1,12 +1,13 @@
 "use client";
 
+import { LeaseVersionPanel } from "@/components/LeaseVersionPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
-import { ApiError, getExceptions, getLeases, getSchedule } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { day, humanize, money, period, signedMoney } from "@/lib/format";
+import { useExceptions, useLeases, useSchedule } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -16,9 +17,9 @@ export default function LeaseDetailPage() {
   const leaseId = decodeURIComponent(id);
   const [version, setVersion] = useState<number | undefined>(undefined);
 
-  const leases = useQuery({ queryKey: ["leases"], queryFn: getLeases });
-  const exceptions = useQuery({ queryKey: ["exceptions"], queryFn: getExceptions });
-  const schedule = useQuery({ queryKey: ["schedule", leaseId, version ?? "active"], queryFn: () => getSchedule(leaseId, version) });
+  const leases = useLeases();
+  const exceptions = useExceptions();
+  const schedule = useSchedule(leaseId, version);
 
   const lease = leases.data?.find((l) => l.lease_id === leaseId);
   const mine = (exceptions.data ?? []).filter((e) => e.lease_id === leaseId);
@@ -50,6 +51,8 @@ export default function LeaseDetailPage() {
         <Fact label="Term ends" value={day(lease.end)} />
         <Fact label="Open exceptions" value={String(mine.filter((e) => e.status !== "balanced").length)} />
       </div>
+
+      <LeaseVersionPanel leaseId={leaseId} />
 
       {mine.length ? (
         <Card>
