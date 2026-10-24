@@ -45,6 +45,9 @@ check-grants:      ## assert every role's exact table privileges
 prove-roles:
 	$(PY) -m app.db.prove_roles
 
+export-ledger:     ## the books as Beancount, read as lease_reader, for Fava (profile ledger)
+	$(PY) -m app.ledger.export_beancount --out data/ledger/leasedesk.beancount
+
 api:               ## the API on the host, with reload, against the Compose database
 	cd backend && $(PY) -m uvicorn app.main:app --reload --port 8000
 
@@ -56,5 +59,3 @@ run-month:
 replay:
 	@echo "replay: projections rebuilt from audit_event land in A6" && exit 1
 
-export-ledger:
-	@echo "export-ledger: the Beancount export lands in A7" && exit 1
