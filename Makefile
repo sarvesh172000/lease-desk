@@ -45,6 +45,9 @@ check-grants:      ## assert every role's exact table privileges
 prove-roles:
 	$(PY) -m app.db.prove_roles
 
+replay:            ## rebuild work_item and question from audit_event; fail if they differ
+	$(PY) -m app.work.replay
+
 api:               ## the API on the host, with reload, against the Compose database
 	cd backend && $(PY) -m uvicorn app.main:app --reload --port 8000
 
@@ -52,9 +55,6 @@ api:               ## the API on the host, with reload, against the Compose data
 # pretend to succeed.
 run-month:
 	@echo "run-month M=$(M): the job queue and monthly run land in A7" && exit 1
-
-replay:
-	@echo "replay: projections rebuilt from audit_event land in A6" && exit 1
 
 export-ledger:
 	@echo "export-ledger: the Beancount export lands in A7" && exit 1
