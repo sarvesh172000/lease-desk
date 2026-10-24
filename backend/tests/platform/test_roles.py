@@ -16,16 +16,20 @@ GOLDEN = {"entity", "region", "landlord", "center", "clinic", "lease", "landlord
 RULEBOOK = {"lease_version", "lease_term"}
 WORK = {"work_item", "question", "policy", "agent_run", "tool_call", "job"}
 LEDGER = {"account", "period", "journal_entry", "journal_line"}
-ALL = RECORDS | GOLDEN | RULEBOOK | WORK | LEDGER | {"outbox", "audit_event", "actor"}
+DISPUTES = {"dispute", "obligation"}                 # migration 0006
+ALL = RECORDS | GOLDEN | RULEBOOK | WORK | LEDGER | DISPUTES | {"outbox", "audit_event", "actor"}
 
 # role -> privilege -> tables. Column-level UPDATEs are listed separately.
 SPEC = {
     "lease_reader": {"SELECT": ALL - {"actor"}},     # actor: columns only, below
     "lease_agent": {
-        "SELECT": RECORDS | GOLDEN | RULEBOOK | WORK | {"account", "period", "audit_event"},
+        "SELECT": RECORDS | GOLDEN | RULEBOOK | WORK | DISPUTES | {"account", "period",
+                                                                   "audit_event"},
         "INSERT": {"source_document", "raw_row", "sync_cursor", "lease_version", "lease_term",
-                   "work_item", "question", "agent_run", "tool_call", "job", "audit_event"},
-        "UPDATE": {"sync_cursor", "work_item", "question", "agent_run", "tool_call", "job"},
+                   "work_item", "question", "agent_run", "tool_call", "job", "audit_event",
+                   "dispute", "obligation"},
+        "UPDATE": {"sync_cursor", "work_item", "question", "agent_run", "tool_call", "job",
+                   "obligation"},
     },
     "lease_api": {
         "SELECT": ALL,
@@ -40,8 +44,14 @@ SPEC = {
     },
 }
 COLUMN_UPDATES = {
-    "lease_api": {"lease_version": {"confirmed_by", "confirmed_at"}},
+    "lease_api": {
+        "lease_version": {"confirmed_by", "confirmed_at"},
+        "dispute": {"status", "credited_amount", "credits", "credit_memo_ref", "refusal_reason",
+                    "updated_at"},
+    },
     "lease_gateway": {
+        "dispute": {"status", "letter_outbox_id", "sent_at", "receivable_entry_id",
+                    "writeoff_entry_id", "updated_at"},
         "period": {"status", "closed_at", "closed_by"},
         "outbox": {"status", "attempts", "sent_at"},
         "work_item": {"state", "updated_at", "last_event_seq"},

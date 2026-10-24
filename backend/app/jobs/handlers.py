@@ -27,6 +27,7 @@ from typing import Any, Callable, Dict, Mapping
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from . import obligations as b7
 from . import reminders
 from .lease_versions import draft_versions
 from .monthly import AP_SOURCE, check_period, parse_period
@@ -76,6 +77,9 @@ HANDLERS: Dict[str, Handler] = {
     "abstraction": abstraction,
     "checking": checking,
     "reminders": reminders.handler,     # busy approvers: remind, escalate, pay undisputed
+    # PHASE_2.md groups 11 and 12 (jobs/obligations.py)
+    "obligations": b7.obligations,
+    "disputes": b7.disputes,
 }
 
 

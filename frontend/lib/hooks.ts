@@ -9,6 +9,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
+  approveDisputeLetter,
+  approveDisputeReceivable,
+  getDispute,
+  getDisputes,
+  getObligations,
+  recordDisputeReply,
   approveException,
   confirmLeaseVersion,
   getAllowedActions,
@@ -35,7 +41,9 @@ import {
   subscribeDataSource,
   type DataSource,
 } from "./api";
-import type { ActionResult, DemoResetResult, ItemAction, MonthMetricName } from "./types";
+import type {
+  DisputeDetail,
+  DisputeReply, ActionResult, DemoResetResult, ItemAction, MonthMetricName } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -186,4 +194,49 @@ export function useItemSources(itemOrExceptionId?: number | string | null) {
 /** Open questions waiting on me (or, mine=false, everything in my scope). */
 export function useQuestions(mine = true) {
   return useQuery({ queryKey: ["questions", mine], queryFn: () => getQuestions(mine) });
+}
+
+/** Everything a dispute action can change on screen. */
+const AFTER_DISPUTE = ["dispute", "disputes", "summary", "audit"];
+
+function useDisputeMutation<V>(fn: (vars: V) => Promise<DisputeDetail>) {
+  const qc = useQueryClient();
+  return useMutation<DisputeDetail, Error, V>({
+    mutationFn: fn,
+    onSettled: () => {
+      for (const k of AFTER_DISPUTE) void qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
+export function useDisputes(params: { status?: string; clinic_id?: string } = {}) {
+  return useQuery({ queryKey: ["disputes", params], queryFn: () => getDisputes(params) });
+}
+
+export function useDispute(disputeId?: string | null) {
+  return useQuery({
+    queryKey: ["dispute", disputeId],
+    queryFn: () => getDispute(disputeId!),
+    enabled: !!disputeId,
+    retry: false,
+  });
+}
+
+/** The regional manager approves the letter; the gateway queues it in the outbox. */
+export function useApproveDisputeLetter(disputeId: string) {
+  return useDisputeMutation<string | undefined>((reason) => approveDisputeLetter(disputeId, reason));
+}
+
+/** The controller approves recognising the landlord receivable. */
+export function useApproveDisputeReceivable(disputeId: string) {
+  return useDisputeMutation<string | undefined>((reason) => approveDisputeReceivable(disputeId, reason));
+}
+
+/** Record the landlord's reply: acknowledged, credit (full or partial) or refusal. */
+export function useRecordDisputeReply(disputeId: string) {
+  return useDisputeMutation<DisputeReply>((reply) => recordDisputeReply(disputeId, reply));
+}
+
+export function useObligations(params: { within_days?: number; lease_id?: string; kind?: string } = {}) {
+  return useQuery({ queryKey: ["obligations", params], queryFn: () => getObligations(params) });
 }

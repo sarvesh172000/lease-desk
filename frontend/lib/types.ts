@@ -518,3 +518,138 @@ export interface Questions {
   total: number;
   questions: QuestionItem[];
 }
+
+export type DisputeStatus = "drafted" | "sent" | "acknowledged" | "credited" | "partially_credited" | "refused";
+
+export type DisputeReplyOutcome = "acknowledged" | "queried" | "full_credit" | "partial_credit" | "refused";
+
+export interface DisputeSummary {
+  id: string;
+  status: DisputeStatus;
+  landlord_id: string;
+  landlord_name: string;
+  lease_id: string;
+  clinic_id: string;
+  region_id: string | null;
+  entity_id: string;
+  period: string;
+  charge_type: string;
+  invoice_id: string;
+  billed: number;
+  supported: number;
+  amount: number;
+  credited_amount: number;
+  open_receivable: number;
+  work_item_id: number;
+  work_item_state: string;
+  sent_at: string | null;
+  updated_at: string;
+}
+
+export interface DisputeList {
+  counts: Record<DisputeStatus, number>;
+  total: number;
+  disputes: DisputeSummary[];
+}
+
+export interface DisputeHistoryEvent {
+  seq: number;
+  at: string;
+  actor_id: string;
+  action: string;
+  allowed: boolean;
+  reason: string | null;
+  from_status: string | null;
+  to_status: string | null;
+  evidence: Record<string, unknown> | null;
+}
+
+export interface DisputeReceivable {
+  recognized: number;
+  cleared: number;
+  open: number;
+  entries: { journal_entry_id: number; key: string; date: string; debit: number; credit: number }[];
+}
+
+export interface DisputeOutboxMessage {
+  id: number;
+  key: string;
+  status: "pending" | "sent" | "failed";
+  round: number | null;
+  to: string | null;
+  subject: string | null;
+  sent_at: string | null;
+}
+
+export interface DisputeWorkItemRef {
+  id: number;
+  state: string;
+  proposal: string | null;
+  reason: string | null;
+  updated_at: string;
+}
+
+export interface DisputeDetail {
+  dispute: DisputeSummary;
+  letter: string;
+  notice_to: { landlord_id: string; name: string; attn: string; address: string; email: string };
+  facts: Record<string, unknown>;
+  credits: { credit_memo_ref: string; amount: string; received_on: string }[];
+  refusal_reason: string | null;
+  history: DisputeHistoryEvent[];
+  items: { letter: DisputeWorkItemRef | null; receivable: DisputeWorkItemRef | null };
+  receivable: DisputeReceivable;
+  outbox: DisputeOutboxMessage[];
+  reply_outcomes: DisputeReplyOutcome[];
+  gateway_error: string | null;
+}
+
+export interface DisputeReply {
+  outcome: DisputeReplyOutcome;
+  granted?: number;
+  credit_memo_ref?: string;
+  reason?: string;
+  received_on?: string;
+  sender?: string;
+  message_id?: string;
+  body?: string;
+}
+
+export type ObligationKind = "renewal_notice" | "cam_audit_window" | "deposit_return" | "expiration";
+
+export interface ObligationCitation {
+  section: string | null;
+  page: number | null;
+  quote: string | null;
+  document_id: string | null;
+  field: string | null;
+  lease_version_id: number | null;
+  also?: Record<string, unknown>[];
+  assumption?: string;
+}
+
+export interface Obligation {
+  id: number;
+  lease_id: string;
+  clinic_id: string;
+  region_id: string | null;
+  entity_id: string;
+  kind: ObligationKind;
+  key: string;
+  due_date: string;
+  days_left: number;
+  action: string;
+  citation: ObligationCitation;
+  source: "lease_term" | "generator";
+  lease_version_id: number | null;
+  details: Record<string, unknown>;
+  alert_dates: Record<"90" | "60" | "30", string>;
+  alerts: (DisputeWorkItemRef & { title: string })[];
+}
+
+export interface ObligationList {
+  today: string;
+  within_days: number;
+  total: number;
+  obligations: Obligation[];
+}
