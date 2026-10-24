@@ -12,7 +12,7 @@ repos:
     rev: v0.16.9
     hooks:
       - id: ruff-check
-        files: &platform ^(backend/(app/(db|work|auth|ledger|jobs|records|api)/|app/main\.py$|app/settings\.py$|tests/platform/|tests/test_fetch_grammar\.py$)|agents_fetch/)
+        files: &platform ^(backend/(app/(db|work|auth|ledger|jobs|records|api)/|app/main\.py$|app/settings\.py$|tests/platform/|tests/test_fetch_(grammar|understand|feed)\.py$)|agents_fetch/)
       # Format check is manual until the platform code is reformatted once
       # (17 hand-aligned files would change). Run it with:
       #   pre-commit run --hook-stage manual ruff-format --all-files

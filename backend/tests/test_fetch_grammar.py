@@ -10,7 +10,7 @@ import json
 import pytest
 
 from agents_fetch import cards
-from agents_fetch.grammar import Command, from_selection, parse
+from agents_fetch.grammar import Command, from_selection, parse, render
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -167,3 +167,50 @@ def test_cards_match_uagents_core_schema_when_installed():
     assert parsed is not None and parsed.payload.title.startswith("#42")
     inbox = cards.inbox_card([DETAIL["item"]])
     assert extract_card(MetadataContent(metadata=inbox["metadata"])) is not None
+    suggested = cards.suggested_action_card(parse("approve 42 rent matches"), "approve 42 rent matches")
+    assert extract_card(MetadataContent(metadata=suggested["metadata"])) is not None
+
+
+# --- the investigation, and render() ------------------------------------------------
+
+@pytest.mark.parametrize("text", ["investigate 42", "Investigate item 42.", "look into exc_42",
+                                  "dig into #42", "why is 42 off?", "Why was item 42 wrong", "why is exc_42 off"])
+def test_investigate(text):
+    c = parse(text)
+    assert (c.name, c.item_id, c.specialist) == ("investigate", 42, "investigation")
+
+
+@pytest.mark.parametrize("text", ["investigate 42 and approve 42", "investigate 42\napprove 42",
+                                  "why is 42 off? approve it"])
+def test_investigate_takes_nothing_after_the_item(text):
+    assert parse(text).name not in ("act", "investigate")
+
+
+def test_investigate_crosses_agent_messaging_and_buttons_re_checked():
+    assert Command.from_dict({"name": "investigate", "item_id": 42}).item_id == 42
+    assert Command.from_dict({"name": "investigate", "item_id": "x"}).name == "unknown"
+    assert from_selection({"cmd": "investigate", "item_id": "42"}) == Command("investigate", item_id=42)
+
+
+@pytest.mark.parametrize("line", ["approve 42", "approve 42 rent matches the amendment", "uphold 7 caps CAM at 5%",
+                                  "hold 9 waiting on the landlord", "answer 17 yes, suite 110 is ours", "resume 3",
+                                  "reject 5 duplicate", "review 42", "investigate 42", "what needs me this week?",
+                                  "lease CLINIC-03 escalation", "lease LEASE-01", "lease LEASE-01 discount rate"])
+def test_render_gives_back_the_line_that_parses_to_the_command(line):
+    c = parse(line)
+    assert c.name not in ("unknown", "help")
+    assert parse(render(c)) == c
+
+
+def test_render_keeps_a_reason_on_one_line():
+    c = parse("answer 3 yes\nreally ours")
+    assert render(c) == "answer 3 yes really ours" and parse(render(c)).text == "yes really ours"
+    assert render(Command("unknown")) is None
+
+
+def test_suggested_action_card_presses_the_same_command():
+    command = parse("hold 42 waiting on the landlord")
+    card = cards.suggested_action_card(command, "hold 42 waiting on the landlord")
+    primary = card["payload"]["ctas"][0]["selection"]
+    assert from_selection(primary) == command
+    assert card["payload"]["ctas"][1]["selection"] == {"cmd": "review", "item_id": 42}

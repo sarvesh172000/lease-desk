@@ -24,6 +24,8 @@ include = [
     "backend/app/settings.py",
     "backend/tests/platform/**/*.py",
     "backend/tests/test_fetch_grammar.py",
+    "backend/tests/test_fetch_understand.py",
+    "backend/tests/test_fetch_feed.py",
     "agents_fetch/**/*.py",
 ]
 # `include` only steers discovery. Explicit paths (pre-commit, editors) are

@@ -59,11 +59,14 @@ LeaseDesk Coordinator  ── asi1 model: work out what the user wants, plan the
                                                         (mailbox search, trust.py, remeasure)
 ```
 
-- **Coordinator** (`fetch/agents.py`, run by `python -m fetch.run`): uses the ASI:One LLM
+- **Coordinator** (as built: the front desk, `agents_fetch/front_desk.py`, run with
+  the rulebook, investigation and approvals agents by `python -m agents_fetch.run`;
+  see `agents_fetch/README.md`): uses the ASI:One LLM
   (`https://api.asi1.ai/v1`, model `asi1`, OpenAI-compatible client) for
-  intent and planning, which is the ASI:One usage the "Use of Fetch.ai" score
-  looks for. It never computes money; it calls the other agents and relays
-  their results.
+  intent, which is the ASI:One usage the "Use of Fetch.ai" score
+  looks for. The model's reading is re-parsed by a fixed grammar and never
+  triggers an action by itself. It never computes money; it calls the other
+  agents and relays their results.
 - **Specialist agents** talk to the existing FastAPI backend over HTTP as the
   `lease_agent` role, so the database permissions, the state machine and the
   audit hash chain apply to them exactly as they do to the web app.
@@ -104,7 +107,7 @@ payments, and every step is a real write to a real ledger rather than chat.
 
 1. Get an ASI:One API key (asi1.ai) and an Agentverse account.
 2. `pip install uagents uagents-core openai stripe` (a separate
-   `fetch/requirements.txt`, so the backend's dependencies don't change).
+   `agents_fetch/requirements.txt`, so the backend's dependencies don't change).
 3. Build the coordinator from the ASI:One example (`mailbox=True`,
    `publish_agent_details=True`, `publish_manifest=True`), run it, open the
    Inspector link, connect the **Mailbox**, then edit the name, handle and
@@ -211,8 +214,9 @@ criterion, made visible, and it puts SpacetimeDB on screen in the video.
 
 This repo splits ownership, so the work splits along the same lines:
 
-- **Sarvesh:** a new top-level `fetch/` (the agents), `spacetime/` (the module),
-  and the README badges and agent addresses.
+- **Sarvesh:** the agents (now one folder, `agents_fetch/`, after S2 folded
+  `fetch/` into it), `spacetime/` (the module), and the README badges and
+  agent addresses.
 - **Jenil (needs their OK):** anything in `backend/app/{api,db,work,auth,...}`,
   `frontend/`, `Makefile`, `.github/`: the Azure connection settings
   (`sslmode`), the SpacetimeDB subscription in the frontend, and any new API

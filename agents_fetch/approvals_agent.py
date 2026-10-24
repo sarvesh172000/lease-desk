@@ -22,8 +22,10 @@ from typing import Any, Dict, List, Mapping, Optional
 from .cards import held_item_card, inbox_card, money, source_rows, trust_text
 from .client import ApiError, LeaseDeskClient, PairedClient
 from .grammar import Command
+from .live import Feed, record_step
 from .protocol import ERROR, INVALID, NOT_FOUND, REFUSED, UNPAIRED, Reply
 
+FEED_NAME = "approvals"
 AGENT_NAME = "lease_desk_approvals"
 DESCRIPTION = ("Lists and answers the open lease-accounting items and questions of the person paired "
                "to this chat, under their Lease Desk permissions. Reached through Northbay Lease Desk.")
@@ -195,12 +197,14 @@ def handle(client: PairedClient, command: Command, now: Optional[datetime] = Non
         return Reply("Lease Desk couldn't do that (%s)." % exc.detail, outcome=ERROR)
 
 
-def handle_request(request: Mapping[str, Any], api: LeaseDeskClient) -> Dict[str, Any]:
-    """One SpecialistRequest (protocol.py) -> one SpecialistReply dict."""
+def handle_request(request: Mapping[str, Any], api: LeaseDeskClient, feed: Optional[Feed] = None) -> Dict[str, Any]:
+    """One SpecialistRequest (protocol.py) -> one SpecialistReply dict, with
+    this agent's step on the live feed under the message's run id."""
     command = Command.from_dict(request.get("command") or {})
     reply = handle(api.paired(str(request.get("token") or ""), str(request.get("chat_user") or "")),
                    command)
     reply.request_id = request.get("request_id")
+    record_step(feed, str(request.get("run_id") or ""), FEED_NAME, command, reply)
     return reply.as_dict()
 
 

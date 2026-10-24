@@ -1,13 +1,21 @@
-"""The uAgents layer: three agents, the Chat Protocol, agent messaging.
+"""The uAgents layer: four agents, the Chat Protocol, agent messaging.
 
-    python -m agents_fetch.front_desk        "Northbay Lease Desk"   (ASI:One talks to this one)
-    python -m agents_fetch.rulebook_agent    lease_desk_rulebook
-    python -m agents_fetch.approvals_agent   lease_desk_approvals
-    python -m agents_fetch.runtime bureau    all three in one process, for a laptop
+    python -m agents_fetch.run               all four in one Bureau, on Agentverse mailboxes (run.py)
+    python -m agents_fetch.run --offline     the same with local endpoints only
+    python -m agents_fetch.runtime addresses the four agent1q... addresses from the seeds
+
+    front desk      "Northbay Lease Desk"       AGENT_SEED_COORDINATOR    (ASI:One talks to this one)
+    rulebook        lease_desk_rulebook         AGENT_SEED_RECONCILIATION
+    investigation   lease_desk_investigation    AGENT_SEED_INVESTIGATION
+    approvals       lease_desk_approvals        AGENT_SEED_APPROVALS
+
+The seed variable names predate this package: those four agents were
+registered on Agentverse under them, and a seed is an address, so the names
+stay and the addresses with them.
 
 This file is deliberately thin. Everything an agent decides is in
-front_desk.py / rulebook_agent.py / approvals_agent.py as plain functions,
-tested without uagents; here is only the wiring:
+front_desk.py and the *_agent.py specialists as plain functions, tested
+without uagents; here is only the wiring:
 
 - the front desk implements the Agent Chat Protocol (`chat_protocol_spec`):
   it acknowledges every ChatMessage (ChatAcknowledgement), greets on
@@ -16,9 +24,13 @@ tested without uagents; here is only the wiring:
 - it routes to a specialist with `ctx.send_and_receive` (SpecialistRequest ->
   SpecialistReply, wire.py) and answers the chat with TextContent plus the
   card as MetadataContent;
-- the specialists accept requests only from the front desk's address (when
-  configured), and also speak the Chat Protocol so a direct message gets a
-  pointer to the front desk instead of silence.
+- the specialists accept requests only from the front desk's address, and
+  refuse to start without one: any agent on Agentverse can message any other,
+  and a specialist that answered strangers would be a side door. They also
+  speak the Chat Protocol so a direct message gets a pointer to the front
+  desk instead of silence;
+- one live feed (live.py) per process and, when ASI_ONE_API_KEY is set, the
+  asi1 reader (understand.py) for the front desk.
 
 Configuration is environment only (README.md, .env.example). Seeds are
 secrets — they *are* the agents' identities — and are never committed.
@@ -33,20 +45,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+from . import live
 from .client import LeaseDeskClient
-from .grammar import APPROVALS, RULEBOOK
+from .grammar import APPROVALS, INVESTIGATION, RULEBOOK
 from .protocol import Reply
 
 log = logging.getLogger("agents_fetch")
 
-README = Path(__file__).resolve().parent / "README.md"
+PROFILES = Path(__file__).resolve().parent / "profiles"
+PROFILE = {"front_desk": "front_desk.md", RULEBOOK: "rulebook.md", INVESTIGATION: "investigation.md",
+           APPROVALS: "approvals.md"}
 
-ENV_SEED = {"front_desk": "LEASEDESK_FRONT_DESK_SEED", RULEBOOK: "LEASEDESK_RULEBOOK_SEED",
-            APPROVALS: "LEASEDESK_APPROVALS_SEED"}
+ENV_SEED = {"front_desk": "AGENT_SEED_COORDINATOR", RULEBOOK: "AGENT_SEED_RECONCILIATION",
+            INVESTIGATION: "AGENT_SEED_INVESTIGATION", APPROVALS: "AGENT_SEED_APPROVALS"}
 ENV_ADDRESS = {"front_desk": "LEASEDESK_FRONT_DESK_ADDRESS", RULEBOOK: "LEASEDESK_RULEBOOK_ADDRESS",
-               APPROVALS: "LEASEDESK_APPROVALS_ADDRESS"}
-DEFAULT_PORT = {"front_desk": 8101, RULEBOOK: 8102, APPROVALS: 8103}
-SPECIALIST_TIMEOUT_S = 60
+               INVESTIGATION: "LEASEDESK_INVESTIGATION_ADDRESS", APPROVALS: "LEASEDESK_APPROVALS_ADDRESS"}
+DEFAULT_PORT = {"front_desk": 8101, RULEBOOK: 8102, APPROVALS: 8103, INVESTIGATION: 8104}
+# Seconds the front desk waits for a specialist. An investigation may run a
+# model over the mailbox; the rest are one or two API calls.
+SPECIALIST_TIMEOUT_S = {INVESTIGATION: 600}
+DEFAULT_TIMEOUT_S = 60
 
 
 def _env(name: str, default: Optional[str] = None) -> Optional[str]:
@@ -90,9 +108,10 @@ def make_agent(role: str, name: str, description: str, *, port: Optional[int] = 
     mailbox = _env("LEASEDESK_AGENT_MAILBOX", "0") == "1"
     port = port or int(_env("LEASEDESK_%s_PORT" % role.upper(), str(DEFAULT_PORT[role])))
     kwargs: Dict[str, Any] = dict(name=name, seed=seed or seed_for(role), port=port,
-                                  description=description, publish_agent_details=True)
-    if README.exists():
-        kwargs["readme_path"] = str(README)
+                                  description=description, publish_agent_details=mailbox)
+    profile = PROFILES / PROFILE[role]
+    if profile.exists():
+        kwargs["readme_path"] = str(profile)
     if mailbox:
         kwargs["mailbox"] = True
     else:
@@ -124,7 +143,7 @@ def chat_reply(reply: Reply, end_session: bool = False):
 
 def build_front_desk(api: Optional[LeaseDeskClient] = None, *, seed: Optional[str] = None,
                      port: Optional[int] = None, addresses: Optional[Dict[str, str]] = None,
-                     store=None):
+                     store=None, feed: Optional[live.Feed] = None, understand=None):
     from uagents import Context, Protocol
     from uagents_core.contrib.protocols.chat import (
         ChatAcknowledgement,
@@ -142,14 +161,16 @@ def build_front_desk(api: Optional[LeaseDeskClient] = None, *, seed: Optional[st
     from .wire import SpecialistReply, SpecialistRequest
 
     api = api or api_client()
+    feed = feed if feed is not None else live.Feed()
     agent = make_agent("front_desk", AGENT_NAME, DESCRIPTION, port=port, seed=seed)
-    targets = addresses or {RULEBOOK: address_for(RULEBOOK), APPROVALS: address_for(APPROVALS)}
+    targets = addresses or {role: address_for(role) for role in (RULEBOOK, INVESTIGATION, APPROVALS)}
     desks: Dict[str, FrontDesk] = {}
 
     def desk_for(ctx: Context) -> FrontDesk:
         if "desk" not in desks:
             desks["desk"] = FrontDesk(api, store if store is not None else KeyValuePairingStore(ctx.storage),
-                                      dispatch=lambda *_: {})   # agent messaging below, never local
+                                      dispatch=lambda *_: {},   # agent messaging below, never local
+                                      feed=feed, understand=understand)
         return desks["desk"]
 
     chat = Protocol(spec=chat_protocol_spec)
@@ -180,6 +201,11 @@ def build_front_desk(api: Optional[LeaseDeskClient] = None, *, seed: Optional[st
             return
 
         routed = await asyncio.to_thread(desk.route, sender, "\n".join(texts) if texts else None, selection)
+        if isinstance(routed, Route) and routed.specialist == INVESTIGATION:
+            # Minutes, possibly: say who has it so the chat shows work happening.
+            await ctx.send(sender, chat_reply(Reply(
+                "Handed to the investigation agent: it is searching the mailbox for what explains "
+                "#%d. This can take a minute." % routed.command.item_id)))
         if isinstance(routed, Route):
             reply = await _ask_specialist(ctx, desk, sender, routed, targets, SpecialistRequest,
                                           SpecialistReply)
@@ -207,8 +233,8 @@ async def _ask_specialist(ctx, desk, sender, routed, targets, request_model, rep
     response, status = await ctx.send_and_receive(
         address,
         request_model(request_id=req["request_id"], chat_user=req["chat_user"], token=req["token"],
-                      command_json=json.dumps(req["command"])),
-        response_type=reply_model, timeout=SPECIALIST_TIMEOUT_S)
+                      command_json=json.dumps(req["command"]), run_id=req.get("run_id") or ""),
+        response_type=reply_model, timeout=SPECIALIST_TIMEOUT_S.get(routed.specialist, DEFAULT_TIMEOUT_S))
     if not isinstance(response, reply_model) or response.request_id != req["request_id"]:
         ctx.logger.warning("no reply from %s: %s", routed.specialist, status)
         return desk.finish(sender, routed, None)
@@ -226,25 +252,27 @@ async def _ask_specialist(ctx, desk, sender, routed, targets, request_model, rep
 # --- the specialists ------------------------------------------------------------------
 
 def build_specialist(role: str, name: str, description: str,
-                     handle_request: Callable[[Dict[str, Any], LeaseDeskClient], Dict[str, Any]],
+                     handle_request: Callable[..., Dict[str, Any]],
                      api: Optional[LeaseDeskClient] = None, *, seed: Optional[str] = None,
-                     port: Optional[int] = None, front_desk: Optional[str] = None):
+                     port: Optional[int] = None, front_desk: Optional[str] = None,
+                     feed: Optional[live.Feed] = None):
     from uagents import Context, Protocol
     from uagents_core.contrib.protocols.chat import ChatAcknowledgement, ChatMessage, chat_protocol_spec
 
     from .wire import SpecialistReply, SpecialistRequest, specialist_protocol
 
     api = api or api_client()
-    agent = make_agent(role, name, description, port=port, seed=seed)
+    feed = feed if feed is not None else live.Feed()
     allowed_sender = front_desk or address_for("front_desk")
     if not allowed_sender:
-        log.warning("%s: no front desk address configured; accepting requests from any agent "
-                    "(each still needs a valid pairing token)", name)
+        raise SystemExit("%s answers only the front desk: set %s (or %s) so it knows the front desk's "
+                         "address." % (name, ENV_SEED["front_desk"], ENV_ADDRESS["front_desk"]))
+    agent = make_agent(role, name, description, port=port, seed=seed)
     proto = specialist_protocol()
 
     @proto.on_message(SpecialistRequest, replies=SpecialistReply)
     async def on_request(ctx: Context, sender: str, req: SpecialistRequest):
-        if allowed_sender and sender != allowed_sender:
+        if sender != allowed_sender:
             ctx.logger.warning("refusing a request from %s: not the front desk", sender)
             await ctx.send(sender, SpecialistReply(request_id=req.request_id, outcome="refused",
                                                    text="Only Northbay Lease Desk may ask me."))
@@ -254,8 +282,8 @@ def build_specialist(role: str, name: str, description: str,
         except ValueError:
             command = {}
         out = await asyncio.to_thread(handle_request, {
-            "request_id": req.request_id, "chat_user": req.chat_user, "token": req.token,
-            "command": command if isinstance(command, dict) else {}}, api)
+            "request_id": req.request_id, "run_id": req.run_id, "chat_user": req.chat_user,
+            "token": req.token, "command": command if isinstance(command, dict) else {}}, api, feed)
         await ctx.send(sender, SpecialistReply(
             request_id=req.request_id, text=out["text"], outcome=out["outcome"],
             card_json=json.dumps(out["card"]) if out.get("card") else None,
@@ -268,7 +296,7 @@ def build_specialist(role: str, name: str, description: str,
         await ctx.send(sender, ChatAcknowledgement(timestamp=_now(), acknowledged_msg_id=msg.msg_id))
         await ctx.send(sender, chat_reply(Reply(
             "I work behind **Northbay Lease Desk**. Message it instead%s — pairing and "
-            "permissions live there." % (" (%s)" % allowed_sender if allowed_sender else ""))))
+            "permissions live there." % (" (%s)" % allowed_sender))))
 
     @chat.on_message(ChatAcknowledgement)
     async def on_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
@@ -280,27 +308,45 @@ def build_specialist(role: str, name: str, description: str,
 
 
 def run_front_desk() -> None:  # pragma: no cover - long-running
-    build_front_desk().run()
+    from .understand import from_env
+
+    build_front_desk(feed=live.from_env(), understand=from_env()).run()
 
 
 def run_specialist(role: str, name: str, description: str, handle_request) -> None:  # pragma: no cover
-    build_specialist(role, name, description, handle_request).run()
+    build_specialist(role, name, description, handle_request, feed=live.from_env()).run()
 
 
-def build_bureau():
-    """All three agents in one process (local endpoints, no mailbox)."""
+def build_agents(api: Optional[LeaseDeskClient] = None, feed: Optional[live.Feed] = None,
+                 understand=None) -> Dict[str, Any]:
+    """The four agents, wired to each other, sharing one API client and one
+    live feed (so the feed's single sender keeps every agent's steps in order)."""
+    from . import approvals_agent, investigation_agent, rulebook_agent
+
+    api = api or api_client()
+    feed = feed if feed is not None else live.Feed()
+    desk_address = address_for("front_desk")
+    agents: Dict[str, Any] = {"front_desk": build_front_desk(api, feed=feed, understand=understand)}
+    for role, module in ((RULEBOOK, rulebook_agent), (INVESTIGATION, investigation_agent),
+                         (APPROVALS, approvals_agent)):
+        agents[role] = build_specialist(role, module.AGENT_NAME, module.DESCRIPTION, module.handle_request,
+                                        api, front_desk=desk_address, feed=feed)
+    return agents
+
+
+def build_bureau(port: Optional[int] = None):
+    """All four agents in one process. LEASEDESK_AGENT_MAILBOX=1 gives each its
+    Agentverse mailbox (run.py sets it); otherwise local endpoints only."""
     from uagents import Bureau
 
-    from . import approvals_agent, rulebook_agent
+    from .understand import from_env
 
-    api = api_client()
-    desk_address = address_for("front_desk")
-    bureau = Bureau()
-    bureau.add(build_front_desk(api))
-    bureau.add(build_specialist(RULEBOOK, rulebook_agent.AGENT_NAME, rulebook_agent.DESCRIPTION,
-                                rulebook_agent.handle_request, api, front_desk=desk_address))
-    bureau.add(build_specialist(APPROVALS, approvals_agent.AGENT_NAME, approvals_agent.DESCRIPTION,
-                                approvals_agent.handle_request, api, front_desk=desk_address))
+    feed = live.from_env()
+    bureau = Bureau(port=port or int(_env("AGENT_PORT", "8001")))
+    for agent in build_agents(feed=feed, understand=from_env()).values():
+        bureau.add(agent)
+    log.info("live feed %s; asi1 reader %s", "on" if feed.enabled else "off",
+             "on" if _env("ASI_ONE_API_KEY") else "off (grammar only)")
     return bureau
 
 
@@ -309,16 +355,18 @@ def print_addresses() -> None:
 
     for role, env in ENV_SEED.items():
         seed = _env(env)
-        print("%-11s %s" % (role, Identity.from_seed(seed, 0).address if seed else "(%s not set)" % env))
+        print("%-14s %-26s %s" % (role, env, Identity.from_seed(seed, 0).address if seed else "(not set)"))
 
 
 if __name__ == "__main__":  # pragma: no cover
     logging.basicConfig(level=logging.INFO)
     arg = sys.argv[1] if len(sys.argv) > 1 else ""
-    if arg == "bureau":
-        build_bureau().run()
-    elif arg == "addresses":
+    if arg == "addresses":
+        from .run import load_dotenv
+
+        load_dotenv()
         print_addresses()
     else:
-        print("usage: python -m agents_fetch.runtime bureau|addresses", file=sys.stderr)
+        print("usage: python -m agents_fetch.runtime addresses   (to run the agents: python -m agents_fetch.run)",
+              file=sys.stderr)
         sys.exit(2)

@@ -1,13 +1,18 @@
 # leasedesk-live (SpacetimeDB)
 
-The live feed behind Lease Desk's agents. While someone talks to the agent in
-ASI:One, every step it takes (what it understood, each document the
-investigation found, the remeasurement, an approval) lands here, and every
-browser subscribed to the module sees it at once.
+The live feed behind Lease Desk's agents (`agents_fetch/`). While someone talks
+to the front desk in ASI:One, every step each of the four agents takes (what
+the front desk received and where it routed it, each frame of the
+investigation, an approval and its outcome) lands here under one run id per
+chat message, and every browser subscribed to the module sees it at once.
 
 It is a feed, not the books. Postgres keeps the ledger, the work states and the
-audit trail; nothing reads this module back to decide anything, and the agent
-carries on unchanged if SpacetimeDB is down.
+audit trail; nothing reads this module back to decide anything, and the agents
+carry on unchanged if SpacetimeDB is down.
+
+The agents write `agent_step` only (`agents_fetch/live.py`). `desk_status` is
+the backend's to publish after each transition, so it never runs ahead of
+Postgres.
 
 ## Tables
 
@@ -39,16 +44,16 @@ spacetime publish -s http://127.0.0.1:3100 -p spacetime -y leasedesk-live
 ```
 
 Pass the same `-s http://127.0.0.1:3100` to `call`, `sql` and `generate`
-below, and set `SPACETIME_HOST=http://127.0.0.1:3100` for the agent.
+below, and set `SPACETIME_HOST=http://127.0.0.1:3100` for the agents.
 
-A publisher for the agent, once:
+A publisher for the agents, once:
 
 ```bash
-python -m fetch.live identity          # prints an identity and its token
+python -m agents_fetch.live identity   # prints an identity and its token
 spacetime call leasedesk-live authorize_publisher <identity>
 ```
 
-Then run the agent with:
+Then run the agents (`python -m agents_fetch.run`, which reads the repo's `.env`) with:
 
 | Variable | |
 |---|---|

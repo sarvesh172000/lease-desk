@@ -19,6 +19,7 @@ class SpecialistRequest(Model):
     chat_user: str
     token: str          # the chat user's scoped pairing token; the API checks it on every call
     command_json: str   # grammar.Command.as_dict(), re-validated by Command.from_dict
+    run_id: str = ""    # the chat message's run on the live feed; the specialist records its steps under it
 
 
 class SpecialistReply(Model):

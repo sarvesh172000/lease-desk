@@ -1,13 +1,13 @@
-"""What the three agents say to each other, as plain data.
+"""What the four agents say to each other, as plain data.
 
 The front desk turns a chat message into a Command (grammar.py) and, for
-anything but pairing and help, sends a SpecialistRequest to the rulebook or
-approvals agent over agent messaging. The specialist calls the Lease Desk API
+anything but pairing and help, sends a SpecialistRequest to the rulebook,
+investigation or approvals agent over agent messaging. The specialist calls the Lease Desk API
 with the paired person's token and answers with a SpecialistReply. In the
 uAgents runtime these dicts ride inside the `wire.py` models; in tests they
 are passed directly, so the logic is the same code either way.
 
-    request = {"request_id", "chat_user", "token", "command": Command.as_dict()}
+    request = {"request_id", "run_id", "chat_user", "token", "command": Command.as_dict()}
     reply   = {"request_id", "text", "card": {"card_kind", "payload", "metadata"} | None,
                "outcome": "ok" | "refused" | "not_found" | "unpaired" | "error" | "invalid",
                "audit_seq": int | None}

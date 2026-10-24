@@ -217,3 +217,26 @@ def inbox_card(items: List[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
     validate("carousel", payload)
     return {"card_kind": "carousel", "payload": payload,
             "metadata": card_metadata("carousel", payload)}
+
+
+def suggested_action_card(command: Any, line: str) -> Dict[str, Any]:
+    """The card under "send exactly: `approve 42 ...`" when ASI:One's model
+    read a message as an action (understand.py). Its button carries the same
+    command as a selection, so pressing it goes through
+    grammar.from_selection and the API's can() like any other button: the
+    person's press is the decision, never the model's reading."""
+    item_id = int(command.item_id)
+    selection: Dict[str, Any] = {"cmd": command.verb, "item_id": item_id}
+    rows = [{"label": "Command", "value": line},
+            {"label": "Item", "value": "#%d" % item_id}]
+    if command.text:
+        selection["text"] = command.text
+        rows.append({"label": "Answer" if command.verb == "answer" else "Reason",
+                     "value": _short(command.text, 300)})
+    payload = {"title": "Send `%s %d`?" % (command.verb, item_id), "summary_rows": rows,
+               "ctas": [{"label": "%s #%d" % (str(command.verb).capitalize(), item_id),
+                         "selection": selection, "primary": True},
+                        {"label": "Review #%d first" % item_id,
+                         "selection": {"cmd": "review", "item_id": item_id}, "primary": False}]}
+    validate("detail", payload)
+    return {"card_kind": "detail", "payload": payload, "metadata": card_metadata("detail", payload)}
