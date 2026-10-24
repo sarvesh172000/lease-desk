@@ -70,3 +70,36 @@ def advance(conn: Connection, days: int) -> date:
         raise ClockError("advance cannot move the clock backward (%d days); "
                          "use set_today to rewind deliberately" % days)
     return set_today(conn, today(conn) + timedelta(days=days))
+
+
+def main(argv=None) -> int:
+    """`python -m app.jobs.clock [show | set YYYY-MM-DD]`, as lease_agent (the
+    role that owns sync_cursor's writes). `make demo-data` sets it to the last
+    month it runs, so the API reads the portfolio as of that month."""
+    import argparse
+
+    from ..db.engine import engine
+
+    parser = argparse.ArgumentParser(prog="python -m app.jobs.clock")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("show", help="print the stored business date, or 'unset'")
+    setter = sub.add_parser("set", help="set the business date")
+    setter.add_argument("day", help="YYYY-MM-DD")
+    args = parser.parse_args(argv)
+
+    eng = engine("lease_agent")
+    if args.command == "set":
+        try:
+            day = date.fromisoformat(args.day)
+        except ValueError:
+            parser.error("not a date: %r" % args.day)
+        with eng.begin() as conn:
+            set_today(conn, day)
+    with eng.connect() as conn:
+        value = stored(conn)
+    print("business date: %s" % (value.isoformat() if value else "unset"))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

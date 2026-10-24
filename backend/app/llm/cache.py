@@ -28,10 +28,19 @@ def cache_key(model: str, prompt_ref: str, payload: object, schema: str) -> str:
 
 
 class ResponseCache:
-    """JSON bodies on disk, one file per key."""
+    """JSON bodies on disk, one file per key.
 
-    def __init__(self, root: Union[str, Path], enabled: bool = True):
+    `replay` is an optional read-only directory of the same shape, consulted
+    after a miss in `root` and never written. The repository commits the
+    answers the demo depends on there (data/reference/llm_cache), so a fresh
+    clone, a container or CI replays them with no key and no network, however
+    the process was started and wherever its own cache lives.
+    """
+
+    def __init__(self, root: Union[str, Path], enabled: bool = True,
+                 replay: Optional[Union[str, Path]] = None):
         self.root = Path(root)
+        self.replay = Path(replay) if replay else None
         self.enabled = enabled
         if enabled:
             self.root.mkdir(parents=True, exist_ok=True)
@@ -41,18 +50,23 @@ class ResponseCache:
     def get(self, key: str) -> Optional[dict]:
         if not self.enabled:
             return None
-        path = self._path(key)
+        for root in (self.root, self.replay):
+            value = self._read(root, key) if root else None
+            if value is not None:
+                self.hits += 1
+                return value
+        self.misses += 1
+        return None
+
+    def _read(self, root: Path, key: str) -> Optional[dict]:
+        path = self._path(key, root)
         if not path.exists():
-            self.misses += 1
             return None
         try:
-            value = json.loads(path.read_text())
+            return json.loads(path.read_text())
         except json.JSONDecodeError:
             # A truncated file from an interrupted run is a miss, not a crash.
-            self.misses += 1
             return None
-        self.hits += 1
-        return value
 
     def put(self, key: str, value: dict) -> None:
         if not self.enabled:
@@ -68,5 +82,5 @@ class ResponseCache:
         total = self.hits + self.misses
         return self.hits / total if total else 0.0
 
-    def _path(self, key: str) -> Path:
-        return self.root / key[:2] / (key + ".json")
+    def _path(self, key: str, root: Optional[Path] = None) -> Path:
+        return (root or self.root) / key[:2] / (key + ".json")

@@ -20,6 +20,7 @@ Two deviations from the Phase 1 plan, both forced by the current API:
     need rewriting regardless.
 """
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +41,14 @@ MAX_TOKENS = 16000
 DEFAULT_EFFORT = "high"
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def schema_ref(output_model: Type[BaseModel]) -> str:
+    """The output schema as the cache key sees it: its name and a hash of its
+    shape. The name alone let an answer cached under an older shape (a field
+    that was free text, now a closed set) be served after the schema changed."""
+    shape = json.dumps(output_model.model_json_schema(), sort_keys=True, separators=(",", ":"))
+    return "%s@%s" % (output_model.__name__, hashlib.sha256(shape.encode()).hexdigest()[:12])
 
 
 class LLMError(RuntimeError):
@@ -81,6 +90,12 @@ def _default_cache_dir() -> str:
         return ".cache/llm"
 
 
+# Committed answers (cache.ResponseCache's `replay`): the repository's, so it
+# resolves from this file rather than from whatever directory the process
+# started in. In the container this is /app/data/reference/llm_cache.
+REPLAY_DIR = Path(__file__).resolve().parents[3] / "data" / "reference" / "llm_cache"
+
+
 class LLM:
     def __init__(
         self,
@@ -93,7 +108,7 @@ class LLM:
         max_retries: int = 3,
     ):
         self.registry = registry or PromptRegistry()
-        self.cache = cache or ResponseCache(Path(_default_cache_dir()))
+        self.cache = cache or ResponseCache(Path(_default_cache_dir()), replay=REPLAY_DIR)
         self.usage = usage or UsageLog()
         self.model = model
         # Retries are the SDK's job: it already backs off on 429, 5xx and
@@ -135,7 +150,7 @@ class LLM:
             self.model,
             prompt.ref,
             {"system": system, "documents": [list(d) for d in documents or []], "effort": effort},
-            output_model.__name__,
+            schema_ref(output_model),
         )
 
         cached = self.cache.get(key)

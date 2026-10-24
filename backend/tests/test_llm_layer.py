@@ -108,6 +108,35 @@ def test_corrupt_cache_file_is_a_miss_not_a_crash(tmp_path):
     assert cache.get(key) is None
 
 
+def test_a_miss_falls_back_to_the_replay_directory(tmp_path):
+    ResponseCache(tmp_path / "replay").put("b" * 64, {"v": "committed"})
+    cache = ResponseCache(tmp_path / "own", replay=tmp_path / "replay")
+    assert cache.get("b" * 64) == {"v": "committed"}
+    assert (cache.hits, cache.misses) == (1, 0)
+
+
+def test_the_own_cache_wins_and_the_replay_directory_is_never_written(tmp_path):
+    ResponseCache(tmp_path / "replay").put("c" * 64, {"v": "committed"})
+    cache = ResponseCache(tmp_path / "own", replay=tmp_path / "replay")
+    cache.put("c" * 64, {"v": "fresh"})
+    cache.put("d" * 64, {"v": "new"})
+    assert cache.get("c" * 64) == {"v": "fresh"}
+    assert not (tmp_path / "replay" / "dd").exists()
+
+
+def test_a_missing_replay_directory_is_a_miss(tmp_path):
+    cache = ResponseCache(tmp_path / "own", replay=tmp_path / "nowhere")
+    assert cache.get("e" * 64) is None
+    assert not (tmp_path / "nowhere").exists()
+
+
+def test_the_default_client_replays_the_committed_answers():
+    from app.llm.client import REPLAY_DIR
+    llm = LLM(client=object())
+    assert llm.cache.replay == REPLAY_DIR
+    assert REPLAY_DIR.parts[-3:] == ("data", "reference", "llm_cache")
+
+
 # --- client ----------------------------------------------------------------
 
 def test_structured_returns_validated_model(tmp_path):
@@ -222,3 +251,20 @@ def test_cost_matches_published_opus_rates():
     # $4 / MTok in, $20 / MTok out
     assert cost_usd("claude-opus-5-5", 1_000_000, 0) == 4.00
     assert cost_usd("claude-opus-5-5", 0, 1_000_000) == 20.00
+
+
+def test_changing_the_output_schema_is_a_cache_miss():
+    from typing import Literal
+
+    from app.llm.client import schema_ref
+
+    class Shape(BaseModel):
+        kind: str
+
+    before = schema_ref(Shape)
+
+    class Shape(BaseModel):  # noqa: F811 - same name, new shape
+        kind: Literal["fixed_percent", "fixed_step"]
+
+    assert schema_ref(Shape) != before
+    assert schema_ref(Shape).startswith("Shape@")

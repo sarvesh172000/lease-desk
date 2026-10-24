@@ -20,7 +20,7 @@ supports it gets caught here, before the number reaches a schedule.
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -51,16 +51,38 @@ class CitedDate(BaseModel):
     quote: str
 
 
+class CitedEscalationKind(BaseModel):
+    """A closed set, not a string with a description: given free text the
+    model answered "percentage", "percent" and "fixed dollar increase per
+    month", and the checker, which knows exactly these two, could check no
+    lease at all. Structured outputs hold the model to the Literal."""
+    value: Literal["fixed_percent", "fixed_step"] = Field(
+        description="fixed_percent: rent grows by a percentage each year. "
+                    "fixed_step: rent grows by a fixed dollar amount each year.")
+    page: int
+    quote: str
+
+
+class CitedEscalationAmount(BaseModel):
+    """Its own model so the unit sits on the number the model fills in. As a
+    description on the parent field it sat beside a schema reference, the
+    model never saw it, and "3% per annum" came back as 3: rent that
+    quadruples every year, and a false hold on every month of the lease."""
+    value: float = Field(
+        description="For fixed_percent, a fraction: 3% per annum is 0.03, never 3. "
+                    "For fixed_step, dollars: a $275.00 increase is 275.0.")
+    page: int
+    quote: str
+
+
 class AbstractedLease(BaseModel):
     commencement: CitedDate
     expiration: CitedDate
     rentable_sf: CitedNumber
     proportionate_share_pct: CitedNumber
     base_rent_monthly: CitedNumber
-    escalation_kind: CitedText = Field(
-        description='Exactly "fixed_percent" or "fixed_step"')
-    escalation_amount: CitedNumber = Field(
-        description="0.03 for 3% per annum, or 275.00 for a $275 step")
+    escalation_kind: CitedEscalationKind
+    escalation_amount: CitedEscalationAmount
     cam_estimate_psf_annual: CitedNumber
     security_deposit: CitedNumber
     renewal_count: CitedNumber
@@ -222,6 +244,17 @@ def abstract_lease(
     return check(extracted, document, lease_id, meta)
 
 
+def percent_unit_problem(kind: str, amount: float) -> Optional[str]:
+    """Why a percentage escalation cannot be a fraction, or None. 100% or more
+    a year is not a lease term; it is a percentage written as a whole number.
+    It goes to a person rather than being divided by 100 here: the quote is
+    the evidence, and a human reads it in a second."""
+    if kind == "fixed_percent" and not 0 <= amount < 1:
+        return ("escalation_amount %r for a fixed_percent escalation is not a fraction "
+                "(3%% per annum is 0.03); confirm the rate against the quote" % amount)
+    return None
+
+
 def check(
     extracted: AbstractedLease,
     document: Document,
@@ -253,14 +286,18 @@ def check(
             flags.append("%s: quote is on page %d, not page %d as claimed"
                          % (name, citation.page, checked.claimed_page))
 
-    for note in extracted.uncertain:
+    uncertain = list(extracted.uncertain)
+    unit = percent_unit_problem(extracted.escalation_kind.value, extracted.escalation_amount.value)
+    if unit:
+        uncertain.append(unit)
+    for note in uncertain:
         flags.append("model unsure: %s" % note)
 
     return Abstraction(
         lease_id=lease_id,
         fields=fields,
-        uncertain=list(extracted.uncertain),
-        confidence=confidence(fields, extracted.uncertain),
+        uncertain=uncertain,
+        confidence=confidence(fields, uncertain),
         flags=flags,
         meta=meta,
     )

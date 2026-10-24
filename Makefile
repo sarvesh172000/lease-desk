@@ -94,13 +94,23 @@ DEMO_MONTH ?= 2026-01
 # demo mode only) and the month runs again, so the demo opens on checked
 # charges. DEMO_CONFIRM=0 leaves them for you to confirm on screen.
 DEMO_CONFIRM ?= 1
+# Then the month the story is about: CLINIC-01's amendment (signed in June,
+# never sent to accounting) takes effect in July 2026, so July's rent is billed
+# $2,226.65 under the schedule and held. Its investigation replays from the
+# committed answers in data/reference/llm_cache, with no key. July runs only
+# once the leases are confirmed; DEMO_MOMENT= (empty) stops at DEMO_MONTH.
+DEMO_MOMENT ?= 2026-07
 
-demo-data:         ## database (created if missing), migrate, seed, dev passwords, run DEMO_MONTH
+demo-data:         ## database (created if missing), migrate, seed, dev passwords, run DEMO_MONTH (+ DEMO_MOMENT)
 	$(PY) -m app.db.ensure_database
 	$(MAKE) migrate seed dev-passwords
 	$(MAKE) run-month M=$(DEMO_MONTH)
 	@if [ "$(DEMO_CONFIRM)" != "0" ]; then \
 	  $(PY) -m app.work.confirm_leases --as PER-RM-BAY && $(MAKE) run-month M=$(DEMO_MONTH); \
+	fi
+	@if [ "$(DEMO_CONFIRM)" != "0" ] && [ -n "$(DEMO_MOMENT)" ]; then \
+	  $(PY) -m datagen.build --month $(DEMO_MOMENT) && $(PY) -m app.records.seed && \
+	  $(MAKE) run-month M=$(DEMO_MOMENT) && $(PY) -m app.jobs.clock set $(DEMO_MOMENT)-01; \
 	fi
 
 demo: demo-data    ## demo-data, then the API on :8000 and the web app on :3000 until Ctrl-C

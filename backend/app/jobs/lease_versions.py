@@ -167,20 +167,29 @@ def default_llm():
 
     With ANTHROPIC_API_KEY: the real client (cache first, as always), its
     provider calls behind the `llm` circuit breaker.
-    Without: a cache-only client, if the cache directory exists at all."""
-    from ..llm.cache import ResponseCache
-    from ..llm.client import LLM
+    Without: a cache-only client, if there is any cache to read at all.
 
-    cache_root = Path(os.environ.get("LEASEDESK_LLM_CACHE", ".cache/llm"))
+    The cache is the one every other caller uses (settings' llm_cache_dir,
+    LEASEDESK_LLM_CACHE_DIR) plus the repository's committed answers
+    (client.REPLAY_DIR), so the demo's leases are read by the abstraction
+    agent with no key. LEASEDESK_LLM_CACHE names one directory and nothing
+    else: the suite and the chaos harness point it at an empty one to keep the
+    generator path deterministic and offline."""
+    from ..llm.cache import ResponseCache
+    from ..llm.client import LLM, REPLAY_DIR, _default_cache_dir
+
+    only = os.environ.get("LEASEDESK_LLM_CACHE")
+    root, replay = (Path(only), None) if only else (Path(_default_cache_dir()), REPLAY_DIR)
     if os.environ.get("ANTHROPIC_API_KEY"):
         import anthropic
 
         # The same timeout and SDK retries LLM() uses when it builds its own.
         provider = anthropic.Anthropic(timeout=120.0, max_retries=3)
-        return LLM(cache=ResponseCache(cache_root), client=guard_client(provider))
-    if not cache_root.is_dir():
+        return LLM(cache=ResponseCache(root, replay=replay), client=guard_client(provider))
+    # Checked before building the cache, which creates its own directory.
+    if not any(d is not None and d.is_dir() for d in (root, replay)):
         return None
-    return LLM(cache=ResponseCache(cache_root), client=_CacheOnlyClient())
+    return LLM(cache=ResponseCache(root, replay=replay), client=_CacheOnlyClient())
 
 
 def _is_cold(exc: BaseException) -> bool:
@@ -596,6 +605,12 @@ def confirmed_rules(conn: Connection, entity_id: str) -> ConfirmedRules:
             rsf = float(t["rentable_sf"][0])
             if kind not in ("fixed_percent", "fixed_step"):
                 raise ValueError("escalation_kind %r" % kind)
+            # A confirmed 300% a year would hold every month of the lease;
+            # waiting on a person costs one question instead.
+            from ..agents.abstraction import percent_unit_problem
+            unit = percent_unit_problem(kind, amount)
+            if unit:
+                raise ValueError(unit)
         except (TypeError, ValueError) as exc:
             out.waiting[lease_id] = "confirmed lease_version %d cannot be checked against: %s" % (
                 r["version_id"], exc)
