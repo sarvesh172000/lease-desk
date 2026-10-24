@@ -127,15 +127,10 @@ The demo and the whole test suite run offline. Only `--live` calls the API.
 
 | Document | What's in it |
 |---|---|
-| [docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md) | Final system design: trust model, agents, accounting, failure modes |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | High and low level diagrams, API surface, frontend structure |
-| [docs/SPONSORS.md](docs/SPONSORS.md) | Sponsor integration strategy |
-| **[docs/PLAN.md](docs/PLAN.md)** | **The plan being executed** — 36 hours, 7 stages, Jenil's phase structure |
-| [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Superseded by PLAN.md; kept for its fixtures and cut list |
-| [docs/PLAN_RECONCILIATION.md](docs/PLAN_RECONCILIATION.md) | Why the roadmap was compressed, and what was cut |
-| [docs/ROADMAP_PHASE_1.md](docs/ROADMAP_PHASE_1.md) | Roadmap: platform core and first thin slice |
-| [docs/ROADMAP_PHASE_2.md](docs/ROADMAP_PHASE_2.md) | Roadmap: the company, the mess, the full loop |
-| [docs/ROADMAP_PHASE_3.md](docs/ROADMAP_PHASE_3.md) | Roadmap: polish, hardening, multi-track delivery |
+| **[docs/PLAN.md](docs/PLAN.md)** | **The plan.** Seven stages, live status, who does what next |
+| [docs/DESIGN.md](docs/DESIGN.md) | How it works: trust model, agents, accounting, diagrams, API |
+| [docs/SPONSORS.md](docs/SPONSORS.md) | Which sponsors to target and how |
+| [docs/roadmap/](docs/roadmap/) | The full 500-hour plan — after the hackathon, not now |
 
 ## Status
 
