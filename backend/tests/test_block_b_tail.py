@@ -21,7 +21,7 @@ from app.personas.people import (
     AGREE, PERSONAS, REFUSE, UNAVAILABLE, UNKNOWN, answer, route,
 )
 from datagen.company import build_company
-from datagen.edgar import NEEDS_HUMAN_LABEL, coverage, load_corpus
+from datagen.edgar import coverage, load_corpus, score
 from datagen.leases import SECOND_AMENDMENT, amended, build_leases
 from datagen.month import build_month
 
@@ -117,47 +117,132 @@ def test_an_unknown_kind_is_an_error():
         escalate(10_000.00, "vibes", 0.0)
 
 
-# --- the EDGAR corpus ------------------------------------------------------
+# --- the EDGAR corpus -----------------------------------------------------
 
-def test_real_leases_are_cached():
+def test_three_distinct_real_leases_are_cached():
     corpus = load_corpus()
-    assert len(corpus) >= 3
+    assert len(corpus) == 3
     assert all(len(lease.text) > 20_000 for lease in corpus)
+
+
+def test_the_duplicate_lease_is_excluded_from_scoring():
+    """Inuvo is the renamed FindWhat.com and both filings attach the identical
+    Colonial Bank Plaza lease. Scoring both double-weights one lease."""
+    assert all(not lease.is_duplicate for lease in load_corpus())
+    with_dupes = load_corpus(include_duplicates=True)
+    assert len(with_dupes) == 4
+    assert sum(1 for l in with_dupes if l.is_duplicate) == 1
 
 
 def test_every_lease_records_where_it_came_from():
     for lease in load_corpus():
         assert lease.cik and lease.url.startswith("https://www.sec.gov/")
-        assert lease.file_date
+        assert lease.file_date and lease.document
 
 
-def test_every_label_carries_the_sentence_that_proves_it():
+def test_every_label_quote_really_is_in_the_filing():
+    """The check that makes a hand label verifiable rather than asserted."""
+    for lease in load_corpus():
+        for name, label in lease.labels.items():
+            if not label.is_absent:
+                assert lease.quote_is_in_text(name), "%s/%s" % (lease.doc_id, name)
+
+
+def test_a_stated_numeric_label_appears_verbatim_in_its_quote():
+    """Stated labels are read off the page. Derived ones — "0.03" for "Three
+    (3%) percent", a monthly figure computed from an annual — are correct but
+    are not in the words, so they are marked and excused."""
     for lease in load_corpus():
         for label in lease.labelled:
-            assert label.quote
-            if label.value != "yes":
-                assert label.value.replace(",", "") in label.quote.replace(",", "")
+            if not label.is_stated:
+                continue
+            if label.value.replace(".", "").replace("-", "").isdigit():
+                head = label.value.rstrip("0").rstrip(".").split(".")[0]
+                assert head in label.quote.replace(",", ""), \
+                    "%s %s" % (lease.doc_id, label.field)
 
 
-def test_unstated_terms_are_absent_not_guessed():
-    """A benchmark that invents an answer measures nothing."""
-    corpus = load_corpus()
-    absent = [l for lease in corpus for l in lease.labels.values() if l.is_absent]
-    assert absent
-    assert all(l.value is None and l.quote is None for l in absent)
+def test_every_derived_label_explains_its_derivation():
+    for lease in load_corpus():
+        for label in lease.labelled:
+            if label.derived:
+                assert label.note, "%s/%s" % (lease.doc_id, label.field)
 
 
-def test_the_fields_needing_a_person_are_listed():
-    """Reading a ninety-page exhibit properly is a person's job, and
-    pretending otherwise would make the EDGAR score meaningless."""
-    assert len(NEEDS_HUMAN_LABEL) >= 10
-    assert "rentable_sf" in NEEDS_HUMAN_LABEL
+def test_most_labels_are_read_rather_than_inferred():
+    """A benchmark made mostly of inference is not testing reading."""
+    labels = [l for lease in load_corpus() for l in lease.labelled]
+    stated = [l for l in labels if l.is_stated]
+    assert len(stated) > len(labels) / 2
 
 
-def test_coverage_is_reported_honestly():
+def test_an_absent_field_says_why():
+    """Absent means the exhibit does not state the term, not that labelling
+    gave up."""
+    for lease in load_corpus():
+        for label in lease.labels.values():
+            if label.is_absent:
+                assert label.absent_reason, "%s/%s" % (lease.doc_id, label.field)
+                assert label.quote is None
+
+
+def test_one_lease_carries_two_different_proportionate_shares():
+    """38.55% for taxes and insurance, 33.08% for CAM on ground-floor area. A
+    system assuming one share per lease gets this lease wrong."""
+    lease = next(l for l in load_corpus() if "sportsmans" in l.doc_id)
+    assert lease.label("pro_rata_share").value == "38.55"
+    assert lease.label("pro_rata_share_cam").value == "33.08"
+
+
+def test_a_lease_that_contradicts_itself_is_labelled_with_a_note():
+    lease = next(l for l in load_corpus() if "findwhat" in l.doc_id)
+    assert lease.label("rentable_sf").note
+    assert "32,823" in lease.label("rentable_sf").note
+
+
+def test_coverage_is_reported_per_field():
     numbers = coverage()
-    assert numbers["cam_present"] == len(load_corpus())
-    assert numbers["monthly_base_rent"] < len(load_corpus())
+    assert numbers["cam_present"] == 3
+    assert numbers["cam_cap"] == 0          # none of the three caps CAM
+    assert numbers["rentable_sf"] == 3
+
+
+def test_a_perfect_extractor_scores_one():
+    corpus = load_corpus()
+    perfect = {l.doc_id: {n: lab.value for n, lab in l.labels.items()
+                          if not lab.is_absent} for l in corpus}
+    result = score(perfect)
+    assert result["accuracy"] == 1.0
+    assert result["wrong"] == 0 and result["fabricated"] == 0
+
+
+def test_an_extractor_that_says_nothing_scores_zero():
+    result = score({})
+    assert result["accuracy"] == 0.0
+    assert result["missed"] == result["scorable"]
+
+
+def test_inventing_a_value_is_counted_separately_from_misreading_one():
+    """Claiming a cap on a lease that has none is a different failure from
+    reading the wrong cap."""
+    corpus = load_corpus()
+    result = score({corpus[0].doc_id: {"cam_cap": "5%"}})
+    assert result["fabricated"] == 1
+    assert result["wrong"] == 0
+
+
+def test_a_wrong_value_is_counted_as_wrong():
+    corpus = load_corpus()
+    result = score({corpus[0].doc_id: {"term_years": "99"}})
+    assert result["wrong"] == 1
+    assert result["fabricated"] == 0
+
+
+def test_numbers_compare_regardless_of_formatting():
+    corpus = load_corpus()
+    lease = next(l for l in corpus if l.label("annual_base_rent").value)
+    value = lease.label("annual_base_rent").value
+    assert score({lease.doc_id: {"annual_base_rent": "%s" % float(value)}})["right"] >= 1
 
 
 # --- counterfactual replay -------------------------------------------------

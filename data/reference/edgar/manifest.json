@@ -32,6 +32,16 @@
       "accession": "0001354488-12-001498",
       "url": "https://www.sec.gov/Archives/edgar/data/829323/000135448812001498/inuv_ex106.htm",
       "characters": 89841
+    },
+    {
+      "id": "edgar-04-asset-acceptance-capital",
+      "company": "ASSET ACCEPTANCE CAPITAL CORP  (CIK 0001264707)",
+      "cik": "0001264707",
+      "form": "S-1",
+      "file_date": "2003-10-24",
+      "accession": "0000950124-03-003334",
+      "url": "https://www.sec.gov/Archives/edgar/data/1264707/000095012403003334/k79644exv10w10.txt",
+      "characters": 90280
     }
   ]
 }

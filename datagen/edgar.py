@@ -1,52 +1,92 @@
-"""Real leases, filed with the SEC.
+"""Real leases, filed with the SEC, hand-labelled by reading them.
 
-Everything else in `datagen` is a lease we wrote, which means the extraction
-benchmark is partly a test of our own prose. These are not: they are exhibits
-companies actually filed, with the clause numbering, the capitalisation, the
-defined terms and the thirty-page digressions that real leases have.
+Everything else in `datagen` is a lease we wrote, so an extraction benchmark
+built only on it is partly a test of our own prose. These are not. They have
+the clause numbering, the defined terms, the thirty-page digressions and the
+internal contradictions that real leases have.
 
-They are small in number and that is the point — the synthetic corpus gives
-breadth, these give a check that the extractor has not simply learned how *we*
-write a lease. The eval scores them separately for the same reason.
+Three of them, which is few — breadth comes from the synthetic corpus. What
+these give is a check that the extractor has not simply learned how *we* write
+a lease, which is why the eval scores them separately.
 
-Each label carries the sentence that supports it, located in the filed text, so
-a label can be checked rather than taken on trust. Where a term genuinely is
-not stated in an exhibit, it is recorded as absent rather than guessed: a
-benchmark that invents an answer measures nothing.
+**The labels were produced by reading the exhibits, not by pattern-matching
+them.** An earlier pass did pattern-match and produced labels that were wrong:
+"renewal notice days" caught an insurance-cancellation notice, and "annual base
+rent" lifted the monthly figure from the same sentence. A benchmark carrying
+wrong labels is worse than one carrying none, because it scores a correct
+extraction as a failure. Every value here carries the sentence it was read
+from, so any label can be checked against the filed document.
+
+Three things reading them turned up that writing a generator would never have:
+
+  - **Two exhibits are the same lease.** Inuvo is the renamed FindWhat.com and
+    both filings attach the identical Colonial Bank Plaza lease. Scoring both
+    would double-weight one lease's quirks, so one is marked a duplicate and
+    excluded.
+  - **One lease carries two different proportionate shares** — 38.55% for taxes
+    and insurance on total leasable area, 33.08% for CAM on ground-floor area.
+    A system assuming one share per lease gets that lease wrong.
+  - **One lease contradicts itself**, giving the premises as 32,820 rentable
+    square feet in one sub-paragraph and 32,823 in the next.
 """
 
 import json
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
 CORPUS = Path(__file__).resolve().parents[1] / "data" / "reference" / "edgar"
 MANIFEST = CORPUS / "manifest.json"
+LABELS = CORPUS.parent / "edgar_labels.json"
+
+# The fields a lease abstractor is scored on here. Narrower than the synthetic
+# schema, because these are what real exhibits actually state.
+SCORED_FIELDS = (
+    "term_years", "commencement", "rentable_sf", "building_rsf",
+    "monthly_base_rent", "annual_base_rent", "escalation_kind",
+    "escalation_amount", "pro_rata_share", "pro_rata_share_cam", "cam_present",
+    "cam_cap", "management_fee_cap", "audit_window_days", "renewal_count",
+    "renewal_years", "renewal_notice_days", "security_deposit",
+)
 
 
 @dataclass(frozen=True)
 class Label:
-    """One field of one real lease, with the sentence that states it."""
     field: str
     value: Optional[str]
     quote: Optional[str]
+    note: Optional[str] = None
+    absent_reason: Optional[str] = None
+    # True where the value is a normalised or computed form of what the quote
+    # states — "0.03" for "Three (3%) percent" — rather than the words. Still
+    # correct, but it tests inference rather than reading.
+    derived: bool = False
 
     @property
     def is_absent(self) -> bool:
         return self.value is None
+
+    @property
+    def is_stated(self) -> bool:
+        return not self.is_absent and not self.derived
 
 
 @dataclass
 class EdgarLease:
     doc_id: str
     company: str
+    document: str
     cik: str
     form: str
     file_date: str
     url: str
     text: str
     labels: Dict[str, Label] = field(default_factory=dict)
+    duplicate_of: Optional[str] = None
+
+    @property
+    def is_duplicate(self) -> bool:
+        return self.duplicate_of is not None
 
     @property
     def labelled(self) -> List[Label]:
@@ -55,115 +95,115 @@ class EdgarLease:
     def label(self, name: str) -> Optional[Label]:
         return self.labels.get(name)
 
-
-# Patterns that locate a field's supporting sentence in a real exhibit.
-#
-# Deliberately few. A first pass matched more fields and two of them were
-# WRONG: "renewal notice days" caught an insurance-cancellation notice, and
-# "annual base rent" picked up the monthly figure from the same sentence. A
-# benchmark carrying wrong labels is worse than one carrying none, because it
-# scores a correct extraction as a failure and sends you chasing it.
-#
-# What survives is only what the supporting quote actually proves. The rest is
-# recorded as unlabelled and listed in NEEDS_HUMAN_LABEL — reading a
-# ninety-page exhibit properly is a person's job, and pretending otherwise
-# would make the EDGAR score meaningless.
-_PATTERNS = {
-    "monthly_base_rent": (
-        r"[^.]{0,120}(?:equal )?monthly installments? of \$\s*([\d,]+(?:\.\d{2})?)[^.]{0,60}\.",
-        r"[^.]{0,120}monthly (?:base )?rent (?:of|shall be) \$\s*([\d,]+(?:\.\d{2})?)[^.]{0,60}\.",
-    ),
-    "cam_present": (
-        r"[^.]{0,120}[Cc]ommon [Aa]rea [Mm]aintenance[^.]{0,100}\.",
-    ),
-}
-
-# Fields a person has to label by reading. Listed, not guessed.
-NEEDS_HUMAN_LABEL = (
-    "commencement", "expiration", "rentable_sf", "annual_base_rent",
-    "escalation_kind", "escalation_amount", "pro_rata_share",
-    "cam_cap", "cam_exclusions", "management_fee_cap", "audit_window",
-    "renewal_count", "renewal_notice_days", "security_deposit",
-)
+    def quote_is_in_text(self, name: str) -> bool:
+        """Whether the label's supporting sentence really is in the filing."""
+        label = self.labels.get(name)
+        if label is None or not label.quote:
+            return False
+        return _flat(label.quote)[:60] in _flat(self.text)
 
 
-def load_corpus() -> List[EdgarLease]:
-    """The cached exhibits, with their labels located in the filed text."""
-    if not MANIFEST.exists():
+def load_corpus(include_duplicates: bool = False) -> List[EdgarLease]:
+    """The cached exhibits with their hand-written labels."""
+    if not MANIFEST.exists() or not LABELS.exists():
         return []
-    manifest = json.loads(MANIFEST.read_text())
+
+    manifest = {d["id"]: d for d in json.loads(MANIFEST.read_text())["documents"]}
+    labelled = json.loads(LABELS.read_text())["leases"]
 
     out: List[EdgarLease] = []
-    for entry in manifest["documents"]:
-        path = CORPUS / (entry["id"] + ".txt")
-        if not path.exists():
+    for doc_id, entry in labelled.items():
+        meta = manifest.get(doc_id)
+        path = CORPUS / (doc_id + ".txt")
+        if meta is None or not path.exists():
             continue
-        lease = EdgarLease(
-            doc_id=entry["id"], company=entry["company"], cik=entry["cik"],
-            form=entry["form"], file_date=entry["file_date"], url=entry["url"],
-            text=path.read_text(),
-        )
-        lease.labels = _label(lease.text)
-        out.append(lease)
+        if entry.get("duplicate_of") and not include_duplicates:
+            continue
+
+        out.append(EdgarLease(
+            doc_id=doc_id,
+            company=entry["company"],
+            document=entry.get("document", ""),
+            cik=meta["cik"], form=meta["form"], file_date=meta["file_date"],
+            url=meta["url"], text=path.read_text(),
+            duplicate_of=entry.get("duplicate_of"),
+            labels={
+                name: Label(name, spec.get("value"), spec.get("quote"),
+                            spec.get("label_note"), spec.get("absent_reason"),
+                            bool(spec.get("derived")))
+                for name, spec in entry["fields"].items()
+            },
+        ))
     return out
-
-
-def _label(text: str) -> Dict[str, Label]:
-    flat = " ".join(text.split())
-    labels: Dict[str, Label] = {}
-
-    for name, patterns in _PATTERNS.items():
-        found = None
-        for pattern in patterns:
-            match = re.search(pattern, flat)
-            if match:
-                value = match.group(1) if match.groups() else "yes"
-                found = Label(name, value.strip(), match.group(0).strip()[:260])
-                break
-        labels[name] = found or Label(name, None, None)
-
-    return labels
 
 
 def coverage(corpus: Optional[List[EdgarLease]] = None) -> Dict[str, int]:
     """How many of the real leases state each field at all.
 
-    A field most exhibits do not state is not a field the extractor should be
-    scored on.
+    A field most exhibits do not state is not a field to score an extractor on.
     """
     corpus = corpus if corpus is not None else load_corpus()
-    out: Dict[str, int] = {}
+    out = {name: 0 for name in SCORED_FIELDS}
     for lease in corpus:
         for name, label in lease.labels.items():
-            out[name] = out.get(name, 0) + (0 if label.is_absent else 1)
+            if not label.is_absent:
+                out[name] = out.get(name, 0) + 1
     return out
 
 
-def write_labels(path: Optional[Path] = None) -> Path:
-    """Persist the labels for the eval to score against."""
+def score(extracted: Dict[str, Dict[str, object]]) -> Dict[str, object]:
+    """Score an extractor against the hand labels.
+
+    `extracted` maps doc_id to {field: value}. Only fields the exhibit actually
+    states are scored — claiming a value for a term the lease is silent on is
+    counted separately as a fabrication, because inventing a number is a
+    different failure from misreading one.
+    """
     corpus = load_corpus()
-    payload = {
-        "source": "SEC EDGAR",
-        "note": ("Labels located in the filed text, each carrying the sentence "
-                 "that supports it. Only fields whose quote actually proves the "
-                 "value are labelled; the rest need a person to read the "
-                 "exhibit and are listed in needs_human_label."),
-        "needs_human_label": list(NEEDS_HUMAN_LABEL),
-        "leases": {
-            lease.doc_id: {
-                "company": lease.company,
-                "cik": lease.cik,
-                "form": lease.form,
-                "file_date": lease.file_date,
-                "url": lease.url,
-                "fields": {
-                    name: {"value": label.value, "quote": label.quote}
-                    for name, label in lease.labels.items()
-                },
-            }
-            for lease in corpus
-        },
+    right = wrong = fabricated = missed = 0
+    detail: Dict[str, Dict[str, str]] = {}
+
+    for lease in corpus:
+        got = extracted.get(lease.doc_id, {})
+        per_lease: Dict[str, str] = {}
+        for name, label in lease.labels.items():
+            value = got.get(name)
+            if label.is_absent:
+                if value not in (None, ""):
+                    fabricated += 1
+                    per_lease[name] = "fabricated"
+                continue
+            if value in (None, ""):
+                missed += 1
+                per_lease[name] = "missed"
+            elif _same(value, label.value):
+                right += 1
+                per_lease[name] = "right"
+            else:
+                wrong += 1
+                per_lease[name] = "wrong"
+        detail[lease.doc_id] = per_lease
+
+    scorable = right + wrong + missed
+    return {
+        "leases": len(corpus),
+        "right": right, "wrong": wrong, "missed": missed,
+        "fabricated": fabricated,
+        "scorable": scorable,
+        "accuracy": round(right / scorable, 4) if scorable else 0.0,
+        "detail": detail,
     }
-    out = Path(path or (CORPUS.parent / "edgar_labels.json"))
-    out.write_text(json.dumps(payload, indent=2) + "\n")
-    return out
+
+
+def _same(got, expected) -> bool:
+    a, b = str(got).strip().lower(), str(expected).strip().lower()
+    if a == b:
+        return True
+    try:
+        return abs(float(a.replace(",", "")) - float(b.replace(",", ""))) < 0.01
+    except ValueError:
+        return False
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())

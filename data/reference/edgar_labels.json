@@ -1,73 +1,294 @@
 {
   "source": "SEC EDGAR",
-  "note": "Labels located in the filed text, each carrying the sentence that supports it. Only fields whose quote actually proves the value are labelled; the rest need a person to read the exhibit and are listed in needs_human_label.",
-  "needs_human_label": [
-    "commencement",
-    "expiration",
-    "rentable_sf",
-    "annual_base_rent",
-    "escalation_kind",
-    "escalation_amount",
-    "pro_rata_share",
-    "cam_cap",
-    "cam_exclusions",
-    "management_fee_cap",
-    "audit_window",
-    "renewal_count",
-    "renewal_notice_days",
-    "security_deposit"
-  ],
+  "method": "Hand-labelled by reading each exhibit. Every value carries the sentence it was read from, so a label can be checked against the filed document.",
+  "absent_means": "The exhibit does not state the term. It does not mean the label could not be found.",
+  "distinct_leases": 3,
+  "note": "edgar-01 and edgar-03 are the SAME lease filed twice: Inuvo is the renamed FindWhat.com and both filings attach the identical Colonial Bank Plaza lease. Scoring both would double-weight one lease's quirks, so edgar-03 is marked a duplicate and excluded from scoring.",
   "leases": {
-    "edgar-01-findwhat-com-inc": {
-      "company": "FINDWHAT COM INC  (CIK 0001094808)",
-      "cik": "0001094808",
-      "form": "10QSB",
-      "file_date": "2002-11-06",
-      "url": "https://www.sec.gov/Archives/edgar/data/1094808/000095015202008069/l96901aexv10w9.txt",
+    "edgar-02-sportsmans-guide-inc": {
+      "company": "SPORTSMANS GUIDE INC (CIK 0000791450)",
+      "document": "Lease Agreement, The Golf Warehouse LLC / Steve Clark Trust, Wichita KS",
+      "duplicate_of": null,
       "fields": {
-        "monthly_base_rent": {
+        "term_years": {
+          "value": "5",
+          "quote": "for a term of five (5) years (the \"ORIGINAL TERM\")"
+        },
+        "commencement": {
           "value": null,
-          "quote": null
+          "quote": null,
+          "absent_reason": "conditional: the earlier of substantial completion, June 1 2000, or opening for business"
+        },
+        "rentable_sf": {
+          "value": "45330",
+          "quote": "consist of a space containing approximately 45,330 square feet of floor area (including 9,600 square feet of mezzanine space)"
+        },
+        "building_rsf": {
+          "value": "117600",
+          "quote": "the total leasable space in the Warehouse is 117,600 square feet"
+        },
+        "monthly_base_rent": {
+          "value": "11910.00",
+          "quote": "the sum of $142,920.00 annually in equal monthly installments of $11,910.00 per month"
+        },
+        "annual_base_rent": {
+          "value": "142920.00",
+          "quote": "LESSEE shall pay, as base rent for years 1 through 5, the sum of $142,920.00 annually"
+        },
+        "escalation_kind": {
+          "value": "none_in_initial_term",
+          "quote": "as base rent for years 1 through 5, the sum of $142,920.00 annually",
+          "label_note": "Flat for the whole initial term. Rent steps only if the option is exercised.",
+          "derived": true
+        },
+        "escalation_amount": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no escalation during the initial term"
+        },
+        "pro_rata_share": {
+          "value": "38.55",
+          "quote": "therefore, Lessee's proportionate share is 38.55%",
+          "label_note": "Taxes and insurance only."
+        },
+        "pro_rata_share_cam": {
+          "value": "33.08",
+          "quote": "Lessee's proportionate share of the common area maintenance costs shall be 33.08 percent",
+          "label_note": "A SECOND share, on ground-floor area, for CAM. Two different denominators in one lease."
         },
         "cam_present": {
           "value": "yes",
-          "quote": "(i) Additional Rent: Tenant's Pro Rata Share Common Area Maintenance Expenses (see Section 4."
+          "quote": "COMMON AREA MAINTENANCE: In addition to the base rent above provided, and as additional lease rent, Lessee shall pay its proportionate share of the cost of operation and maintenance of the common area"
+        },
+        "cam_cap": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no cap on controllable expenses is stated"
+        },
+        "management_fee_cap": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "not stated"
+        },
+        "audit_window_days": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no tenant audit right is granted"
+        },
+        "renewal_count": {
+          "value": "1",
+          "quote": "LESSEE shall have the right to extend the term of this lease for an additional five (5) years",
+          "derived": true,
+          "label_note": "the lease grants one option; the digit is not written"
+        },
+        "renewal_years": {
+          "value": "5",
+          "quote": "extend the term of this lease for an additional five (5) years"
+        },
+        "renewal_notice_days": {
+          "value": "180",
+          "quote": "upon written notice provided to LESSOR 180 days prior to expiration of the Original Term"
+        },
+        "security_deposit": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no security deposit clause in this lease"
         }
       }
     },
-    "edgar-02-sportsmans-guide-inc": {
-      "company": "SPORTSMANS GUIDE INC  (CIK 0000791450)",
-      "cik": "0000791450",
-      "form": "10-K",
-      "file_date": "2005-03-17",
-      "url": "https://www.sec.gov/Archives/edgar/data/791450/000095013405005369/c93035exv10w5.txt",
+    "edgar-01-findwhat-com-inc": {
+      "company": "FINDWHAT COM INC (CIK 0001094808)",
+      "document": "Colonial Bank Plaza at Summerlin Center, Ft. Myers FL / Alanda Ltd",
+      "duplicate_of": null,
       "fields": {
+        "term_years": {
+          "value": "10",
+          "quote": "(c) Term: Ten (10) years"
+        },
+        "commencement": {
+          "value": "2002-11-30",
+          "quote": "(b) Anticipated Commencement Date: November 30, 2002",
+          "label_note": "Anticipated, not fixed.",
+          "derived": true
+        },
+        "rentable_sf": {
+          "value": "32820",
+          "quote": "(f) Size of Premises: 32,820 rentable sq. ft. (10,940 rentable sq. ft. per floor)",
+          "label_note": "Section 1.1(j) says 32,823 for the same premises. The lease disagrees with itself."
+        },
+        "building_rsf": {
+          "value": "51653",
+          "quote": "(j) Tenant Estimated Pro Rata Share: 32,823 sq.ft./51,653 sq.ft. (i.e. 63.545%)"
+        },
         "monthly_base_rent": {
-          "value": "11,910.00",
-          "quote": "00 annually in equal monthly installments of $11,910.00 per month."
+          "value": "36922.50",
+          "quote": "(g) Annual Base Rent: $443,070.00",
+          "label_note": "Derived: the annual figure divided by twelve. The lease states only the annual.",
+          "derived": true
+        },
+        "annual_base_rent": {
+          "value": "443070.00",
+          "quote": "(g) Annual Base Rent: $443,070.00"
+        },
+        "escalation_kind": {
+          "value": "fixed_percent",
+          "quote": "(h) Annual Rental Increase: Three (3%) percent. See Section 4.2.",
+          "derived": true,
+          "label_note": "our vocabulary for what the clause describes"
+        },
+        "escalation_amount": {
+          "value": "0.03",
+          "quote": "(h) Annual Rental Increase: Three (3%) percent",
+          "derived": true,
+          "label_note": "decimal form of the percentage the lease states in words"
+        },
+        "pro_rata_share": {
+          "value": "63.545",
+          "quote": "(j) Tenant Estimated Pro Rata Share: 32,823 sq.ft./51,653 sq.ft. (i.e. 63.545%)"
+        },
+        "pro_rata_share_cam": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "one share covers all additional rent"
         },
         "cam_present": {
           "value": "yes",
-          "quote": "nt, Lessee shall pay its proportionate share of the cost of operation and maintenance of the common area (collectively \"common area maintenance costs\")."
+          "quote": "(i) Additional Rent: Tenant's Pro Rata Share Common Area Maintenance Expenses (see Section 4.3)"
+        },
+        "cam_cap": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "Section 1.1 refers to limitations in Section 4.3 but states no percentage in the summary"
+        },
+        "management_fee_cap": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "not stated in the fundamental provisions"
+        },
+        "audit_window_days": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "not stated in the fundamental provisions"
+        },
+        "renewal_count": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no option to extend in the fundamental provisions"
+        },
+        "renewal_years": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no option stated"
+        },
+        "renewal_notice_days": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no option stated"
+        },
+        "security_deposit": {
+          "value": "100000.00",
+          "quote": "(k) Security Deposit: $100,000.00"
+        }
+      }
+    },
+    "edgar-04-asset-acceptance-capital": {
+      "company": "ASSET ACCEPTANCE CAPITAL (CIK 0001264707)",
+      "document": "Brooklyn Heights Business Park, Ohio / Asset Acceptance Corp",
+      "duplicate_of": null,
+      "fields": {
+        "term_years": {
+          "value": "5",
+          "quote": "The term of this Lease shall be for a period of five (5) years"
+        },
+        "commencement": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "conditional: the earlier of delivery of possession or opening for business, but not before February 1 2001"
+        },
+        "rentable_sf": {
+          "value": "11525",
+          "quote": "contains approximately 11,525 square feet of gross floor area (the \"Premises\")"
+        },
+        "building_rsf": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "stated only as a ratio, not as an area"
+        },
+        "monthly_base_rent": {
+          "value": "11525.00",
+          "quote": "payable in fixed equal monthly installments of Eleven Thousand Five Hundred Twenty Five and 00/100 ($11,525.00)",
+          "label_note": "First Lease Year. Equal to the square footage, which is a coincidence of $12.00 psf."
+        },
+        "annual_base_rent": {
+          "value": "138300.00",
+          "quote": "the sum One Hundred Thirty Eight Thousand Three Hundred and 00/100 dollars ($138,300.00) per Lease Year"
+        },
+        "escalation_kind": {
+          "value": "fixed_step",
+          "quote": "3.1.2 the s",
+          "label_note": "Section 3.1 lists a separate fixed sum per Lease Year rather than a percentage.",
+          "derived": true
+        },
+        "escalation_amount": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "each Lease Year is stated as its own sum; no single step amount is given"
+        },
+        "pro_rata_share": {
+          "value": "37.85",
+          "quote": "Tenant's initial Proportionate Share shall be Thirty Seven and 85/100 percent (37.85 %)"
+        },
+        "pro_rata_share_cam": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "one share covers both Taxes and Operating Expenses"
+        },
+        "cam_present": {
+          "value": "yes",
+          "quote": "Proportionate Share (as hereinafter defined) of all (i) Taxes (as defined in Section 4"
+        },
+        "cam_cap": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "no cap on controllable expenses is stated"
+        },
+        "management_fee_cap": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "not stated"
+        },
+        "audit_window_days": {
+          "value": "180",
+          "quote": "Tenant shall have the right, exercised within one hundred eighty (180) days after Tenant's receipt of the written statement set forth above, to conduct an audit or inspection of Landlord's books"
+        },
+        "renewal_count": {
+          "value": "1",
+          "quote": "Minimum Annual Rent for such Extension Term shall be adjusted as set forth herein (\"Rent Adjustment\")",
+          "label_note": "An Extension Term exists; the count is not stated explicitly in the summary.",
+          "derived": true
+        },
+        "renewal_years": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "length not stated in the sections read"
+        },
+        "renewal_notice_days": {
+          "value": null,
+          "quote": null,
+          "absent_reason": "not stated in the sections read"
+        },
+        "security_deposit": {
+          "value": "12245.31",
+          "quote": "the sum of Twelve Thousand Two Hundred Forty Five and 31/100 Dollars ($12,245.31)"
         }
       }
     },
     "edgar-03-inuvo,-inc.": {
-      "company": "INUVO, INC.  (INUV)  (CIK 0000829323)",
-      "cik": "0000829323",
-      "form": "10-K",
-      "file_date": "2012-03-29",
-      "url": "https://www.sec.gov/Archives/edgar/data/829323/000135448812001498/inuv_ex106.htm",
-      "fields": {
-        "monthly_base_rent": {
-          "value": null,
-          "quote": null
-        },
-        "cam_present": {
-          "value": "yes",
-          "quote": "(i) Additional Rent: Tenant's Pro Rata Share Common Area Maintenance Expenses (see Section 4."
-        }
-      }
+      "company": "INUVO, INC. (CIK 0000829323)",
+      "document": "Colonial Bank Plaza at Summerlin Center, Ft. Myers FL / Alanda Ltd",
+      "duplicate_of": "edgar-01-findwhat-com-inc",
+      "fields": {}
     }
-  }
+  },
+  "derived_means": "The value is a normalised or computed form of what the quote states, not the words themselves. Still correct, but it tests inference rather than reading."
 }
