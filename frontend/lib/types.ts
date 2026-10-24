@@ -115,13 +115,28 @@ export interface ExceptionDetail {
   reason?: string | null;
   rule?: string | null;
   confidence?: number | null;
+  /**
+   * EXTENSION: what approving does with the money. On a hold, `payable` is the
+   * undisputed amount approving ("Uphold hold") posts and `disputed` what stays
+   * out of the ledger; on an approve proposal, `payable` is the billed amount.
+   */
+  payable?: number | null;
+  disputed?: number | null;
+  /** EXTENSION: once decided: "upheld", or "pay_as_billed" (the controller's override). */
+  resolution?: "upheld" | "pay_as_billed" | string | null;
+  resolved_by?: string | null;
+  override_reason?: string | null;
 }
 
 /** EXTENSION: what the gateway did after an approval. */
 export interface Posting {
-  status: "posted" | "pending";
+  /** closed: a hold upheld on a charge nothing supports; nothing owed, nothing posted. */
+  status: "posted" | "closed" | "pending";
   journal_entry_id?: number | null;
   error?: string | null;
+  /** What the entry put on accounts payable, and what stayed out of the ledger. */
+  amount?: number | null;
+  disputed?: number | null;
 }
 
 /** POST /api/exceptions/{id}/approve (and EXTENSION /hold) */

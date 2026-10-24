@@ -13,7 +13,7 @@ import { EmptyState, ErrorState, LoadingBlock, Skeleton } from "@/components/ui/
 import { WorkStateBadge } from "@/components/WorkStateBadge";
 import { ApiError } from "@/lib/api";
 import { day, humanize, money, period, signedMoney, STATUS_LABEL } from "@/lib/format";
-import { useAllowedActions, useException, useExceptionAction, useSchedule } from "@/lib/hooks";
+import { useAllowedActions, useException, useExceptionAction, useMe, usePayAsBilled, useSchedule } from "@/lib/hooks";
 import type { ActionResult, Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -233,7 +233,13 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                 <JournalEntryTable entries={inv.entries} balanced={inv.balanced} />
               ) : (
                 <EmptyState title="No entries proposed.">
-                  A charge check proposes no adjusting entries. Approving it posts the billed charge to the ledger through the gateway (Dr lease cost, Cr accounts payable).
+                  {ex.resolution === "pay_as_billed"
+                    ? `Paid as billed by ${ex.resolved_by ?? "the controller"} over the hold: ${ex.override_reason ?? "reason on record"}.`
+                    : ex.resolution === "upheld"
+                      ? `Hold upheld by ${ex.resolved_by ?? "a reviewer"}. ${(ex.payable ?? 0) > 0 ? `Only the undisputed ${money(ex.payable)} posts` : "Nothing is paid"}; the disputed ${money(ex.disputed)} never reaches the ledger.`
+                      : ex.proposal === "hold"
+                        ? "A charge check proposes no adjusting entries. Upholding the hold posts only the undisputed amount through the gateway (Dr expense, Cr accounts payable); the disputed amount stays out of the ledger."
+                        : "A charge check proposes no adjusting entries. Approving it posts the billed charge to the ledger through the gateway (Dr lease cost, Cr accounts payable)."}
                 </EmptyState>
               )}
             </CardBody>
@@ -281,20 +287,44 @@ const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold",
 // The money screen offers sign-off and hold; the rest of the queue's actions live elsewhere.
 const SCREEN_ACTIONS = new Set(["approve", "hold"]);
 
-function outcome(action: ItemAction, res: ActionResult): string {
-  const did = action === "approve" ? "Approved" : "Held";
+function outcome(action: ItemAction, res: ActionResult, did?: string): string {
+  did = did ?? (action === "approve" ? "Approved" : "Held");
   const state = res.state ? ` · ${res.state}` : ` · now ${STATUS_LABEL[res.status] ?? res.status}`;
-  if (res.posting?.status === "posted") return `${did} · posted to the ledger (journal entry #${res.posting.journal_entry_id})${state}`;
-  if (res.posting?.status === "pending") return `${did} · posting pending${res.posting.error ? ` (${res.posting.error})` : ""}${state}`;
+  const p = res.posting;
+  const kept = p?.disputed ? `; ${money(p.disputed)} stays held` : "";
+  if (p?.status === "posted") {
+    const amount = p.amount != null ? `${money(p.amount)} ` : "";
+    return `${did} · ${amount}posted to the ledger (journal entry #${p.journal_entry_id})${kept}${state}`;
+  }
+  if (p?.status === "closed") return `${did} · nothing paid${kept}${state}`;
+  if (p?.status === "pending") return `${did} · posting pending${p.error ? ` (${p.error})` : ""}${state}`;
   return `${did}${state}`;
+}
+
+/** A held charge: what "Uphold hold" does with the money, in one line. */
+function upholdCopy(ex: ExceptionDetail): string {
+  const payable = ex.payable ?? ex.expected ?? 0;
+  const disputed = ex.disputed ?? ex.delta ?? 0;
+  return payable > 0
+    ? `Posts the undisputed ${money(payable)}; ${money(disputed)} stays held.`
+    : `Nothing is paid; the ${money(disputed)} stays held.`;
 }
 
 function Actions({ ex }: { ex: ExceptionDetail }) {
   const allowed = useAllowedActions(ex.exception_id);
   const m = useExceptionAction(ex.exception_id);
+  const override = usePayAsBilled(ex.exception_id);
+  const me = useMe();
   const [done, setDone] = useState<string | null>(null);
+  const [overriding, setOverriding] = useState(false);
+  const [why, setWhy] = useState("");
   const actions = (allowed.data?.actions ?? []).filter((a) => SCREEN_ACTIONS.has(a));
   const blockApprove = !!ex.investigation && (!ex.investigation.balanced || !ex.investigation.explains_variance);
+  const isHold = ex.proposal === "hold";
+  const canOverride = isHold && actions.includes("approve") && me.data?.role === "controller";
+  const busy = m.isPending || override.isPending;
+  const error = m.error ?? override.error;
+  const label = (a: string) => (a === "approve" && isHold ? "Uphold hold" : ACTION_LABEL[a] ?? humanize(a));
 
   return (
     <div className="flex shrink-0 flex-col items-end gap-1.5 pt-5" data-testid="actions">
@@ -304,32 +334,101 @@ function Actions({ ex }: { ex: ExceptionDetail }) {
         ) : allowed.isError ? (
           <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
         ) : actions.length ? (
-          actions.map((a) => (
-            <Button
-              key={a}
-              size="lg"
-              variant={a === "approve" ? "primary" : "secondary"}
-              disabled={m.isPending || (a === "approve" && blockApprove)}
-              onClick={() =>
-                m.mutate(a, {
-                  onSuccess: (res) => setDone(outcome(a, res)),
-                  onError: () => setDone(null),
-                })
-              }
-              title={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
-            >
-              {m.isPending && m.variables === a ? "Working…" : ACTION_LABEL[a] ?? humanize(a)}
-            </Button>
-          ))
+          <>
+            {actions.map((a) => (
+              <Button
+                key={a}
+                size="lg"
+                variant={a === "approve" ? "primary" : "secondary"}
+                disabled={busy || (a === "approve" && blockApprove)}
+                onClick={() => {
+                  override.reset();
+                  m.mutate(a, {
+                    onSuccess: (res) => setDone(outcome(a, res, a === "approve" && isHold ? "Hold upheld" : undefined)),
+                    onError: () => setDone(null),
+                  });
+                }}
+                title={
+                  a === "approve" && blockApprove
+                    ? "Entries must balance and explain the variance before approval"
+                    : a === "approve" && isHold
+                      ? `Agree the charge is wrong. ${upholdCopy(ex)}`
+                      : undefined
+                }
+              >
+                {m.isPending && m.variables === a ? "Working…" : label(a)}
+              </Button>
+            ))}
+            {canOverride ? (
+              <Button
+                size="lg"
+                variant="secondary"
+                disabled={busy}
+                aria-expanded={overriding}
+                data-testid="pay-as-billed"
+                onClick={() => setOverriding((v) => !v)}
+                title={`Controller override: pay the billed ${money(ex.actual)}, disputed amount included`}
+              >
+                Pay as billed…
+              </Button>
+            ) : null}
+          </>
         ) : (
           <span data-testid="no-actions" className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
             {ex.status === "balanced" ? `${ex.state ? humanize(ex.state.toLowerCase()) : "Approved"} — nothing to do` : "No actions available to your role"}
           </span>
         )}
       </div>
-      {m.isError ? (
+      {isHold && actions.includes("approve") && !done ? (
+        <span data-testid="uphold-copy" className="text-sm text-ink-soft">
+          Uphold hold: {upholdCopy(ex)}
+        </span>
+      ) : null}
+      {canOverride && overriding ? (
+        <form
+          className="mt-1 flex w-[26rem] flex-col gap-2 rounded-md border border-line bg-surface p-3 shadow-card"
+          data-testid="pay-as-billed-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!why.trim()) return;
+            m.reset();
+            override.mutate(why.trim(), {
+              onSuccess: (res) => {
+                setOverriding(false);
+                setWhy("");
+                setDone(outcome("approve", res, "Paid as billed (controller override)"));
+              },
+              onError: () => setDone(null),
+            });
+          }}
+        >
+          <label htmlFor="override-reason" className="text-sm font-medium">
+            {(ex.payable ?? ex.expected ?? 0) > 0
+              ? `Pay the billed ${money(ex.actual)}, including the disputed ${money(ex.disputed ?? ex.delta)}?`
+              : `Pay the billed ${money(ex.actual)}? None of it is supported by the lease.`}
+          </label>
+          <textarea
+            id="override-reason"
+            required
+            rows={3}
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            placeholder="Reason (required, recorded in the audit trail)"
+            className="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setOverriding(false)} disabled={override.isPending}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={!why.trim() || busy}>
+              {override.isPending ? "Working…" : "Pay as billed"}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+      {error ? (
         <span role="alert" className="text-sm text-bad">
-          {(m.error as Error).message}
+          {(error as Error).message}
         </span>
       ) : done ? (
         <span role="status" data-testid="action-result" className="text-sm font-medium text-ok">

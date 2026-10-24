@@ -201,6 +201,15 @@ def transition(conn: Connection, actor: Actor, item_id: Any, action: str, *,
     return _row(conn, item["id"])
 
 
+def record_denial(conn: Connection, actor: Actor, action: str, item: Mapping, reason: str,
+                  *, evidence: Optional[Mapping] = None) -> Event:
+    """Put a refusal of `action` on `item` on record, the way transition()
+    records can()'s, for a rule that lives above can() (work/charges.py's
+    pay-as-billed override). The caller raises Denied with the event."""
+    return _record_denial(conn, actor, action, "work_item", item["id"], item["state"], reason,
+                          evidence=evidence)
+
+
 # ------------------------------------------------------------------ helpers
 
 def _append_and_project(conn: Connection, actor: Actor, action: str, item_id: int,

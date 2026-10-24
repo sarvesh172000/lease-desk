@@ -35,8 +35,9 @@ ROLES = {
     # The AP clerk releases payment batches and touches nothing else.
     "ap_clerk": {"PAYMENT_RELEASE": {"approve", "hold", "resume"}},
     "auditor": {},
-    # Only the gateway posts, and it does nothing but post.
-    "system": {ANY_KIND: {"post"}},
+    # Only the gateway posts. Its one other move is closing an approved item
+    # that has nothing to post: a hold upheld on a wholly unsupported charge.
+    "system": {ANY_KIND: {"post", "close"}},
 }
 
 

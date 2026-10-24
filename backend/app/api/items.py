@@ -16,6 +16,17 @@ button got from allowed-actions is the answer the press gets. A refusal is
 (transition() writes it on its own connection), so it is in the timeline even
 though nothing else changed. A move the state machine does not have is 409.
 
+Approving a CHARGE_CHECK means what its proposal makes it mean
+(work/charges.py): on a charge the checker found correct it accepts the
+charge; on a hold it upholds the hold, and only the undisputed amount may
+post. Paying a disputed charge as billed is the explicit override
+
+    POST /api/items/{id}/actions/approve  {"reason": "...", "patch": {"resolution": "pay_as_billed"}}
+
+controller-only (403, on record, for anyone else) and with a required reason
+(422 without one). `patch.resolution` is the only patch an approve of a
+charge check takes.
+
 An approved CHARGE_CHECK item on a landlord charge is posted straight away
 through the gateway, on a `lease_gateway` connection, in a transaction of its
 own *after* the approval commits. If posting fails the approval stands, the
@@ -35,7 +46,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
-from ..work import gateway
+from ..work import charges, gateway
 from ..work.events import events_for
 from ..work.roles import Actor
 from ..work.transitions import (
@@ -130,9 +141,14 @@ class ActionBody(BaseModel):
 
 
 class Posting(BaseModel):
-    status: Literal["posted", "pending"]
+    # posted: an entry is in the ledger. closed: a hold upheld on a charge
+    # nothing supports, so nothing was owed and nothing posted. pending: the
+    # approval stands but the gateway has not posted yet (error says why).
+    status: Literal["posted", "closed", "pending"]
     journal_entry_id: Optional[int] = None
     error: Optional[str] = None
+    amount: Optional[float] = None       # what the entry put on Accounts payable
+    disputed: Optional[float] = None     # what stayed out of the ledger
 
 
 class ActionResult(BaseModel):
@@ -258,8 +274,12 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
     with eng.connect() as conn:
         try:
             with conn.begin():
-                row = transition(conn, work_actor(actor), item_id, action,
-                                 reason=reason, patch=patch)
+                if action == "approve" and _is_charge_check(conn, item_id):
+                    row = charges.approve_charge(conn, work_actor(actor), item_id,
+                                                 resolution=_resolution(patch), reason=reason)
+                else:
+                    row = transition(conn, work_actor(actor), item_id, action,
+                                     reason=reason, patch=patch)
         except Denied as exc:
             raise HTTPException(403, exc.reason) from None
         except UnknownItem:
@@ -272,11 +292,31 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
     posting = None
     if action == "approve" and _postable(row):
         posting = _post(gateway_engine, row["id"])
-        if posting.status == "posted":
+        if posting.status in ("posted", "closed"):
             with eng.connect() as conn:
                 row = dict(conn.execute(text("SELECT * FROM work_item WHERE id = :id"),
                                         {"id": row["id"]}).mappings().one())
     return ActionResult(state=row["state"], item=_public_item(row), posting=posting)
+
+
+def _is_charge_check(conn: Connection, item_id: int) -> bool:
+    kind = conn.execute(text("SELECT kind FROM work_item WHERE id = :id"),
+                        {"id": item_id}).scalar()
+    return kind == gateway.CHARGE_CHECK
+
+
+def _resolution(patch: Optional[Mapping]) -> Optional[str]:
+    """An approve of a charge check takes one patch key, `resolution`. The
+    evidence it records is written by charges.approve_charge, never by the
+    caller, so nobody can mark their own approval an override."""
+    patch = dict(patch or {})
+    resolution = patch.pop("resolution", None)
+    if patch:
+        raise ValueError("approving a charge check takes only patch.resolution, not %s"
+                         % ", ".join(sorted(patch)))
+    if resolution is not None and not isinstance(resolution, str):
+        raise ValueError("patch.resolution must be a string")
+    return resolution
 
 
 def _postable(row: Mapping) -> bool:
@@ -288,10 +328,35 @@ def _post(gateway_engine: Engine, item_id: int) -> Posting:
     try:
         with gateway_engine.begin() as conn:
             entry_id = gateway.post_approved_charge(conn, item_id)
+            done = conn.execute(text("""
+                SELECT e.evidence FROM audit_event e
+                 WHERE e.subject_type = 'work_item' AND e.subject_id = :sid AND e.allowed
+                   AND e.action IN ('post', 'close') ORDER BY e.seq DESC LIMIT 1
+            """), {"sid": str(item_id)}).scalar() or {}
     except Exception as exc:  # noqa: BLE001 — the approval is committed; never lose it to a post
         log.warning("approved work item %s not posted: %s", item_id, exc)
         return Posting(status="pending", error="%s: %s" % (type(exc).__name__, exc))
-    return Posting(status="posted", journal_entry_id=entry_id)
+    amount = _float(done.get("posted_amount"))
+    disputed = _float(done.get("disputed_amount"))
+    if entry_id is None:
+        return Posting(status="closed", amount=0.0, disputed=disputed)
+    if amount is None:
+        amount = _float(_entry_amount(gateway_engine, entry_id))
+    return Posting(status="posted", journal_entry_id=entry_id, amount=amount,
+                   disputed=disputed if disputed is not None else 0.0)
+
+
+def _entry_amount(eng: Engine, entry_id: int) -> Optional[Decimal]:
+    with eng.connect() as conn:
+        return conn.execute(text("SELECT sum(debit) FROM journal_line WHERE journal_entry_id = :id"),
+                            {"id": entry_id}).scalar()
+
+
+def _float(value: Any) -> Optional[float]:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 # --- shaping ----------------------------------------------------------------------

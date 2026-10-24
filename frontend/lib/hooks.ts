@@ -23,6 +23,7 @@ import {
   getSchedule,
   getSummary,
   holdException,
+  payAsBilledException,
   subscribeDataSource,
   type DataSource,
 } from "./api";
@@ -101,6 +102,20 @@ export function useExceptionAction(exceptionId: string) {
   const qc = useQueryClient();
   return useMutation<ActionResult, Error, ItemAction>({
     mutationFn: (action) => (action === "approve" ? approveException(exceptionId) : holdException(exceptionId)),
+    onSettled: () => {
+      for (const k of AFTER_ACTION) void qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
+/**
+ * The controller's override on a held charge: pay the billed amount anyway,
+ * with a reason that goes on the record. Same refetches as an approve.
+ */
+export function usePayAsBilled(exceptionId: string) {
+  const qc = useQueryClient();
+  return useMutation<ActionResult, Error, string>({
+    mutationFn: (reason) => payAsBilledException(exceptionId, reason),
     onSettled: () => {
       for (const k of AFTER_ACTION) void qc.invalidateQueries({ queryKey: [k] });
     },

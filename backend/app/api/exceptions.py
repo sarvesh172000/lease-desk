@@ -4,7 +4,14 @@
     GET  /api/exceptions/{id}                the money screen (§16 #3)
     POST /api/exceptions/{id}/approve        sign-off (§16 #4)
     POST /api/exceptions/{id}/hold           park it (the queue's hold, same path)
+    POST /api/exceptions/{id}/pay-as-billed  {"reason"}: the controller's override
     POST /api/exceptions/{id}/investigate    SSE: the investigation's stages (§16 #5)
+
+Approve on a hold upholds it (work/charges.py): only the undisputed
+`supported` amount posts, and a charge nothing supports posts nothing. The
+only way a disputed amount is paid is pay-as-billed, controller-only, with a
+reason. The detail shows the outcome as `resolution`, `payable` (what
+approving posts) and `disputed` (what stays out of the ledger).
 
 An exception is a CHARGE_CHECK work item whose proposal is `hold`: the checker
 compared a landlord charge with what the lease supports and they disagreed.
@@ -52,6 +59,7 @@ from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
 from ..docs.storage import LocalStorage
+from ..work import charges
 from . import evidence as where
 from .deps import get_data_dir, get_engine, get_gateway_engine, get_storage
 from .items import perform
@@ -132,6 +140,9 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
         flat = _flatten(row)
         ev = flat["evidence"]
         charge = where.document_for_charge(conn, _str(ev.get("charge_id")) or row["charge_id"])
+    billed = row["charge_amount"] if row["charge_amount"] is not None else row["amount"]
+    pay = None if billed is None else charges.payable(
+        {"kind": "CHARGE_CHECK", "proposal": row["proposal"], "evidence": ev}, billed)
     line = where.invoice_line(storage, charge)
     cited = where.lease_citation(storage, where.lease_sha(data_dir, flat["lease_id"]),
                                  flat["lease_id"], ev.get("proof"))
@@ -142,6 +153,10 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
         item_id=row["id"], state=row["state"], clinic_id=flat["clinic_id"],
         charge_type=flat["charge_type"], confidence=flat["confidence"],
         proposal=row["proposal"], reason=row["reason"], rule=_str(ev.get("rule")),
+        resolution=_str(ev.get("resolution")), resolved_by=_str(ev.get("resolved_by")),
+        override_reason=_str(ev.get("override_reason")),
+        payable=float(pay.amount) if pay else None,
+        disputed=float(pay.disputed) if pay else None,
         invoice_line=InvoiceLine(**line) if line else None,
         lease_citation=LeaseCitation(**cited) if cited else None,
     )
@@ -149,6 +164,10 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
 
 class ApproveBody(BaseModel):
     reason: Optional[str] = Field(None, max_length=4000)
+
+
+class OverrideBody(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=4000)
 
 
 @router.post("/exceptions/{exc_id}/approve", response_model=ApproveResult)
@@ -174,12 +193,26 @@ def hold_exception(exc_id: str, body: Optional[ApproveBody] = None,
     return _act(exc_id, "hold", body, actor, eng, gateway_engine)
 
 
-def _act(exc_id: str, action: str, body: Optional[ApproveBody], actor: SessionActor,
-         eng: Engine, gateway_engine: Engine) -> ApproveResult:
+@router.post("/exceptions/{exc_id}/pay-as-billed", response_model=ApproveResult)
+def pay_as_billed(exc_id: str, body: OverrideBody,
+                  actor: SessionActor = Depends(current_actor),
+                  eng: Engine = Depends(get_engine),
+                  gateway_engine: Engine = Depends(get_gateway_engine)) -> ApproveResult:
+    """The override: approve a held charge and pay the billed amount anyway.
+    The same as POST /api/items/{id}/actions/approve with
+    patch {"resolution": "pay_as_billed"}. Controller only: anyone else is
+    403 and the refusal is on record. The reason is required (422 without
+    one, blank included) and goes on the approve event."""
+    return _act(exc_id, "approve", body, actor, eng, gateway_engine,
+                patch={"resolution": charges.PAY_AS_BILLED})
+
+
+def _act(exc_id: str, action: str, body, actor: SessionActor,
+         eng: Engine, gateway_engine: Engine, patch: Optional[dict] = None) -> ApproveResult:
     with eng.connect() as conn:
         item_id = _row(conn, exc_id)["id"]
     result = perform(eng, gateway_engine, actor, item_id, action,
-                     reason=(body or ApproveBody()).reason)
+                     reason=body.reason if body is not None else None, patch=patch)
     return ApproveResult(status=STATUS_BY_STATE[result.state], exception_id=exception_id(item_id),
                          state=result.state, posting=result.posting)
 

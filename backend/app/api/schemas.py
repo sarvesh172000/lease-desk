@@ -114,6 +114,14 @@ class ExceptionDetail(BaseModel):
     proposal: Optional[str] = None    # what the checker proposed: hold | approve
     reason: Optional[str] = None      # the checker's reason, in words
     rule: Optional[str] = None        # the checker rule that decided it
+    # What approving does with the money (work/charges.py). On a hold:
+    # payable is the undisputed amount approving posts, disputed what stays
+    # out of the ledger; on an approve proposal, payable is the billed amount.
+    payable: Optional[float] = None
+    disputed: Optional[float] = None
+    resolution: Optional[str] = None       # upheld | pay_as_billed, once decided
+    resolved_by: Optional[str] = None
+    override_reason: Optional[str] = None  # the controller's reason for paying as billed
     invoice_line: Optional[InvoiceLine] = None
     lease_citation: Optional[LeaseCitation] = None
 

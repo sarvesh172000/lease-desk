@@ -132,7 +132,9 @@ def test_exception_detail_matches_the_fixture(client, as_in_the_fixtures):
     assert {**{k: body[k] for k in fixture}, "exception_id": fixture["exception_id"]} == fixture
     # The additions the web app reads; no box is invented for rows with no documents.
     assert set(body) - set(fixture) == {"item_id", "state", "clinic_id", "charge_type", "confidence",
-                                        "proposal", "reason", "rule", "invoice_line", "lease_citation"}
+                                        "proposal", "reason", "rule", "invoice_line", "lease_citation",
+                                        "payable", "disputed", "resolution", "resolved_by",
+                                        "override_reason"}
     assert body["invoice_line"] is None and body["lease_citation"] is None
 
 

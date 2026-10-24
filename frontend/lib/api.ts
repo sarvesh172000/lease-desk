@@ -329,6 +329,26 @@ export function holdException(id: string): Promise<ActionResult> {
 }
 
 /**
+ * EXTENSION: POST /api/exceptions/{id}/pay-as-billed {reason}, the controller's
+ * override: approve a held charge and pay the billed amount anyway. Anyone
+ * else gets 403 (and the refusal is on record); no reason is 422.
+ */
+export function payAsBilledException(id: string, reason: string): Promise<ActionResult> {
+  return call(
+    () =>
+      http<ActionResult>(`/api/exceptions/${encodeURIComponent(id)}/pay-as-billed`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    () => {
+      if (!reason.trim()) throw new ApiError(422, "422 paying a disputed charge as billed needs a reason");
+      // Not a controller: fxAct records the refusal and throws 403.
+      return fxAct(id, fx.actor?.role === "controller" ? "approve" : "pay_as_billed");
+    },
+  );
+}
+
+/**
  * 5. POST /api/exceptions/{id}/investigate — SSE.
  * EventSource cannot POST, so this reads the response body as a stream and
  * parses `data:` lines. Resolves when the stream ends.

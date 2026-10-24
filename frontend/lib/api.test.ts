@@ -96,6 +96,24 @@ describe("live API wiring", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8000/api/exceptions/exc_5/approve");
   });
 
+  it("sends the pay-as-billed override with its reason to its own route", async () => {
+    const answer = { status: "balanced", exception_id: "exc_5", state: "POSTED", posting: { status: "posted", journal_entry_id: 2, amount: 19626.65, disputed: 0 } };
+    const fetchMock = vi.fn().mockResolvedValue(json(answer));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await freshApi();
+    expect(await api.payAsBilledException("exc_5", "side letter")).toEqual(answer);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://localhost:8000/api/exceptions/exc_5/pay-as-billed");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ reason: "side letter" });
+  });
+
+  it("does not mask a refused override (403) from the live API", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ detail: "only a controller may pay a disputed charge as billed" }, 403)));
+    const api = await freshApi();
+    await expect(api.payAsBilledException("exc_5", "please")).rejects.toMatchObject({ status: 403 });
+  });
+
   it("takes dashboard totals from /api/summary, not from the exception rows", async () => {
     const summary = { as_of: "2026-01-01", active_leases: 5, open_exceptions: 5, pending_review: 5, held_total: 25736.36, held_count: 5, portfolio_liability: 2259943.54 };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(summary)));
