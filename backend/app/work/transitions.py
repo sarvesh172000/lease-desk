@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from . import live
 from .events import Event, append_event
 from .projections import apply, project
 from .roles import Actor, can
@@ -227,6 +228,9 @@ def _append_and_project(conn: Connection, actor: Actor, action: str, item_id: in
                          subject_id=item_id, reason=reason, diff=diff, evidence=evidence,
                          policy_ref=policy_ref)
     apply(conn, project(event))
+    # Queued for the live mirror (work/live.py), which sends only once this
+    # transaction is seen committed; off, this is one `is None` test.
+    live.stage(conn, item_id, actor.id)
     return event
 
 

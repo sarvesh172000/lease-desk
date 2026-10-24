@@ -29,6 +29,7 @@
     "react-pdf": "10.5.0",
     "recharts": "^3.10.1",
     "sonner": "^2.0.8",
+    "spacetimedb": "2.13.0",
     "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
