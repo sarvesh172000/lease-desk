@@ -213,6 +213,35 @@ audit_event = Table(
     Column("model_ref", Text), Column("prev_hash", Text), Column("hash", Text),
 )
 
+# ------------------------------------------- disputes, obligations (0006)
+
+dispute = Table(
+    "dispute", metadata, _text_id(),
+    Column("work_item_id", BigInteger), Column("charge_item_id", BigInteger),
+    Column("charge_id", Text),
+    Column("landlord_id", Text), Column("lease_id", Text), Column("clinic_id", Text),
+    Column("entity_id", Text), Column("region_id", Text), Column("period", Date),
+    Column("charge_type", Text), Column("billed", Money), Column("supported", Money),
+    Column("amount", Money), Column("status", Text), Column("notice_to", JSONB),
+    Column("letter", Text), Column("facts", JSONB), Column("letter_outbox_id", BigInteger),
+    Column("sent_at", Timestamp), Column("credited_amount", Money), Column("credits", JSONB),
+    Column("credit_memo_ref", Text), Column("refusal_reason", Text),
+    Column("receivable_entry_id", BigInteger), Column("writeoff_entry_id", BigInteger),
+    Column("created_at", Timestamp), Column("updated_at", Timestamp),
+)
+
+obligation = Table(
+    "obligation", metadata, _id(),
+    Column("lease_id", Text), Column("clinic_id", Text), Column("entity_id", Text),
+    Column("region_id", Text), Column("kind", Text), Column("key", Text),
+    Column("due_date", Date), Column("action", Text), Column("citation", JSONB),
+    Column("source", Text), Column("lease_version_id", BigInteger), Column("details", JSONB),
+    Column("computed_at", Timestamp),
+)
+
+DISPUTE_STATUSES = ("drafted", "sent", "acknowledged", "credited", "partially_credited",
+                    "refused")
+
 actor = Table(
     "actor", metadata, _text_id(),
     Column("name", Text), Column("role", Text), Column("email", Text),

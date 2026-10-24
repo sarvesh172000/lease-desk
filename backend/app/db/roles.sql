@@ -86,6 +86,28 @@ BEGIN
     END IF;
 END $$;
 
+-- ---------------------------------------------- disputes, obligations
+-- Migration 0006 (007_disputes.sql). Guarded like actor above, so an earlier
+-- migration that re-applies this file before the tables exist still runs.
+-- reader, api and gateway already read them through ALL TABLES.
+--   dispute     the disputes agent drafts; the API records landlord replies
+--               (status, credits, refusal reason); the gateway records what
+--               it sent and posted (outbox and journal entry ids).
+--   obligation  the obligations agent computes and refreshes it.
+DO $$
+BEGIN
+    IF to_regclass('public.dispute') IS NOT NULL THEN
+        GRANT SELECT, INSERT ON dispute TO lease_agent;
+        GRANT UPDATE (status, credited_amount, credits, credit_memo_ref, refusal_reason,
+                      updated_at) ON dispute TO lease_api;
+        GRANT UPDATE (status, letter_outbox_id, sent_at, receivable_entry_id,
+                      writeoff_entry_id, updated_at) ON dispute TO lease_gateway;
+    END IF;
+    IF to_regclass('public.obligation') IS NOT NULL THEN
+        GRANT SELECT, INSERT, UPDATE ON obligation TO lease_agent;
+    END IF;
+END $$;
+
 -- Sequences behind serial columns. Identity columns need no grant for a
 -- plain INSERT.
 GRANT USAGE ON SEQUENCE audit_event_seq_seq TO lease_agent, lease_gateway, lease_api;

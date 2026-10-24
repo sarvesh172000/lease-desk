@@ -15,6 +15,9 @@ import type {
   AllowedActions,
   AuditResponse,
   ChargeCheck,
+  DisputeDetail,
+  DisputeList,
+  DisputeReply,
   DocumentPages,
   ExceptionDetail,
   ExceptionSummary,
@@ -22,6 +25,7 @@ import type {
   ItemAction,
   LeaseSummary,
   LeaseVersion,
+  ObligationList,
   Schedule,
   Status,
   Summary,
@@ -594,5 +598,97 @@ export function demoSwitch(actorId: string): Promise<Actor> {
       fx.actor = a;
       return clone(a);
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Disputes and obligations (backend/app/api/disputes.py, obligations.py).
+// No fixtures yet: in fixtures mode the register and the calendar are empty
+// and a dispute read or write is a 404.
+// ---------------------------------------------------------------------------
+
+const EMPTY_DISPUTES: DisputeList = {
+  counts: { drafted: 0, sent: 0, acknowledged: 0, credited: 0, partially_credited: 0, refused: 0 },
+  total: 0,
+  disputes: [],
+};
+
+function noFixture(what: string): never {
+  throw new ApiError(404, `404 ${what} is not available in fixtures mode`);
+}
+
+function query(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams(
+    Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== "")
+      .map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return qs ? `?${qs}` : "";
+}
+
+/** GET /api/disputes?status=&clinic_id= → the dispute register */
+export function getDisputes(params: { status?: string; clinic_id?: string } = {}): Promise<DisputeList> {
+  return call(
+    () => http<DisputeList>(`/api/disputes${query(params)}`),
+    () => clone(EMPTY_DISPUTES),
+  );
+}
+
+/** GET /api/disputes/{id} → letter, status history, receivable */
+export function getDispute(disputeId: string): Promise<DisputeDetail> {
+  return call(
+    () => http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}`),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** POST /api/disputes/{id}/approve {reason?} → the regional manager approves the letter; the gateway sends it */
+export function approveDisputeLetter(disputeId: string, reason?: string): Promise<DisputeDetail> {
+  return call(
+    () =>
+      http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}/approve`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      }),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** POST /api/disputes/{id}/receivable/approve {reason?} → controller only: recognise the landlord receivable */
+export function approveDisputeReceivable(disputeId: string, reason?: string): Promise<DisputeDetail> {
+  return call(
+    () =>
+      http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}/receivable/approve`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      }),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** POST /api/disputes/{id}/reply → record the landlord's reply (AP clerk or controller) */
+export function recordDisputeReply(disputeId: string, reply: DisputeReply): Promise<DisputeDetail> {
+  return call(
+    () =>
+      http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}/reply`, {
+        method: "POST",
+        body: JSON.stringify(reply),
+      }),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** GET /api/obligations?within_days=&lease_id=&kind= → critical dates from the business date */
+export function getObligations(
+  params: { within_days?: number; lease_id?: string; kind?: string } = {},
+): Promise<ObligationList> {
+  return call(
+    () => http<ObligationList>(`/api/obligations${query(params)}`),
+    () => ({
+      today: new Date().toISOString().slice(0, 10),
+      within_days: params.within_days ?? 365,
+      total: 0,
+      obligations: [],
+    }),
   );
 }
