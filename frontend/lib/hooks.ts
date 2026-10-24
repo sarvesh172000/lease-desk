@@ -22,14 +22,17 @@ import {
   getLeaseVersions,
   getLeases,
   getMe,
+  getMonthSummary,
+  getMonthSummaryItems,
   getSchedule,
   getSummary,
   holdException,
   payAsBilledException,
+  resetDemo,
   subscribeDataSource,
   type DataSource,
 } from "./api";
-import type { ActionResult, ItemAction } from "./types";
+import type { ActionResult, DemoResetResult, ItemAction, MonthMetricName } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -137,5 +140,28 @@ export function usePayAsBilled(exceptionId: string) {
     onSettled: () => {
       for (const k of AFTER_ACTION) void qc.invalidateQueries({ queryKey: [k] });
     },
+  });
+}
+
+/** The month's run summary for the guided stepper; every number has a drill-down. */
+export function useMonthSummary(period: string, entity?: string) {
+  return useQuery({ queryKey: ["month-summary", period, entity ?? ""], queryFn: () => getMonthSummary(period, entity) });
+}
+
+/** The rows behind one number of the month summary (enabled once a metric is picked). */
+export function useMonthSummaryItems(period: string, metric: MonthMetricName | null, entity?: string) {
+  return useQuery({
+    queryKey: ["month-summary-items", period, metric, entity ?? ""],
+    queryFn: () => getMonthSummaryItems(period, metric!, entity),
+    enabled: !!metric,
+  });
+}
+
+/** The controller's demo reset; afterwards every query refetches, since every table changed. */
+export function useDemoReset() {
+  const qc = useQueryClient();
+  return useMutation<DemoResetResult, Error, void>({
+    mutationFn: () => resetDemo(),
+    onSettled: () => void qc.invalidateQueries(),
   });
 }

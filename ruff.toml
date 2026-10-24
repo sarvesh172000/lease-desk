@@ -19,6 +19,7 @@ include = [
     "backend/app/jobs/**/*.py",
     "backend/app/records/**/*.py",
     "backend/app/api/**/*.py",
+    "backend/app/demo/**/*.py",
     "backend/app/main.py",
     "backend/app/settings.py",
     "backend/tests/platform/**/*.py",
