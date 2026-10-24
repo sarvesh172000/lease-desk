@@ -11,11 +11,11 @@
 > | 5. Jobs and business clock | 6 | A7 | B | — |
 > | 6. Document store and pipeline v1 | 8 | A1 | A | **Done** — `storage.py`, `pipeline.py`, `citations.py` |
 > | 7. LLM layer | 8 | A1 | A | **Done** — `llm/{client,registry,cache,usage,untrusted}.py` |
-> | 8. Data generator v1 and answer key | 12 | A2 | A | **Partial** — 2025 history and `answer_key.json` left |
+> | 8. Data generator v1 and answer key | 12 | A2 | A | **Done** — history, errors, answer key |
 > | 9. Abstraction agent v1 | 10 | A3 | A | **Done** — 13 cited fields |
 > | 10. Charge engine and monthly run | 6 | A4 | A | **Done** — 5/5 caught, 0 false holds |
 > | 11. Web app shell | 12 | A8 | B | — |
-> | 12. Eval v1 and regression gate | 4 | A4 | A | **Next** |
+> | 12. Eval v1 and regression gate | 4 | A4 | A | **Done** — `python -m eval.run` |
 
 **Budget: 110 of 500 hours (22%)**
 

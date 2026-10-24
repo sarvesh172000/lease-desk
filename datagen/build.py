@@ -18,8 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from app.docs.pipeline import extract  # noqa: E402
 from app.docs.storage import LocalStorage  # noqa: E402
 
+from .answer_key import write as write_answer_key  # noqa: E402
 from .company import build_company  # noqa: E402
 from .leases import build_leases  # noqa: E402
+from .emails import build_emails, write_emails  # noqa: E402
+from .history import build_history  # noqa: E402
 from .month import (  # noqa: E402
     build_month, build_payments, write_ap_export, write_bank_export,
 )
@@ -91,6 +94,34 @@ def main(argv=None):
     write_bank_export(payments, out / "bank_export.csv")
     manifest["period"] = period.isoformat()
     manifest["invoice_total"] = round(sum(i.total() for i in invoices), 2)
+
+    # --- 2025 history ---------------------------------------------------
+    history = build_history(company, leases)
+    write_ap_export(history.invoices, out / "history_2025_ap.csv")
+    write_bank_export(history.payments, out / "history_2025_bank.csv")
+    manifest["history_2025"] = {
+        "invoices": len(history.invoices),
+        "payments": len(history.payments),
+        "billed": history.total_billed(),
+        "overbilled_and_paid": history.total_overbilled(),
+    }
+
+    # --- mailbox ----------------------------------------------------------
+    emails = build_emails(company)
+    write_emails(emails, out / "inbox")
+    manifest["emails"] = len(emails)
+
+    # --- answer key, for eval/ only ---------------------------------------
+    shas = {entry["lease_id"]: entry["document_sha256"] for entry in manifest["leases"]}
+    write_answer_key(out / "answer_key.json", company=company, leases=leases,
+                     document_shas=shas)
+
+    print()
+    print("2025 history : %d invoices, $%s billed, $%s overbilled and paid"
+          % (len(history.invoices), "{:,.2f}".format(history.total_billed()),
+             "{:,.2f}".format(history.total_overbilled())))
+    print("mailbox      : %d threads" % len(emails))
+    print("answer key   : %s" % (out / "answer_key.json"))
 
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print()

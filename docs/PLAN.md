@@ -33,10 +33,10 @@ then move.
 
 | | |
 |---|---|
-| **Complete** | A1, A3 · 26 of 526 hours |
-| **Partial** | A2, A4, B1, B3, B5, B10 |
-| **Tests** | 174 passing, offline, no API key |
-| **Next (Sarvesh)** | **A4** — finish the eval and answer key |
+| **Complete** | **A1–A4 — all of Person A's Block A** · 48 of 526 hours |
+| **Partial** | B1, B3, B5, B10 (started early for the demo moment) |
+| **Tests** | 205 passing, offline, no API key · `python -m eval.run` passes |
+| **Next (Sarvesh)** | **B2** — company at scale, after one real API run |
 | **Next (Jenil)** | **A5** — Compose, Postgres schema, the four DB roles |
 
 **Jenil is the critical path.** A1–A4 are backend no judge can see until A5–A8
@@ -49,9 +49,9 @@ land.
 | # | Chunk | h | Owner | Covers | Gate | Status |
 |---|---|---|---|---|---|---|
 | **A1** | Document & LLM substrate | 16 | A | P1 g6, g7 | A PDF goes in, page text and word boxes come out; a prompt call is versioned, cached and fenced | **DONE** |
-| **A2** | The generated world | 12 | A | P1 g8 | `make seed` produces 5 leases, a billing month and the answer key, byte-reproducibly | **Partial** — 2025 history + `answer_key.json` left |
+| **A2** | The generated world | 12 | A | P1 g8 | `make seed` produces 5 leases, a billing month and the answer key, byte-reproducibly | **DONE** |
 | **A3** | Reading leases | 10 | A | P1 g9 | 13 fields extracted, every one cited to a box, invented quotes rejected | **DONE** |
-| **A4** | Checking charges | 10 | A | P1 g10, g12 | `make eval` reports 5/5 caught, 0 false holds, from a fresh clone | **Partial** — checker done, eval next |
+| **A4** | Checking charges | 10 | A | P1 g10, g12 | `make eval` reports 5/5 caught, 0 false holds, from a fresh clone | **DONE** |
 | **A5** | Platform & database | 20 | B | P1 g1, g2 | `make up migrate seed` from a fresh clone; `lease_agent` denied on `journal_entry` | — |
 | **A6** | Work layer & permissions | 14 | B | P1 g3 | `verify_chain()` names a tampered row; nobody approves their own proposal | — |
 | **A7** | Gateway & ledger | 16 | B | P1 g4, g5 | Only the gateway posts; unbalanced entries rejected; Fava opens the books | — |

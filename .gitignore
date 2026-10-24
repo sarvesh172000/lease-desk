@@ -13,3 +13,5 @@ env/
 data/generated/
 *.beancount
 data/gen2/
+eval/report.json
+eval/history.csv
