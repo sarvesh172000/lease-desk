@@ -127,10 +127,14 @@ class LLM:
         system = prompt.render(variables)
         user = fence_all(documents or [])
 
+        # Keyed on the documents, not on `user`: the fence draws a fresh random
+        # nonce every call (it has to stay unguessable to whoever wrote the
+        # document), so a key over the fenced text meant a call with documents
+        # could never be a cache hit.
         key = cache_key(
             self.model,
             prompt.ref,
-            {"system": system, "user": user, "effort": effort},
+            {"system": system, "documents": [list(d) for d in documents or []], "effort": effort},
             output_model.__name__,
         )
 
