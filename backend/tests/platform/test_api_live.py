@@ -22,6 +22,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import lease_world as lw
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -55,11 +56,17 @@ def generated(tmp_path_factory):
 
 
 @pytest.fixture
-def january(clean, generated):
+def january(clean, generated, monkeypatch):
     seed(Path(generated), clean["lease_agent"], clean["lease_gateway"])
-    with clean["lease_agent"].begin() as conn:
-        run_month(conn, "ENT-CA", "2026-01")
-    drain(clean["lease_agent"], "test-live")
+    lw.use_documents(monkeypatch, generated)
+    # The month drafts the five lease versions; the Bay Area manager confirms
+    # them; the month again checks the twelve charges against confirmed terms.
+    for confirm in (False, True):
+        if confirm:
+            lw.confirm(clean)
+        with clean["lease_agent"].begin() as conn:
+            run_month(conn, "ENT-CA", "2026-01")
+        drain(clean["lease_agent"], "test-live")
     return clean
 
 

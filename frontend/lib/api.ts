@@ -21,6 +21,7 @@ import type {
   InvestigationEvent,
   ItemAction,
   LeaseSummary,
+  LeaseVersion,
   Schedule,
   Status,
   Summary,
@@ -410,6 +411,31 @@ export function getSchedule(leaseId: string, version?: number): Promise<Schedule
       const s = versions[v];
       if (!s) throw new ApiError(404, `404 ${leaseId} has no schedule v${v}`);
       return clone(s);
+    },
+  );
+}
+
+/**
+ * EXTENSION: GET /api/leases/{id}/versions — each version's abstracted terms
+ * (page, box, quote, confidence) and who confirmed it. The fixtures carry no
+ * abstraction, so fixtures mode has none.
+ */
+export function getLeaseVersions(leaseId: string): Promise<LeaseVersion[]> {
+  return call(
+    () => http<LeaseVersion[]>(`/api/leases/${encodeURIComponent(leaseId)}/versions`),
+    () => [],
+  );
+}
+
+/**
+ * EXTENSION: confirm a lease version = approve its LEASE_ABSTRACTION work item
+ * (POST /api/items/{id}/actions/approve). The server's can() decides.
+ */
+export function confirmLeaseVersion(itemId: number): Promise<{ state: string }> {
+  return call(
+    () => http<{ state: string }>(`/api/items/${itemId}/actions/approve`, { method: "POST" }),
+    () => {
+      throw new ApiError(409, "409 lease versions cannot be confirmed in fixtures mode");
     },
   );
 }

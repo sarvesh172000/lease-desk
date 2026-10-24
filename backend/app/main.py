@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from .api import ROUTERS
+from .api.lease_versions import router as lease_versions_router
 from .auth.routes import router as auth_router
 from .db.engine import engine
 from .settings import Settings, get_settings
@@ -33,6 +34,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app.include_router(auth_router)
     for router in ROUTERS:
         app.include_router(router)
+    app.include_router(lease_versions_router)
 
     @app.get("/health")
     def health() -> dict:

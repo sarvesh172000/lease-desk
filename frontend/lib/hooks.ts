@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   approveException,
+  confirmLeaseVersion,
   getAllowedActions,
   getAudit,
   getChargeChecks,
@@ -18,6 +19,7 @@ import {
   getDocumentPages,
   getException,
   getExceptions,
+  getLeaseVersions,
   getLeases,
   getMe,
   getSchedule,
@@ -73,6 +75,22 @@ export function useSchedule(leaseId: string, version?: number, enabled = true) {
     queryFn: () => getSchedule(leaseId, version),
     enabled,
     retry: false,
+  });
+}
+
+/** A lease's versions with their cited terms and confirmation state. */
+export function useLeaseVersions(leaseId: string) {
+  return useQuery({ queryKey: ["lease-versions", leaseId], queryFn: () => getLeaseVersions(leaseId), retry: false });
+}
+
+/** Confirm a lease version by approving its LEASE_ABSTRACTION item; refetches what it changes. */
+export function useConfirmLeaseVersion(leaseId: string) {
+  const qc = useQueryClient();
+  return useMutation<{ state: string }, Error, number>({
+    mutationFn: (itemId) => confirmLeaseVersion(itemId),
+    onSettled: () => {
+      for (const key of [["lease-versions", leaseId], ["audit"], ["leases"]]) void qc.invalidateQueries({ queryKey: key });
+    },
   });
 }
 

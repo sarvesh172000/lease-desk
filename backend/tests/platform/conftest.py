@@ -119,3 +119,15 @@ def books(clean):
         """)
         install_chart(conn, "ENT-CA")
     return clean
+
+
+@pytest.fixture(autouse=True)
+def _abstraction_offline(monkeypatch, tmp_path_factory):
+    """The abstraction step takes the LLM path when ANTHROPIC_API_KEY is set
+    or `.cache/llm` exists. The suite must not depend on either, so every
+    platform test sees no key and an empty cache location: the abstraction
+    job reads from the generator path, deterministically and offline. Tests
+    of the LLM path hand in their own client."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("LEASEDESK_LLM_CACHE",
+                       str(tmp_path_factory.getbasetemp() / "no-llm-cache-here"))

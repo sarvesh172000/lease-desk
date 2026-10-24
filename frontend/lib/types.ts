@@ -263,3 +263,37 @@ export interface ChargeCheck {
   proposal: string | null;
   reason: string | null;
 }
+
+/** EXTENSION: one abstracted term of a lease version (GET /api/leases/{id}/versions). */
+export interface LeaseTerm {
+  field: string;
+  value: unknown;
+  /** Null when the quote could not be located: then bbox and document_id are null too. */
+  page: number | null;
+  bbox: Box | null;
+  quote: string | null;
+  /** The citation match score: 1 exact, lower partial, 0 not found. */
+  confidence: number | null;
+  document_id: string | null;
+  extracted_by: {
+    run_id: number | null;
+    /** "abstraction:llm" or "abstraction:generator": which path read the term. */
+    agent: string | null;
+    prompt_id: string | null;
+    prompt_version: string | null;
+    model: string | null;
+  } | null;
+}
+
+/** EXTENSION: a lease version, who confirmed it, and its confirmation work item. */
+export interface LeaseVersion {
+  lease_id: string;
+  version: number;
+  lease_version_id: number;
+  effective_from: string;
+  confirmed: boolean;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  work_item: { id: number; state: string; proposal: string | null; allowed_actions: string[] } | null;
+  terms: LeaseTerm[];
+}

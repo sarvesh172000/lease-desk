@@ -58,7 +58,7 @@ replay:            ## rebuild work_item and question from audit_event; fail if t
 api:               ## the API on the host, with reload, against the Compose database
 	cd backend && $(PY) -m uvicorn app.main:app --reload --port 8000
 
-run-month:         ## M=2026-01: enqueue ingest, abstraction, checking; run the worker until drained
+run-month:         ## M=2026-01: enqueue ingest, abstraction, checking (+ a re-check once leases are confirmed); drain
 	@test -n "$(M)" || { echo "usage: make run-month M=YYYY-MM" >&2; exit 2; }
 	$(PY) -m app.jobs.monthly --period $(M)
 	$(PY) -m app.jobs.worker --once
@@ -88,11 +88,20 @@ dev-passwords:     ## give every seeded person the password `demo` (as lease_gat
 # (live mode against the API) until Ctrl-C, which stops both.
 .PHONY: demo demo-data
 DEMO_MONTH ?= 2026-01
+# The first run drafts the five lease versions and checks nothing against
+# unconfirmed terms. With DEMO_CONFIRM=1 (the default) the Bay Area manager
+# then confirms them (the same approve the lease page's Confirm button sends,
+# demo mode only) and the month runs again, so the demo opens on checked
+# charges. DEMO_CONFIRM=0 leaves them for you to confirm on screen.
+DEMO_CONFIRM ?= 1
 
 demo-data:         ## database (created if missing), migrate, seed, dev passwords, run DEMO_MONTH
 	$(PY) -m app.db.ensure_database
 	$(MAKE) migrate seed dev-passwords
 	$(MAKE) run-month M=$(DEMO_MONTH)
+	@if [ "$(DEMO_CONFIRM)" != "0" ]; then \
+	  $(PY) -m app.work.confirm_leases --as PER-RM-BAY && $(MAKE) run-month M=$(DEMO_MONTH); \
+	fi
 
 demo: demo-data    ## demo-data, then the API on :8000 and the web app on :3000 until Ctrl-C
 	@test -d frontend/node_modules || (cd frontend && npm ci)
