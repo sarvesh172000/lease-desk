@@ -3,11 +3,16 @@
 Jenil's plan in full, 500 hours, which is what we are building.
 [`../PLAN.md`](../PLAN.md) is the status board; these files hold the task detail.
 
-| Phase | Hours | What it delivers |
-|---|---|---|
-| [Phase 1](PHASE_1.md) | 110 | Event-sourced platform, DB roles, gateway, ledger, first thin slice |
-| [Phase 2](PHASE_2.md) | 250 | 30 clinics, EDGAR leases, scans, email, CAM, CPI, ASC 842 close, resolver, policy engine |
-| [Phase 3](PHASE_3.md) | 140 + 26 | Polish, chaos testing, and the five sponsor tracks |
+| Phase | Hours | Chunks | What it delivers |
+|---|---|---|---|
+| [Phase 1](PHASE_1.md) | 110 | A1–A8 | Event-sourced platform, DB roles, gateway, ledger, first thin slice |
+| [Phase 2](PHASE_2.md) | 250 | B1–B10 | 30 clinics, EDGAR leases, scans, email, CAM, CPI, ASC 842 close, resolver, policy engine |
+| [Phase 3](PHASE_3.md) | 166 | C1–C9 | Polish, chaos testing, and the five sponsor tracks |
+
+Each phase is split into gated chunks in [`../PLAN.md`](../PLAN.md), so a piece
+of work can be finished and made solid before the next one starts. The phase
+files below hold the task detail; PLAN.md holds the chunk, the gate and the
+status.
 
 Phase 3 gains two groups beyond Jenil's original ten, both sponsor targets:
 **group 11 SpacetimeDB** (14 h) and **group 12 Anthropic** (12 h). Both are

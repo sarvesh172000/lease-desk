@@ -1,16 +1,25 @@
 # Phase 2 - The Company, the Mess and the Full Autonomous Loop
 
-> **Status — four groups started early, because the demo moment needed them.**
+> **Status — this phase is Block B, chunks B1–B10.** See [`../PLAN.md`](../PLAN.md).
 >
-> | Group | Hours | Owner | Status |
-> |---|---|---|---|
-> | 3. Messy inputs | 16 | A | Partial — `datagen/emails.py`: 10 threads incl. forged sender and injection. No scans, tracker, or multi-format invoices |
-> | 5. Bitemporal rulebook and lease changes | 14 | B/A | Partial — `agents/modification.py` finds causes and proposes versions. Not yet bitemporal |
-> | 8. ASC 842 subledger and close | 26 | A | Partial — `engine/remeasurement.py` remeasures and proposes balanced entries. No transition, close, or tie-out |
-> | 9. Resolver | 20 | B/A | Partial — `agents/trust.py` six-rank ranking + confidence. No routing, SLAs, or partial payment |
-> | 15. Safety and defense in depth | 8 | B | Partial — untrusted fencing and 4 adversarial tests. No DB-role depth tests |
->
-> Everything else in this phase is not started. See [`../PLAN.md`](../PLAN.md).
+> | Group | h | Chunk | Owner | Status |
+> |---|---|---|---|---|
+> | 1. EDGAR corpus and labels | 14 | B8 | A | — |
+> | 2. Company generator v2 and held-out | 26 | B2 | A | — |
+> | 3. Messy inputs | 16 | B3 | A | **Partial** — `datagen/emails.py` done |
+> | 4. Document understanding at full mess | 20 | B3 | A | — |
+> | 5. Bitemporal rulebook and lease changes | 14 | B1 | B/A | **Partial** — `modification.py` done, not yet bitemporal |
+> | 6. CAM engine and shared pools | 20 | B4 | A | — |
+> | 7. Rent engine v2 with CPI | 8 | B4 | A | — |
+> | 8. ASC 842 subledger and close | 26 | B5 | A | **Partial** — `remeasurement.py` done |
+> | 9. Resolver | 20 | B1 | B/A | **Partial** — `trust.py` + confidence done |
+> | 10. Policy engine | 24 | B6 | B | — |
+> | 11. Disputes and correspondence | 12 | B7 | B | — |
+> | 12. Obligations and critical dates | 8 | B7 | B | — |
+> | 13. Human personas | 10 | B9 | A | — |
+> | 14. Why, auditor, evidence packs | 10 | B9 | B | — |
+> | 15. Safety and defense in depth | 8 | B10 | B | **Partial** — fencing + 4 adversarial tests |
+> | 16. Eval v2, held-out, counterfactual | 14 | B8 | A | — |
 
 **Budget: 250 of 500 hours (50%)**
 

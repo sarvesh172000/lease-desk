@@ -1,11 +1,27 @@
 # Phase 3 - Product Polish, Hardening and Multi-Track Delivery
 
-> **Status — not started.**
+> **Status — this phase is Block C, chunks C1–C9.** See [`../PLAN.md`](../PLAN.md).
 >
-> Two additions to this phase beyond what is written below, both sponsor
-> targets: **SpacetimeDB** (group 11) and **Anthropic** (group 12). They are
-> specified in [`../SPONSORS.md`](../SPONSORS.md) and listed in
-> [`../PLAN.md`](../PLAN.md).
+> Two groups are added beyond the ten below, both sponsor targets:
+> **11. SpacetimeDB** (14 h, chunk C5) and **12. Anthropic depth** (12 h, chunk
+> C6), specified in [`../SPONSORS.md`](../SPONSORS.md).
+>
+> | Group | h | Chunk | Owner |
+> |---|---|---|---|
+> | 1. Product design and UI polish | 22 | C1 | B |
+> | 2. Guided demo, summaries, snapshots | 12 | C2 | B |
+> | 3. Scenario studio | 12 | C2 | B |
+> | 4. Reliability and chaos testing | 14 | C3 | A+B |
+> | 5. Performance and cost | 8 | C4 | A |
+> | 6. Testing and QA | 12 | C4 | A+B |
+> | 7. Cloud deployment and ops | 14 | C7 | B |
+> | 8. Microsoft deliverables | 10 | C7 | A |
+> | 9. Fetch.ai / ASI:One front door | 22 | C8 | B |
+> | 10. Submission package and rehearsals | 14 | C9 | A+B |
+> | **11. SpacetimeDB live layer** *(new)* | **14** | **C5** | **B** |
+> | **12. Anthropic depth** *(new)* | **12** | **C6** | **A** |
+>
+> Nothing in Block C is started.
 
 **Budget: 140 of 500 hours (28%)**
 
