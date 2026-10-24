@@ -48,10 +48,13 @@ prove-roles:
 api:               ## the API on the host, with reload, against the Compose database
 	cd backend && $(PY) -m uvicorn app.main:app --reload --port 8000
 
+run-month:         ## M=2026-01: enqueue ingest, abstraction, checking; run the worker until drained
+	@test -n "$(M)" || { echo "usage: make run-month M=YYYY-MM" >&2; exit 2; }
+	$(PY) -m app.jobs.monthly --period $(M)
+	$(PY) -m app.jobs.worker --once
+
 # Frozen names whose work lands in later chunks. They fail loudly rather than
 # pretend to succeed.
-run-month:
-	@echo "run-month M=$(M): the job queue and monthly run land in A7" && exit 1
 
 replay:
 	@echo "replay: projections rebuilt from audit_event land in A6" && exit 1
