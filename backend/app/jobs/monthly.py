@@ -18,13 +18,12 @@ and `raw_row.source_id` is `<invoice>-L<n>`. Charges are loaded with that
 source id as their `charge_id`, and findings are mapped back through it.
 
 Work items are written through the work layer (`app.work.transitions`), never
-by hand, so every item starts with a hash-chained event. Until that module
-exists, `record_findings()` refuses loudly rather than inventing a second
-way to create work.
+by hand, so every item starts with a hash-chained event: `create_item` then
+`transition(..., 'propose')`, as `agent:checker`, on the worker's
+`lease_agent` connection.
 """
 
 import argparse
-import importlib
 import re
 import sys
 from datetime import date, datetime
@@ -33,6 +32,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from ..work.roles import load_actor
+from ..work.transitions import create_item, transition
 from .queue import enqueue
 
 STEPS = ("ingest", "abstraction", "checking")
@@ -148,17 +149,20 @@ def check_period(conn: Connection, entity_id: str, period: Any) -> Dict[str, int
 def record_findings(conn: Connection, findings: Iterable, period: Any) -> Dict[str, int]:
     """Turn each checker finding into a proposed CHARGE_CHECK work item.
 
-    Goes through `app.work.transitions`: `create_item` then `transition(...,
-    'propose', patch=...)`, as `agent:checker`. A charge that already has an
-    item is skipped, so this is safe to repeat. Returns created/skipped counts.
+    One item per finding, about the landlord charge it judged
+    (`subject_type = 'landlord_charge'`, `subject_id` = the database id):
+    `create_item` then `transition(..., 'propose')` with the checker's
+    proposal (`approve` or `hold`), reason and evidence, as `agent:checker`.
+    A charge that already has an item is skipped, so this is safe to repeat
+    (create_item is idempotent on its own as well). Returns created/skipped
+    counts.
     """
     findings = list(findings)
     month = parse_period(period)
-    transitions = _transitions()
     if not findings:
         return {"created": 0, "skipped": 0}
 
-    actor = _load_actor(conn, transitions, CHECKER)
+    actor = load_actor(conn, CHECKER)
     ids = charge_ids_by_source_id(conn, [f.charge.charge_id for f in findings]
                                   + [r for f in findings for r in f.related])
     unknown = sorted({f.charge.charge_id for f in findings} - set(ids))
@@ -175,13 +179,12 @@ def record_findings(conn: Connection, findings: Iterable, period: Any) -> Dict[s
             skipped += 1
             continue
         clinic = scope.get(f.charge.clinic_id, {})
-        item = transitions.create_item(
+        item = create_item(
             conn, actor, kind=ITEM_KIND, subject_type=SUBJECT, subject_id=charge_id,
             entity_id=clinic.get("entity_id"), region_id=clinic.get("region_id"),
             clinic_id=f.charge.clinic_id, period=month, title=_title(f),
             amount=round(f.billed, 2))
-        item_id = getattr(item, "id", item)
-        transitions.transition(conn, actor, item_id, "propose", patch={
+        transition(conn, actor, item["id"], "propose", reason=f.reason, patch={
             "proposal": f.proposal, "reason": f.reason, "evidence": evidence(f, ids)})
         existing.add(charge_id)
         created += 1
@@ -189,19 +192,30 @@ def record_findings(conn: Connection, findings: Iterable, period: Any) -> Dict[s
 
 
 def evidence(finding, ids: Mapping[str, str]) -> Dict[str, Any]:
-    """What a person needs to judge the proposal, as plain JSON."""
+    """What a person needs to judge the proposal, as plain JSON, in the shape
+    the read API documents (api/exceptions.py): lease_id, charge_id (the
+    landlord_charge id), charge_ids, charge_type, billed, supported, then the
+    rule and the lease clause that decided it. The checker is deterministic
+    and states no confidence, so none is invented here."""
     proof = finding.proof
+    charge = finding.charge
+    charge_id = ids[charge.charge_id]
+    related = [ids.get(r, r) for r in finding.related]
     return {
-        "rule": finding.rule,
-        "charge_ref": finding.charge.charge_id,
-        "invoice_id": finding.charge.invoice_id,
+        "lease_id": charge.lease_id,
+        "charge_id": charge_id,
+        "charge_ids": [charge_id] + related,
+        "charge_type": charge.charge_type,
         "billed": round(finding.billed, 2),
         "supported": round(finding.supported, 2),
         "variance": finding.variance,
+        "rule": finding.rule,
         "proof": None if proof is None else {
             "section": proof.section, "quote": proof.quote, "page": proof.page,
             "box": list(proof.box) if proof.box else None},
-        "related": [ids.get(r, r) for r in finding.related],
+        "charge_ref": charge.charge_id,
+        "invoice_id": charge.invoice_id,
+        "related": related,
     }
 
 
@@ -211,32 +225,6 @@ def _title(finding) -> str:
     c = finding.charge
     return "%s %s %s: $%s matches the lease" % (
         c.clinic_id, c.period.strftime("%b %Y"), c.charge_type, "{:,.2f}".format(finding.billed))
-
-
-def _transitions():
-    try:
-        return importlib.import_module("app.work.transitions")
-    except ImportError as exc:
-        if getattr(exc, "name", None) not in ("app.work.transitions", "app.work"):
-            raise
-        raise NotImplementedError(
-            "record_findings needs app.work.transitions (create_item, transition), "
-            "which is not in this checkout yet; it lands with the work layer (A6)") from exc
-
-
-def _load_actor(conn: Connection, transitions, actor_id: str):
-    """The work layer's actor for `actor_id`. Looked for on transitions first,
-    then on app.work.can, wherever the work layer chose to put `load_actor`."""
-    loader = getattr(transitions, "load_actor", None)
-    if loader is None:
-        try:
-            loader = getattr(importlib.import_module("app.work.can"), "load_actor", None)
-        except ImportError:
-            loader = None
-    if loader is None:
-        raise NotImplementedError("record_findings needs load_actor(conn, actor_id) in "
-                                  "app.work.transitions or app.work.can")
-    return loader(conn, actor_id)
 
 
 def _existing_items(conn: Connection, charge_ids: List[str]) -> set:
