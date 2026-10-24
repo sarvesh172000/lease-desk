@@ -55,6 +55,8 @@ known-first-party = ["app", "leasedesk", "datagen", "eval"]
 [lint.per-file-ignores]
 # Alembic revisions are generated; keep their header layout.
 "backend/app/db/migrations/versions/*.py" = ["E501"]
+# Fixtures imported from a sibling test module look like redefinitions.
+"backend/tests/platform/*.py" = ["F811"]
 
 [format]
 # Not enforced yet: the platform code is hand-aligned and 17 files would be

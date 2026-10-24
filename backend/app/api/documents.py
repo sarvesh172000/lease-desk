@@ -14,7 +14,8 @@ import re
 from functools import lru_cache
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import Path as PathParam
 
 from ..docs.pipeline import DEFAULT_DPI, extract, render_page_png
 from ..docs.storage import LocalStorage

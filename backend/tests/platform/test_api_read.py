@@ -69,11 +69,10 @@ def insert_work_item(owner, *, state, evidence, subject_id, clinic_id=None, peri
 def run_checker(engines):
     """The real checker over the seeded January charges: every finding, keyed
     by the landlord_charge id it is about."""
-    from datagen.company import build_company
-    from datagen.leases import build_leases
-
     from app.agents.checker import Charge, check_month
     from app.engine.from_datagen import rules_from_terms
+    from datagen.company import build_company
+    from datagen.leases import build_leases
 
     company = build_company()
     rules = rules_from_terms(build_leases(company), company)

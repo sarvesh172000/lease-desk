@@ -11,9 +11,12 @@ import re
 from pathlib import Path
 
 import pytest
-
 from test_api_read import (  # noqa: F401 — fixtures
-    checked, client, generated, insert_work_item, seeded,
+    checked,
+    client,
+    generated,
+    insert_work_item,
+    seeded,
 )
 
 DESIGN = Path(__file__).resolve().parents[3] / "docs" / "DESIGN.md"
