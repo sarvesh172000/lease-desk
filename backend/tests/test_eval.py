@@ -93,15 +93,26 @@ def test_charge_ids_are_unique():
     assert len(ids) == len(set(ids))
 
 
-def test_citations_are_reported_per_caught_error(key):
-    """Known gap, pinned so a fix shows up: the escalation errors E4 and E5
-    cite the initial-rent clause 3.1 instead of the escalation clause 3.3."""
+def test_every_hold_cites_the_clause_that_proves_it(key):
+    """Jenil pinned this as a known gap: the escalation errors E4 and E5 cited
+    the initial-rent clause 3.1 instead of the escalation clause 3.3. The
+    checker now picks the proof by what kind of amount error it is — a billed
+    figure matching a different year of the schedule is an escalation problem —
+    so all five cite correctly.
+    """
     section = score_checking(key)
     citations = section.detail["citations"]
     assert set(citations) == {"E1", "E2", "E3", "E4", "E5"}
-    assert [e for e, c in sorted(citations.items()) if not c["correct"]] == ["E4", "E5"]
-    assert section.detail["citations_correct"] == 3
-    assert section.ok, "a weak citation is reported, not yet failed"
+
+    wrong = [e for e, c in sorted(citations.items()) if not c["correct"]]
+    assert wrong == [], "citing the wrong clause: %s" % wrong
+    assert section.detail["citations_correct"] == 5
+
+
+def test_the_escalation_errors_cite_the_escalation_clause(key):
+    section = score_checking(key)
+    for error_id in ("E4", "E5"):
+        assert section.detail["citations"][error_id]["cited"] == "3.3"
 
 
 def test_end_to_end_run_writes_a_report(tmp_path):
