@@ -18,7 +18,8 @@ from .documents import router as documents_router
 from .exceptions import router as exceptions_router
 from .items import router as items_router
 from .leases import router as leases_router
+from .resolver import router as resolver_router
 from .summary import router as summary_router
 
 ROUTERS = (leases_router, exceptions_router, audit_router, documents_router, items_router,
-           batches_router, summary_router)
+           batches_router, summary_router, resolver_router)

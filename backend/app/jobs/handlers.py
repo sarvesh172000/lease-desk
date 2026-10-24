@@ -17,6 +17,9 @@ The three monthly steps, and what each honestly does today:
   checking     The period's charges against the *confirmed* lease rules, every
                finding proposed as a CHARGE_CHECK work item. Charges on a lease
                with no confirmed version wait, and the result says why.
+  reminders    Not a monthly step: one run per business date (jobs/reminders.py)
+               reminds, escalates and releases undisputed amounts for open
+               questions.
 """
 
 from typing import Any, Callable, Dict, Mapping
@@ -24,6 +27,7 @@ from typing import Any, Callable, Dict, Mapping
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from . import reminders
 from .lease_versions import draft_versions
 from .monthly import AP_SOURCE, check_period, parse_period
 
@@ -71,6 +75,7 @@ HANDLERS: Dict[str, Handler] = {
     "ingest": ingest,
     "abstraction": abstraction,
     "checking": checking,
+    "reminders": reminders.handler,     # busy approvers: remind, escalate, pay undisputed
 }
 
 

@@ -285,7 +285,8 @@ def test_investigate_streams_the_checker_evidence_and_invents_no_remeasurement(c
     assert found["doc_id"] == next(l["document_sha256"] for l in manifest["leases"]
                                    if l["lease_id"] == "LEASE-02")
     assert found["quote"] == "those certain premises designated as Suite 115"
-    assert found["confidence"] is None, "the checker states no confidence; none is made up"
+    # The resolver's documented score (work/resolver.py), read from evidence, never made up.
+    assert found["confidence"] == suite["evidence"]["confidence"] == 0.56
     assert found["page"] == 2 and len(found["box"]) == 4
     assert {k: v for k, v in got[2].items() if k != "message"} == {
         "stage": "complete", "entries": 0, "balanced": None}

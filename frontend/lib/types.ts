@@ -312,3 +312,119 @@ export interface LeaseVersion {
   work_item: { id: number; state: string; proposal: string | null; allowed_actions: string[] } | null;
   terms: LeaseTerm[];
 }
+
+// ---------------------------------------------------------------------------
+// EXTENSION: the resolver (backend/app/api/resolver.py)
+// ---------------------------------------------------------------------------
+
+/** 1 executed amendment · 2 original lease · 3 authorized rep · 4 property manager · 5 invoice · 6 payment history */
+export type TrustRank = 1 | 2 | 3 | 4 | 5 | 6;
+
+/** One source the resolver weighed, its trust rank, the value it claims and where it says so. */
+export interface ResolverSource {
+  source_id: string;
+  /** lease, invoice, payment_history, amendment, authorized_rep, property_manager, ... */
+  kind: string;
+  rank: TrustRank;
+  rank_name: string;
+  label: string;
+  /** Dollars when a number, else the text it claims. */
+  value: number | string | null;
+  claim: string;
+  citation: Record<string, unknown>;
+  extraction_confidence: number | null;
+  read_quality: number | null;
+  /** Failed sender verification: set aside, not believed. */
+  suspect: boolean;
+  note: string;
+}
+
+export type ResolverAction = "proceed" | "hold" | "ask";
+
+export interface ResolverDecision {
+  action: ResolverAction;
+  /** "Trusted the lease … over invoice … because …" */
+  explanation: string;
+  trusted: string | null;
+  agreeing: string[];
+  contradicting: string[];
+  superseded: string[];
+  set_aside: string[];
+  trust_gap: number | null;
+  policy: { policy_id: string; version: number; then: string; reason: string } | null;
+}
+
+export interface ResolverRoute {
+  role: "regional_manager" | "controller" | "ap_clerk";
+  nature: "landlord_fact" | "accounting_judgement" | "payment_release";
+  asked_to: string | null;
+  /** The controller, when the amount at stake is over materiality. */
+  also_to: string[];
+  amount_at_stake: number;
+  material: boolean;
+  reasons: string[];
+}
+
+export interface OpenQuestion {
+  id: number;
+  asked_to: string;
+  body: string;
+  asked_at: string;
+  due_at: string | null;
+  reminders: number;
+  last_reminded_at: string | null;
+  escalated_to: string | null;
+}
+
+/** GET /api/items/{id}/sources */
+export interface ItemSources {
+  item_id: number;
+  kind: string;
+  state: string;
+  sources: ResolverSource[];
+  decision: ResolverDecision | null;
+  explanation: string | null;
+  confidence: number | null;
+  confidence_reasons: string[];
+  route: ResolverRoute | null;
+  asked_to: string | null;
+  payment_due: string | null;
+  question: OpenQuestion | null;
+  /** True when resolved on the fly for an item proposed before the resolver existed. */
+  computed: boolean;
+}
+
+/** One open question for the Today screen. */
+export interface QuestionItem {
+  id: number;
+  work_item_id: number;
+  kind: string;
+  state: string;
+  title: string;
+  clinic_id: string | null;
+  region_id: string | null;
+  entity_id: string | null;
+  period: string | null;
+  asked_to: string;
+  asked_by: string;
+  body: string;
+  asked_at: string;
+  due_at: string | null;
+  due_on: string | null;
+  /** Against the business clock, not the wall clock. */
+  overdue: boolean;
+  amount_at_stake: number | null;
+  confidence: number | null;
+  reminders: number;
+  last_reminded_at: string | null;
+  escalated_to: string | null;
+  /** Why it is on my list: asked to me, escalated to me, or copied as material. */
+  why: "asked" | "escalated" | "material" | null;
+}
+
+/** GET /api/questions?mine=1 */
+export interface Questions {
+  business_date: string;
+  total: number;
+  questions: QuestionItem[];
+}

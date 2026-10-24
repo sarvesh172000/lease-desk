@@ -44,6 +44,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from ..work import resolver
 from ..work.roles import load_actor
 from ..work.transitions import create_item, transition
 from .queue import enqueue
@@ -221,9 +222,13 @@ def record_findings(conn: Connection, findings: Iterable, period: Any,
             entity_id=clinic.get("entity_id"), region_id=clinic.get("region_id"),
             clinic_id=f.charge.clinic_id, period=month, title=_title(f),
             amount=round(f.billed, 2))
+        ev = evidence(f, ids, (versions or {}).get(f.charge.lease_id))
+        # Sources, trust decision, confidence and route (work/resolver.py).
+        ev.update(resolver.resolve(conn, ev, kind=ITEM_KIND, region_id=clinic.get("region_id"),
+                                   entity_id=clinic.get("entity_id")))
         transition(conn, actor, item["id"], "propose", reason=f.reason, patch={
-            "proposal": f.proposal, "reason": f.reason,
-            "evidence": evidence(f, ids, (versions or {}).get(f.charge.lease_id))})
+            "proposal": f.proposal, "reason": f.reason, "evidence": ev})
+        resolver.ask_if_needed(conn, actor, item["id"], ev)
         existing.add(charge_id)
         created += 1
     return {"created": created, "skipped": skipped}
@@ -235,7 +240,8 @@ def evidence(finding, ids: Mapping[str, str],
     the read API documents (api/exceptions.py): lease_id, charge_id (the
     landlord_charge id), charge_ids, charge_type, billed, supported, then the
     rule and the lease clause that decided it. The checker is deterministic
-    and states no confidence, so none is invented here."""
+    and states no confidence; record_findings adds the resolver's sources,
+    decision, confidence (a documented formula, with its reasons) and route."""
     proof = finding.proof
     charge = finding.charge
     charge_id = ids[charge.charge_id]
