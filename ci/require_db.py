@@ -30,6 +30,12 @@ def pytest_runtest_logreport(report):
     global _ran
     if not report.nodeid.startswith(PLATFORM):
         return
+    if hasattr(report, "wasxfail"):
+        # An expected failure ran against the database; pytest only reports
+        # it as skipped.
+        if report.when == "call":
+            _ran += 1
+        return
     if report.skipped:
         # A skip raised in setup (the `database` fixture) is reported there.
         reason = report.longrepr[-1] if isinstance(report.longrepr, tuple) else str(report.longrepr)
