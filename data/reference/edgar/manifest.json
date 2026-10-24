@@ -1,0 +1,37 @@
+{
+  "source": "SEC EDGAR full-text search",
+  "query": "\"Base Rent\" \"Common Area Maintenance\" \"Term of this Lease\"",
+  "note": "Real lease exhibits filed with the SEC. Text extracted from the filed HTML.",
+  "documents": [
+    {
+      "id": "edgar-01-findwhat-com-inc",
+      "company": "FINDWHAT COM INC  (CIK 0001094808)",
+      "cik": "0001094808",
+      "form": "10QSB",
+      "file_date": "2002-11-06",
+      "accession": "0000950152-02-008069",
+      "url": "https://www.sec.gov/Archives/edgar/data/1094808/000095015202008069/l96901aexv10w9.txt",
+      "characters": 85720
+    },
+    {
+      "id": "edgar-02-sportsmans-guide-inc",
+      "company": "SPORTSMANS GUIDE INC  (CIK 0000791450)",
+      "cik": "0000791450",
+      "form": "10-K",
+      "file_date": "2005-03-17",
+      "accession": "0000950134-05-005369",
+      "url": "https://www.sec.gov/Archives/edgar/data/791450/000095013405005369/c93035exv10w5.txt",
+      "characters": 59736
+    },
+    {
+      "id": "edgar-03-inuvo,-inc.",
+      "company": "INUVO, INC.  (INUV)  (CIK 0000829323)",
+      "cik": "0000829323",
+      "form": "10-K",
+      "file_date": "2012-03-29",
+      "accession": "0001354488-12-001498",
+      "url": "https://www.sec.gov/Archives/edgar/data/829323/000135448812001498/inuv_ex106.htm",
+      "characters": 89841
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "source": "U.S. Bureau of Labor Statistics Public Data API v2",
+  "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+  "retrieved": "2026-10-24",
+  "series": {
+    "CUUR0000SA0": "CPI-U, U.S. city average, all items, not seasonally adjusted",
+    "CUUR0400SA0": "CPI-U, West region, all items, not seasonally adjusted"
+  },
+  "note": "Real published index values, cached so runs work offline. Months BLS publishes as '-' are omitted.",
+  "observations": 184,
+  "omitted": 2
+}
