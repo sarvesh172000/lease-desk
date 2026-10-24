@@ -14,15 +14,15 @@ targets and repo layout are his and do not change. Full-scope phases live in
 
 | | |
 |---|---|
-| **Stage** | 2 of 7 |
-| **Tests** | 104 passing, all offline, no API key needed |
-| **Built** | Storage, LLM layer, data generator, document pipeline |
+| **Stage** | 2 of 7 complete on Person A's side |
+| **Tests** | 127 passing, all offline, no API key needed |
+| **Built** | Storage, LLM layer, data generator, document pipeline, abstraction agent with citations |
 | **Not built** | Everything Person B owns. No database, no API, no UI yet. |
 | **Demo data** | 5 leases, 6 invoices, $112,759.69 billed, $25,736.36 of it wrong |
 
 ### Next task for each of us
 
-- **Sarvesh →** abstraction agent with citations (Stage 2, last A task)
+- **Sarvesh →** `agents/checker.py` with the three rules (Stage 3)
 - **Jenil →** Stage 1: repo scaffolding, Postgres schema, the four DB roles
 
 **Jenil is the critical path.** Nothing Person A has built is reachable from a
@@ -63,7 +63,7 @@ browser until the work layer and web shell exist.
 | A | `datagen/leases.py` + `render_lease.py` — 8-page lease PDFs | **DONE** |
 | A | `datagen/month.py` + `render_invoice.py` — January invoices, AP and bank exports | **DONE** |
 | A | `docs/pipeline.py` — page text, word boxes, 150 dpi page images | **DONE** |
-| A | Abstraction agent: value + page + verbatim quote per field | **NEXT** |
+| A | Abstraction agent: value + page + verbatim quote per field | **DONE** |
 | B | `work/events.py` — `append_event()`, hash chain, `verify_chain()` | TODO |
 | B | `work/transitions.py` — 8 states, 9 transitions, one transaction | TODO |
 | B | Web shell: login, queue table, item detail skeleton | TODO |
@@ -79,8 +79,8 @@ browser until the work layer and web shell exist.
 | B | `work/roles.py` — ROLES matrix, `can()`, separation of duties | TODO |
 | B | `work/gateway.py` — `post_journal()`, idempotency, APPROVED-only | TODO |
 | B | Chart of accounts, trial balance, Beancount export for Fava | TODO |
-| A | `docs/citations.py` — quote to bounding box, fuzzy, match score | TODO |
-| A | `agents/checker.py` — **three rules, see below** | TODO |
+| A | `docs/citations.py` — quote to bounding box, fuzzy, match score | **DONE** (early) |
+| A | `agents/checker.py` — **three rules, see below** | **NEXT** |
 
 ### The checker needs three rules, not one
 
@@ -211,7 +211,7 @@ build next."
 | Criterion | Status |
 |---|---|
 | Fresh clone to running app with `make up migrate seed run-month M=2026-01` | TODO |
-| 5 leases abstracted, every field boxed on its page | TODO |
+| 5 leases abstracted, every field boxed on its page | **DONE** (agent + citations; needs a real API run) |
 | January catches all 5 errors and does **not** hold the correct-but-odd one | TODO |
 | The amendment is found from email, remeasured, approved by the controller | TODO |
 | `lease_agent` cannot insert into `journal_entry` | TODO |
