@@ -144,6 +144,7 @@ what counts as done.
 |---|---|
 | **[docs/PLAN.md](docs/PLAN.md)** | **The plan.** Three phases, 526 hours, live status board |
 | [docs/DESIGN.md](docs/DESIGN.md) | How it works: trust model, agents, accounting, diagrams, API |
+| [docs/SECURITY.md](docs/SECURITY.md) | Audit findings, what was fixed, what is still open |
 | [docs/SPONSORS.md](docs/SPONSORS.md) | Five sponsor targets and where each lands in the plan |
 | [docs/phases/](docs/phases/) | Phase 1, 2 and 3 in full — the task detail |
 

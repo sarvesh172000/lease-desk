@@ -15,9 +15,14 @@ computes what the lease supports, and the checker compares the two.
 """
 
 import csv
+import sys
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Dict, List, Optional
+
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'backend'))
+
+from app.docs.safe_csv import SafeWriter  # noqa: E402
 
 from .company import Company, build_company
 from .errors import PlantedError, for_period
@@ -190,8 +195,9 @@ def build_payments(invoices: List[Invoice], company: Optional[Company] = None) -
 
 def write_ap_export(invoices: List[Invoice], path) -> None:
     """What AP approved: one row per invoice line."""
+    # Descriptions come from landlord documents and are opened in Excel by AP.
     with open(path, "w", newline="") as fh:
-        writer = csv.writer(fh)
+        writer = SafeWriter(fh)
         writer.writerow([
             "invoice_id", "vendor_id", "clinic_id", "lease_id", "period",
             "charge_type", "description", "suite", "amount", "issue_date",
@@ -214,8 +220,10 @@ def write_bank_export(payments: List[Payment], path) -> None:
     The first four columns are the shape `leasedesk.reconcile.load_payments`
     already reads, so the existing engine can consume this file unchanged.
     """
+    # Counterparty names come from the bank feed, which carries whatever the
+    # landlord registered.
     with open(path, "w", newline="") as fh:
-        writer = csv.writer(fh)
+        writer = SafeWriter(fh)
         writer.writerow([
             "period", "lease_id", "amount", "reference",
             "payment_id", "paid_on", "clinic_id", "charge_type",

@@ -35,7 +35,7 @@ then move.
 |---|---|
 | **Complete** | **A1–A4 (all of Person A's Block A)** · 48 of 526 hours |
 | **Partial** | B1, B3, B5, B10 (started early for the demo moment) |
-| **Tests** | 436 passing, offline, no API key · `python -m eval.run` passes |
+| **Tests** | 476 passing, offline, no API key · `python -m eval.run` passes |
 | **Next (Sarvesh)** | Block B is done bar human labelling. **Pair on A5–A8** — nothing is visible yet |
 | **Next (Jenil)** | **A5** — Compose, Postgres schema, the four DB roles |
 

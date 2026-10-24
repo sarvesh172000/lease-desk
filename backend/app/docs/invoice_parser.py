@@ -50,6 +50,19 @@ TOTAL_PATTERNS = [
 
 TOLERANCE = 0.01
 
+# A statement is a page or two. Anything far larger is either not a statement
+# or is meant to exhaust us, and either way it does not get parsed.
+MAX_BYTES = 16 * 1024 * 1024
+
+
+class UnreadableDocument(ValueError):
+    """The bytes are not a document this parser can read.
+
+    Raised rather than returning an empty result, because an empty parse is
+    indistinguishable from a statement with no charges — and that one gets
+    approved.
+    """
+
 
 @dataclass
 class ParsedLine:
@@ -93,14 +106,41 @@ class ParsedInvoice:
 
 def parse(data, source_format: Optional[str] = None,
           invoice_id: Optional[str] = None) -> ParsedInvoice:
-    """Parse a statement. The format is detected unless given."""
+    """Parse a statement. The format is detected unless given.
+
+    Anything that is not a readable statement raises `UnreadableDocument`.
+    Earlier this fell through to the CSV parser for *any* non-PDF bytes, so a
+    corrupt PDF or a stray HTML page came back as a portal export with zero
+    line items and no total — which reads exactly like a statement that
+    charges nothing.
+    """
+    if data is None:
+        raise UnreadableDocument("no document supplied")
+    if len(data) > MAX_BYTES:
+        raise UnreadableDocument(
+            "document is %.1f MB; the limit is %d MB"
+            % (len(data) / 1e6, MAX_BYTES // (1024 * 1024)))
+
     if isinstance(data, bytes):
         if data[:4] == b"%PDF":
-            document = extract(data)
+            try:
+                document = extract(data)
+            except Exception as exc:
+                raise UnreadableDocument("the PDF could not be opened: %s" % exc) from exc
+            if not document.pages:
+                raise UnreadableDocument("the PDF has no pages")
             detected = source_format or _detect_pdf(document)
             return (_parse_table(document, invoice_id) if detected == FORMAT_TABLE
                     else _parse_letter(document, invoice_id))
+
+        if data[:5].lower() in (b"<html", b"<!doc") or b"\x00" in data[:1024]:
+            raise UnreadableDocument(
+                "not a statement: the bytes look like %s"
+                % ("HTML" if data[:1].lower() == b"<" else "binary data"))
         data = data.decode("utf-8", "replace")
+
+    if not data.strip():
+        raise UnreadableDocument("the document is empty")
     return _parse_portal(data, invoice_id)
 
 

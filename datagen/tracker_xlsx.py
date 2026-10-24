@@ -111,6 +111,10 @@ def build_tracker(company, leases) -> bytes:
     return buffer.getvalue()
 
 
+class UnreadableWorkbook(ValueError):
+    """The bytes are not a workbook this can read."""
+
+
 def read_tracker(data: bytes) -> List[TrackerNote]:
     """Pull the notes out as claims.
 
@@ -118,8 +122,17 @@ def read_tracker(data: bytes) -> List[TrackerNote]:
     the colour of a row carries meaning nobody wrote down. All of that is
     handled here so no caller has to know about it.
     """
-    book = load_workbook(BytesIO(data))
+    # The tracker arrives from a shared drive and may be anything. A raw
+    # BadZipFile or KeyError halfway through ingestion says nothing useful
+    # about which file was bad.
+    try:
+        book = load_workbook(BytesIO(data), read_only=False, data_only=True)
+    except Exception as exc:
+        raise UnreadableWorkbook("not a readable .xlsx workbook: %s" % exc) from exc
+
     sheet = book.active
+    if sheet is None:
+        raise UnreadableWorkbook("the workbook has no sheets")
 
     header = _find_header(sheet)
     if header is None:

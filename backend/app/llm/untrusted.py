@@ -54,4 +54,12 @@ def _neutralize(content: str, nonce: str) -> str:
 
 
 def _attr(value: str) -> str:
-    return value.replace('"', "'").replace("\n", " ")[:200]
+    """A source name, reduced to something that cannot pretend to be markup.
+
+    The name comes from a filename or a mail header, so it is attacker-chosen.
+    Swapping double quotes for single ones stopped it closing the attribute but
+    still let it write `nonce='...'` into the header, where a model reading the
+    block might take it for structure. Only safe characters survive now.
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9 ._@+/:-]", "", value or "")
+    return " ".join(cleaned.split())[:120] or "unnamed-source"
