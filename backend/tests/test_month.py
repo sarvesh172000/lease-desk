@@ -248,3 +248,20 @@ def test_only_eval_imports_the_error_catalog():
         if "errors" in path.read_text() and "datagen.errors" in path.read_text():
             offenders.append(str(path.relative_to(root)))
     assert offenders == [], "datagen.errors imported outside eval: %s" % offenders
+
+
+def test_charge_ids_are_unique_within_a_month(world):
+    """One invoice can carry two charges of the same type — the real rent and a
+    line for premises we do not lease. An id that collides makes them one
+    charge to anything keyed by it."""
+    _, _, invoices, _ = world
+    ids = [c.charge_id for i in invoices for c in i.charges]
+    assert len(ids) == len(set(ids))
+
+
+def test_the_stray_suite_line_has_its_own_id(world):
+    _, _, invoices, _ = world
+    clinic_02 = [c for i in invoices for c in i.charges if c.clinic_id == "CLINIC-02"]
+    rent = [c for c in clinic_02 if c.charge_type == "base_rent"]
+    assert len(rent) == 2
+    assert rent[0].charge_id != rent[1].charge_id

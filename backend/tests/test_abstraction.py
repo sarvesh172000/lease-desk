@@ -285,3 +285,75 @@ def _write(payload):
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
         json.dump(payload, fh)
         return fh.name
+
+
+# --- the history cross-check (Phase 1 group 9) -----------------------------
+
+def test_a_schedule_that_matches_the_cash_raises_nothing(doc, tmp_path):
+    from app.agents.abstraction import cross_check_history
+    from datagen.history import build_history, paid_rent_by_month
+
+    company = build_company()
+    history = build_history(company)
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, paid_rent_by_month(history, "LEASE-01"))
+
+    assert result.disagreements == []
+    assert result.is_usable
+
+
+def test_a_month_that_disagrees_is_surfaced_with_both_figures(doc, tmp_path):
+    from app.agents.abstraction import cross_check_history
+
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, {"2025-06": 21_000.00})
+
+    assert len(result.disagreements) == 1
+    d = result.disagreements[0]
+    assert d.schedule_says == 19_055.00   # what the lease says for 2025
+    assert d.cash_says == 21_000.00
+    assert d.delta == 1_945.00
+
+
+def test_a_disagreement_blocks_the_lease_from_being_used(doc, tmp_path):
+    """Neither source is picked. A human decides which is right."""
+    from app.agents.abstraction import cross_check_history
+
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, {"2025-06": 21_000.00})
+
+    assert not result.is_usable
+    assert any("neither is assumed correct" in f for f in result.flags)
+
+
+def test_the_flag_names_both_numbers(doc, tmp_path):
+    from app.agents.abstraction import cross_check_history
+
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, {"2025-06": 21_000.00})
+    flag = next(f for f in result.flags if "2025-06" in f)
+    assert "19,055.00" in flag and "21,000.00" in flag
+
+
+def test_months_outside_the_term_are_ignored(doc, tmp_path):
+    from app.agents.abstraction import cross_check_history
+
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, {"2019-01": 99_999.00})
+    assert result.disagreements == []
+
+
+def test_no_history_is_not_a_disagreement(doc, tmp_path):
+    from app.agents.abstraction import cross_check_history
+
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, {})
+    assert result.is_usable
+
+
+def test_rounding_in_the_cash_is_not_a_disagreement(doc, tmp_path):
+    from app.agents.abstraction import cross_check_history
+
+    result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
+    cross_check_history(result, {"2025-06": 19_055.50})
+    assert result.disagreements == []

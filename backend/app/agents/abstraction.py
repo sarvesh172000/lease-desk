@@ -104,6 +104,18 @@ class CheckedField:
         return self.citation is not None and self.citation.page == self.claimed_page
 
 
+@dataclass(frozen=True)
+class HistoryDisagreement:
+    """A month where the extracted schedule and the cash disagree."""
+    period: str
+    schedule_says: float
+    cash_says: float
+
+    @property
+    def delta(self) -> float:
+        return round(self.cash_says - self.schedule_says, 2)
+
+
 @dataclass
 class Abstraction:
     lease_id: str
@@ -112,6 +124,7 @@ class Abstraction:
     confidence: float
     flags: List[str] = field(default_factory=list)
     meta: Optional[RunMeta] = None
+    disagreements: List[HistoryDisagreement] = field(default_factory=list)
 
     def field(self, name: str) -> CheckedField:
         for f in self.fields:
@@ -132,12 +145,13 @@ class Abstraction:
 
     @property
     def is_usable(self) -> bool:
-        """Every field verified and nothing the model flagged as unclear.
+        """Every field verified, nothing the model flagged, and the schedule
+        agrees with what was actually paid.
 
         An unusable abstraction is not an error — it is a lease that a human
         confirms before the checker is allowed to run against it.
         """
-        return not self.needs_review and not self.uncertain
+        return not self.needs_review and not self.uncertain and not self.disagreements
 
 
     def to_engine_json(self, location: str, lessor: str, discount_rate: float) -> dict:
@@ -250,6 +264,54 @@ def check(
         flags=flags,
         meta=meta,
     )
+
+
+def cross_check_history(
+    abstraction: Abstraction,
+    paid_by_month: Dict[str, float],
+    tolerance: float = 1.00,
+) -> Abstraction:
+    """Replay the extracted rent schedule over what was actually paid.
+
+    Two independent sources for the same number: the lease we just read, and a
+    year of bank payments. When they disagree the extraction may be wrong — or
+    the landlord may have billed wrongly, as happened in June 2025. Which it is
+    cannot be decided from here, so **neither is picked**. The lease goes to a
+    human with both figures, and the checker does not run against it until a
+    person confirms which is right.
+
+    `paid_by_month` maps "YYYY-MM" to the rent actually paid that month.
+    """
+    if not paid_by_month:
+        return abstraction
+
+    steps = abstraction.to_engine_json("", "", 0.0)["steps"]
+    found: List[HistoryDisagreement] = []
+
+    for key in sorted(paid_by_month):
+        due = _rent_from_steps(steps, key)
+        if due is None:
+            continue
+        paid = paid_by_month[key]
+        if abs(paid - due) > tolerance:
+            found.append(HistoryDisagreement(key, round(due, 2), round(paid, 2)))
+
+    abstraction.disagreements = found
+    for d in found:
+        abstraction.flags.append(
+            "%s: the lease schedule says $%s but $%s was paid. Both sources are "
+            "shown; neither is assumed correct."
+            % (d.period, "{:,.2f}".format(d.schedule_says),
+               "{:,.2f}".format(d.cash_says)))
+    return abstraction
+
+
+def _rent_from_steps(steps, key: str) -> Optional[float]:
+    period = date(int(key[:4]), int(key[5:]), 1)
+    for step in steps:
+        if date.fromisoformat(step["start"]) <= period <= date.fromisoformat(step["end"]):
+            return float(step["monthly_rent"])
+    return None
 
 
 def confidence(fields: List[CheckedField], uncertain: List[str]) -> float:
