@@ -115,9 +115,16 @@ def _check(sha: str, storage: Optional[LocalStorage]) -> str:
 # Cached by (store, sha): the key names the bytes, so the cache never holds
 # them and never goes stale.
 
+@lru_cache(maxsize=64)
+def cached_document(root: str, sha: str):
+    """The extracted document behind `sha`. Shared with the exception screen,
+    which locates citation boxes in the same pages this viewer draws."""
+    return extract(LocalStorage(root).get(sha), sha256=sha)
+
+
 @lru_cache(maxsize=256)
 def _sizes(root: str, sha: str):
-    doc = extract(LocalStorage(root).get(sha), sha256=sha)
+    doc = cached_document(root, sha)
     return tuple((p.number, round(p.width, 2), round(p.height, 2)) for p in doc.pages)
 
 

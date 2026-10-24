@@ -90,6 +90,8 @@ await moneyScreen("duplicate-rent", "billed $19,626.65, lease supports $0.00");
 const goodId = await openCharge("CLINIC-02 Jan 2026 base_rent: $9,700.00 matches the lease");
 await page.waitForSelector("[data-testid=citation-box] >> nth=1", { timeout: 20000 });
 await page.getByTestId("actions").getByRole("button", { name: "Approve", exact: true }).click();
+// a financial action confirms first, restating the amount
+await page.getByTestId("confirm-action").click();
 await page.waitForSelector("[data-testid=action-result]", { timeout: 20000 });
 const result = await page.locator("[data-testid=action-result]").innerText();
 check(/posted to the ledger/.test(result) && /POSTED/.test(result), `approve ${goodId}: "${result}"`);

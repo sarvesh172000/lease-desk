@@ -20,7 +20,7 @@ from app.docs.storage import LocalStorage  # noqa: E402
 
 from .answer_key import write as write_answer_key  # noqa: E402
 from .company import build_company  # noqa: E402
-from .leases import build_leases  # noqa: E402
+from .leases import AMENDMENTS, amended, build_leases  # noqa: E402
 from .emails import build_emails, write_emails  # noqa: E402
 from .history import build_history  # noqa: E402
 from .month import (  # noqa: E402
@@ -28,6 +28,19 @@ from .month import (  # noqa: E402
 )
 from .render_invoice import render_invoice  # noqa: E402
 from .render_lease import render_lease  # noqa: E402
+
+
+
+def billed_as(company, period):
+    """The lease terms the landlord invoices from in `period`.
+
+    Before an amendment's effective date this returns the lease unchanged, so
+    any month earlier than one generates exactly as it did before.
+    """
+    leases = build_leases(company)
+    by_lease = {a.lease_id: a for a in AMENDMENTS if a.effective <= period}
+    return [amended(t, by_lease[t.lease_id]) if t.lease_id in by_lease else t
+            for t in leases]
 
 
 def main(argv=None):
@@ -66,8 +79,14 @@ def main(argv=None):
                  sum(len(p.words) for p in doc.pages), len(pdf) / 1024, sha[:16]))
 
     # --- the billing month --------------------------------------------
+    # The landlord bills the lease as amended; the books still run the old
+    # schedule, because the amendment went to facilities and never reached
+    # accounting. That gap is the variance the whole product exists to catch,
+    # so it has to be in the generated month, not only in the tests.
+    # Before an amendment's effective date `amended()` changes nothing, so a
+    # period earlier than July 2026 generates exactly as it did before.
     leases = build_leases(company)
-    invoices = build_month(period, company, leases)
+    invoices = build_month(period, company, billed_as(company, period))
     payments = build_payments(invoices, company)
 
     (out / "invoices").mkdir(parents=True, exist_ok=True)

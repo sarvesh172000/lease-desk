@@ -151,7 +151,7 @@ export interface ActionResult {
 
 /**
  * SSE events from POST /api/exceptions/{id}/investigate. The live API adds
- * `not_found` and a few fields to the §16 four; `confidence`, `doc_id` and
+ * `not_found`, `error` and a few fields to the §16 four; `confidence`, `doc_id` and
  * `balanced` are null where nothing on record says (a charge check states no
  * confidence and proposes no entries).
  */
@@ -169,7 +169,9 @@ export type InvestigationEvent =
     }
   | { stage: "not_found"; message: string }
   | { stage: "remeasured"; liability_delta: number; rou_delta: number | null }
-  | { stage: "complete"; entries: number; balanced: boolean | null; message?: string };
+  | { stage: "complete"; entries: number; balanced: boolean | null; message?: string }
+  /** EXTENSION: the run could not finish. Carries why, and ends the stream. */
+  | { stage: "error"; message: string };
 
 /** EXTENSION shape for GET /api/leases/{id}/schedule?version= (§16 says only "Schedule rows"). */
 export interface ScheduleRow {

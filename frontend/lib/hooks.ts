@@ -26,6 +26,7 @@ import {
   getSummary,
   holdException,
   payAsBilledException,
+  performAction,
   subscribeDataSource,
   type DataSource,
 } from "./api";
@@ -119,7 +120,12 @@ const AFTER_ACTION = ["exception", "exceptions", "summary", "charge-checks", "le
 export function useExceptionAction(exceptionId: string) {
   const qc = useQueryClient();
   return useMutation<ActionResult, Error, ItemAction>({
-    mutationFn: (action) => (action === "approve" ? approveException(exceptionId) : holdException(exceptionId)),
+    mutationFn: (action) =>
+      action === "approve"
+        ? approveException(exceptionId)
+        : action === "hold"
+          ? holdException(exceptionId)
+          : performAction(exceptionId, action),
     onSettled: () => {
       for (const k of AFTER_ACTION) void qc.invalidateQueries({ queryKey: [k] });
     },

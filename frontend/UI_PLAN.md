@@ -234,13 +234,13 @@ components/domain/ EvidenceCard, ScheduleDiff, JournalEntryTable,
 
 | # | Phase | Hours | Done when |
 |---|---|---|---|
-| 1 | Tokens, fonts, dark theme, `Button`/`Card`/`Badge` | 4 | Every existing screen renders dark with no hex in any `.tsx` |
-| 2 | Dashboard polish — tiles, sparkline, queue | 3 | Count-up and hover states feel deliberate |
-| 3 | **Exception screen** — split view, timeline, entries, diff | 8 | The 3-minute demo runs on it without apology |
-| 4 | **Landing page** `/welcome` | 8 | A stranger reads it once and can say what the product does |
-| 5 | Leases, audit, login | 5 | Hash chain is visibly a chain |
-| 6 | Command palette, toasts, empty and loading states | 3 | Nothing ever shows a raw spinner or a blank panel |
-| 7 | Motion pass, reduced-motion, projector check at 1280 | 3 | Legible from across a room |
+| 1 | ~~Tokens, fonts, dark theme, `Button`/`Card`/`Badge`~~ **DONE** | 4 | Every existing screen renders dark with no hex in any `.tsx` |
+| 2 | Dashboard polish — tiles, queue **DONE** (sparkline not built) | 3 | Count-up and hover states feel deliberate |
+| 3 | ~~**Exception screen**~~ **DONE** — split view, timeline, entries, diff | 8 | The 3-minute demo runs on it without apology |
+| 4 | ~~**Landing page** `/welcome`~~ **DONE** | 8 | A stranger reads it once and can say what the product does |
+| 5 | ~~Leases, audit, login~~ **DONE** | 5 | Hash chain is visibly a chain |
+| 6 | Command palette, empty and loading states **DONE** (no toasts) | 3 | Nothing ever shows a raw spinner or a blank panel |
+| 7 | Motion pass, reduced-motion **DONE**; projector check at 1280 pending | 3 | Legible from across a room |
 
 **34 hours.** If it slips, cut in this order: command palette → sparklines →
 scroll-driven landing sequence (fall back to four static steps) → dark/light
@@ -291,3 +291,50 @@ Sign in as `priya.raghunathan@northbaypt.example` / `demo`.
 Build against fixtures when the backend is in flux
 (`NEXT_PUBLIC_USE_FIXTURES=1`), but do the final pass on live data — the live
 payload is where the empty states and the missing fields actually show up.
+
+
+---
+
+## Status, 24 Oct 2026
+
+Phases 1-6 are built and on `main`. Phase 7's motion and reduced-motion work is
+done; the 1280 projector check still wants a human eye on a real screen.
+
+Building phase 3 surfaced that the money screen had no data to show, and four
+breaks underneath it, all now fixed: the detail endpoint returned seven scalars
+and neither document; the api/worker containers had no data volume, so every
+page request 404'd; the page viewer crashed on pdf.js and is now the server's
+own PNG renders; and the page-size lookup compared `page` against the API's
+`number`, so no citation box could ever draw.
+
+`POST /api/exceptions/{id}/investigate` is now built: it runs the modification
+agent over the mailbox, streams the four stages, and records what it found on
+the work item so the screen survives a reload. A recorded investigation is
+replayed rather than asked again; when no model can run, the stream shows the
+checker's own evidence (the cited clause, boxed on the lease) and then an
+`error` stage saying why the mailbox was not searched. It never invents a
+remeasurement.
+
+**Two things stand between it and the moment on live data:**
+
+1. **A model key, once.** The agent reads the mailbox, and the response cache
+   is empty. Put `ANTHROPIC_API_KEY=...` in `.env` and run the investigation
+   once; the answer is then cached under `.cache/llm`, which the API and the
+   eval share, and every later run is offline. Without it the timeline shows
+   exactly that, rather than failing silently.
+2. **Generate the month the amendment is in.** The seeded month is January
+   2026, whose exceptions are a duplicate and a CAM over-bill — real holds,
+   but no amendment to find, so an honest investigation returns
+   "unexplained". The amendment takes effect 1 July 2026:
+
+   ```bash
+   python -m datagen.build --out data/generated --month 2026-07
+   make seed && make run-month M=2026-07
+   ```
+
+   `datagen/build.py` now bills from the lease *as amended* while the books
+   still run the old schedule — that gap is the variance. A month before the
+   amendment generates byte-identically, so January is untouched.
+
+Note the two months do not coexist: `build.py` generates one billing month, so
+this replaces January rather than adding to it.

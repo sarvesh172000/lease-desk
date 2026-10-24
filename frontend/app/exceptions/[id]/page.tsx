@@ -9,11 +9,13 @@ import { ScheduleDiff } from "@/components/ScheduleDiff";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingBlock, Skeleton } from "@/components/ui/States";
 import { WorkStateBadge } from "@/components/WorkStateBadge";
 import { ApiError } from "@/lib/api";
 import { day, humanize, money, period, signedMoney, STATUS_LABEL } from "@/lib/format";
 import { useAllowedActions, useException, useExceptionAction, useMe, usePayAsBilled, useSchedule } from "@/lib/hooks";
+import { journalTotals } from "@/lib/journal";
 import type { ActionResult, Box, ExceptionDetail, InvestigationEvent, ItemAction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -107,7 +109,6 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
             {ex.clinic_id ? ` · ${ex.clinic_id}` : ""} · <span className="font-mono text-sm">{ex.exception_id}</span>
           </p>
         </div>
-        <Actions ex={ex} />
       </div>
 
       {/* the calculation */}
@@ -270,6 +271,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
           </Card>
         </div>
       </div>
+
+      <ActionBar ex={ex} />
     </div>
   );
 }
@@ -283,12 +286,17 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
-const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold", resume: "Resume", reject: "Reject" };
-// The money screen offers sign-off and hold; the rest of the queue's actions live elsewhere.
-const SCREEN_ACTIONS = new Set(["approve", "hold"]);
+const ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold", reject: "Reject" };
+// The money screen offers sign-off, hold and reject; the rest of the queue's
+// actions (resume, close, ...) live on the queue.
+const SCREEN_ACTIONS = new Set(["approve", "hold", "reject"]);
+const ACTION_DONE: Record<string, string> = { approve: "Approved", hold: "Held", reject: "Rejected" };
+
+/** What confirms before it acts: everything that moves money or closes the decision. */
+type Pending = "approve" | "reject" | "pay_as_billed";
 
 function outcome(action: ItemAction, res: ActionResult, did?: string): string {
-  did = did ?? (action === "approve" ? "Approved" : "Held");
+  did = did ?? ACTION_DONE[action] ?? humanize(action);
   const state = res.state ? ` · ${res.state}` : ` · now ${STATUS_LABEL[res.status] ?? res.status}`;
   const p = res.posting;
   const kept = p?.disputed ? `; ${money(p.disputed)} stays held` : "";
@@ -310,133 +318,219 @@ function upholdCopy(ex: ExceptionDetail): string {
     : `Nothing is paid; the ${money(disputed)} stays held.`;
 }
 
-function Actions({ ex }: { ex: ExceptionDetail }) {
+function ActionBar({ ex }: { ex: ExceptionDetail }) {
   const allowed = useAllowedActions(ex.exception_id);
   const m = useExceptionAction(ex.exception_id);
   const override = usePayAsBilled(ex.exception_id);
   const me = useMe();
   const [done, setDone] = useState<string | null>(null);
-  const [overriding, setOverriding] = useState(false);
+  const [confirming, setConfirming] = useState<Pending | null>(null);
   const [why, setWhy] = useState("");
+
+  const inv = ex.investigation;
   const actions = (allowed.data?.actions ?? []).filter((a) => SCREEN_ACTIONS.has(a));
-  const blockApprove = !!ex.investigation && (!ex.investigation.balanced || !ex.investigation.explains_variance);
+  const blockApprove = !!inv && (!inv.balanced || !inv.explains_variance);
   const isHold = ex.proposal === "hold";
   const canOverride = isHold && actions.includes("approve") && me.data?.role === "controller";
   const busy = m.isPending || override.isPending;
   const error = m.error ?? override.error;
+  const totals = inv ? journalTotals(inv.entries) : null;
   const label = (a: string) => (a === "approve" && isHold ? "Uphold hold" : ACTION_LABEL[a] ?? humanize(a));
 
+  const close = () => {
+    setConfirming(null);
+    setWhy("");
+  };
+  const run = (a: ItemAction) => {
+    override.reset();
+    m.mutate(a, {
+      onSuccess: (res) => {
+        close();
+        setDone(outcome(a, res, a === "approve" && isHold ? "Hold upheld" : undefined));
+      },
+      onError: () => {
+        close();
+        setDone(null);
+      },
+    });
+  };
+  const payAsBilled = () => {
+    if (!why.trim()) return;
+    m.reset();
+    override.mutate(why.trim(), {
+      onSuccess: (res) => {
+        close();
+        setDone(outcome("approve", res, "Paid as billed (controller override)"));
+      },
+      onError: () => {
+        close();
+        setDone(null);
+      },
+    });
+  };
+  // Approve (and so Uphold hold), Reject and Pay as billed restate the money
+  // first. Hold only parks the item, so it acts straight away.
+  const press = (a: ItemAction) => (a === "approve" || a === "reject" ? setConfirming(a) : run(a));
+
+  const dialog: Record<Pending, { title: string; confirm: string; tone: "primary" | "danger" }> = {
+    approve: isHold
+      ? { title: "Uphold the hold?", confirm: "Uphold hold", tone: "primary" }
+      : { title: "Approve and post?", confirm: "Approve", tone: "primary" },
+    reject: { title: "Reject this charge?", confirm: "Reject", tone: "danger" },
+    pay_as_billed: { title: "Pay as billed?", confirm: "Pay as billed", tone: "danger" },
+  };
+  const d = confirming ? dialog[confirming] : null;
+
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1.5 pt-5" data-testid="actions">
-      <div className="flex items-center gap-2">
-        {allowed.isLoading ? (
-          <Skeleton className="h-11 w-56" />
-        ) : allowed.isError ? (
-          <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
-        ) : actions.length ? (
-          <>
-            {actions.map((a) => (
-              <Button
-                key={a}
-                size="lg"
-                variant={a === "approve" ? "primary" : "secondary"}
-                disabled={busy || (a === "approve" && blockApprove)}
-                onClick={() => {
-                  override.reset();
-                  m.mutate(a, {
-                    onSuccess: (res) => setDone(outcome(a, res, a === "approve" && isHold ? "Hold upheld" : undefined)),
-                    onError: () => setDone(null),
-                  });
-                }}
-                title={
-                  a === "approve" && blockApprove
-                    ? "Entries must balance and explain the variance before approval"
-                    : a === "approve" && isHold
-                      ? `Agree the charge is wrong. ${upholdCopy(ex)}`
-                      : undefined
-                }
-              >
-                {m.isPending && m.variables === a ? "Working…" : label(a)}
-              </Button>
-            ))}
-            {canOverride ? (
-              <Button
-                size="lg"
-                variant="secondary"
-                disabled={busy}
-                aria-expanded={overriding}
-                data-testid="pay-as-billed"
-                onClick={() => setOverriding((v) => !v)}
-                title={`Controller override: pay the billed ${money(ex.actual)}, disputed amount included`}
-              >
-                Pay as billed…
-              </Button>
-            ) : null}
-          </>
-        ) : (
-          <span data-testid="no-actions" className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
-            {ex.status === "balanced" ? `${ex.state ? humanize(ex.state.toLowerCase()) : "Approved"} — nothing to do` : "No actions available to your role"}
-          </span>
-        )}
-      </div>
-      {isHold && actions.includes("approve") && !done ? (
-        <span data-testid="uphold-copy" className="text-sm text-ink-soft">
-          Uphold hold: {upholdCopy(ex)}
-        </span>
-      ) : null}
-      {canOverride && overriding ? (
-        <form
-          className="mt-1 flex w-[26rem] flex-col gap-2 rounded-md border border-line bg-surface p-3 shadow-card"
-          data-testid="pay-as-billed-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!why.trim()) return;
-            m.reset();
-            override.mutate(why.trim(), {
-              onSuccess: (res) => {
-                setOverriding(false);
-                setWhy("");
-                setDone(outcome("approve", res, "Paid as billed (controller override)"));
-              },
-              onError: () => setDone(null),
-            });
-          }}
-        >
-          <label htmlFor="override-reason" className="text-sm font-medium">
-            {(ex.payable ?? ex.expected ?? 0) > 0
-              ? `Pay the billed ${money(ex.actual)}, including the disputed ${money(ex.disputed ?? ex.delta)}?`
-              : `Pay the billed ${money(ex.actual)}? None of it is supported by the lease.`}
-          </label>
-          <textarea
-            id="override-reason"
-            required
-            rows={3}
-            value={why}
-            onChange={(e) => setWhy(e.target.value)}
-            placeholder="Reason (required, recorded in the audit trail)"
-            className="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm"
-          />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setOverriding(false)} disabled={override.isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={!why.trim() || busy}>
-              {override.isPending ? "Working…" : "Pay as billed"}
-            </Button>
+    <div className="sticky bottom-0 z-20 -mx-6 mt-1 border-t border-line bg-surface/92 px-6 py-3 backdrop-blur-md">
+      <div className="flex items-center justify-between gap-6">
+        <div className="min-w-0">
+          <div className="truncate text-sm">
+            <span className="num font-semibold">{signedMoney(ex.delta)}</span> variance
+            {inv ? (
+              <>
+                {" · "}
+                {inv.entries.length} proposed {inv.entries.length === 1 ? "entry" : "entries"}
+                {" · "}
+                <span className={cn("font-medium", inv.balanced ? "text-ok" : "text-bad")}>{inv.balanced ? "balanced" : "out of balance"}</span>
+              </>
+            ) : (
+              <span className="text-ink-muted">{" · "}no investigation on record</span>
+            )}
           </div>
-        </form>
-      ) : null}
-      {error ? (
-        <span role="alert" className="text-sm text-bad">
-          {(error as Error).message}
-        </span>
-      ) : done ? (
-        <span role="status" data-testid="action-result" className="text-sm font-medium text-ok">
-          {done}
-        </span>
-      ) : (
-        <span className="text-xs text-ink-muted">Every action, allowed or refused, is recorded in the audit trail.</span>
-      )}
+          {isHold && actions.includes("approve") && !done ? (
+            <div data-testid="uphold-copy" className="text-xs text-ink-soft">
+              Uphold hold: {upholdCopy(ex)}
+            </div>
+          ) : (
+            <div className="text-xs text-ink-muted">Nothing posts to the ledger until you approve. The decision is recorded in the audit trail.</div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-3" data-testid="actions">
+          {error ? (
+            <span role="alert" className="max-w-xs text-right text-sm text-bad">
+              {(error as Error).message}
+            </span>
+          ) : done ? (
+            <span role="status" data-testid="action-result" className="max-w-md text-right text-sm font-medium text-ok">
+              {done}
+            </span>
+          ) : null}
+          {allowed.isLoading ? (
+            <Skeleton className="h-11 w-56" />
+          ) : allowed.isError ? (
+            <span className="text-sm text-bad">Actions unavailable: {(allowed.error as Error).message}</span>
+          ) : actions.length ? (
+            <>
+              {actions.map((a) => (
+                <Button
+                  key={a}
+                  size="lg"
+                  variant={a === "approve" ? "primary" : a === "reject" ? "danger" : "secondary"}
+                  loading={m.isPending && m.variables === a}
+                  disabled={busy}
+                  disabledReason={a === "approve" && blockApprove ? "Entries must balance and explain the variance before approval" : undefined}
+                  title={a === "approve" && isHold ? `Agree the charge is wrong. ${upholdCopy(ex)}` : undefined}
+                  onClick={() => press(a)}
+                >
+                  {label(a)}
+                </Button>
+              ))}
+              {canOverride ? (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  disabled={busy}
+                  loading={override.isPending}
+                  data-testid="pay-as-billed"
+                  onClick={() => setConfirming("pay_as_billed")}
+                  title={`Controller override: pay the billed ${money(ex.actual)}, disputed amount included`}
+                >
+                  Pay as billed…
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <span data-testid="no-actions" className="rounded-md border border-line bg-sunken px-3 py-2 text-sm text-ink-muted">
+              {ex.status === "balanced" ? `${ex.state ? humanize(ex.state.toLowerCase()) : "Approved"} — nothing to do` : "No actions available to your role"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={d !== null}
+        onOpenChange={(open) => !open && close()}
+        title={d?.title ?? ""}
+        confirmLabel={d?.confirm ?? ""}
+        tone={d?.tone ?? "primary"}
+        loading={busy}
+        confirmDisabled={confirming === "pay_as_billed" && !why.trim()}
+        onConfirm={() => {
+          if (confirming === "pay_as_billed") payAsBilled();
+          else if (confirming) run(confirming);
+        }}
+      >
+        {confirming === "pay_as_billed" ? (
+          <div data-testid="pay-as-billed-form">
+            <p>
+              {(ex.payable ?? ex.expected ?? 0) > 0 ? (
+                <>
+                  This pays the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span>, including the disputed{" "}
+                  <span className="num font-semibold text-ink">{money(ex.disputed ?? ex.delta)}</span> the lease does not support.
+                </>
+              ) : (
+                <>
+                  This pays the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span>. None of it is supported by the lease.
+                </>
+              )}
+            </p>
+            <label htmlFor="override-reason" className="mt-3 block text-sm font-medium text-ink">
+              Reason <span className="text-ink-muted">(required, recorded in the audit trail)</span>
+            </label>
+            <textarea
+              id="override-reason"
+              required
+              rows={3}
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+              placeholder="Why the disputed amount is being paid"
+              className="mt-1 w-full rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink"
+            />
+          </div>
+        ) : confirming === "reject" ? (
+          <p>
+            This closes <span className="font-mono">{ex.exception_id}</span> against the billed{" "}
+            <span className="num font-semibold text-ink">{money(ex.actual)}</span>. Nothing posts to the ledger.
+          </p>
+        ) : isHold ? (
+          <p>
+            You agree the billed <span className="num font-semibold text-ink">{money(ex.actual)}</span> is wrong. {upholdCopy(ex)}{" "}
+            The disputed amount never reaches the ledger.
+          </p>
+        ) : totals && inv && inv.entries.length ? (
+          <p>
+            This posts <strong>{inv.entries.length} entries</strong> totalling{" "}
+            <span className="num font-semibold text-ink">{money(totals.debit)}</span> on each side, against a billed{" "}
+            <span className="num font-semibold text-ink">{money(ex.actual)}</span> and a variance of{" "}
+            <span className="num font-semibold text-ink">{signedMoney(ex.delta)}</span>.
+          </p>
+        ) : (
+          <p>
+            This posts the billed <span className="num font-semibold text-ink">{money(ex.payable ?? ex.actual)}</span> to the ledger through the
+            gateway (Dr lease cost, Cr accounts payable)
+            {ex.delta ? (
+              <>
+                {" "}
+                — a variance of <span className="num font-semibold text-ink">{signedMoney(ex.delta)}</span>, with no proposed entries to correct it
+              </>
+            ) : null}
+            .
+          </p>
+        )}
+        <p className="mt-2 text-ink-muted">Recorded in the audit trail under your name, and not reversible from this screen.</p>
+      </ConfirmDialog>
     </div>
   );
 }

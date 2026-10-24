@@ -11,6 +11,7 @@ engines, the data directory and the SSE pacing are swapped through
 - GET  /api/documents/{doc_id}/pages|file by sha256 or by source_document.id
 - POST /api/exceptions/{id}/hold and /approve (posting status, refusals on record)
 - POST /api/exceptions/{id}/investigate: SSE frames from the evidence on record
+  when the agent cannot run, and a recorded investigation replayed
 - GET  /api/summary: held_total is the open over-bills only
 """
 
@@ -27,8 +28,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from app.agents.investigation_run import NoModel
 from app.api.deps import get_data_dir, get_gateway_engine
-from app.api.exceptions import sse_delay
+from app.api.exceptions import investigation_runner, sse_delay
 from app.auth.deps import api_engine, auth_settings
 from app.auth.sessions import COOKIE_NAME, issue_token
 from app.docs.pipeline import extract
@@ -70,6 +72,12 @@ def january(clean, generated, monkeypatch):
     return clean
 
 
+def no_model(**_):
+    """The investigation agent with no key and a cold cache (the agent itself,
+    with a fake model, is test_investigate_route.py's)."""
+    raise NoModel("No model credentials, and this question is not cached yet.")
+
+
 def make_client(engines, data_dir) -> TestClient:
     settings = dataclasses.replace(get_settings(), session_secret=SECRET)
     app = create_app(settings)
@@ -78,6 +86,7 @@ def make_client(engines, data_dir) -> TestClient:
     app.dependency_overrides[auth_settings] = lambda: settings
     app.dependency_overrides[get_data_dir] = lambda: Path(data_dir)
     app.dependency_overrides[sse_delay] = lambda: 0.0
+    app.dependency_overrides[investigation_runner] = lambda: no_model
     return TestClient(app)
 
 
@@ -276,9 +285,10 @@ def test_actions_on_something_that_is_not_a_charge_check_are_404(client):
 # --- investigate (SSE) -------------------------------------------------------------------
 
 def test_investigate_streams_the_checker_evidence_and_invents_no_remeasurement(client, january, generated):
+    """No model to search the mailbox: the checker's own evidence, then why."""
     suite = item_where(january, rule="premises")
     got = frames(as_(client, RM).post("/api/exceptions/exc_%d/investigate" % suite["id"]))
-    assert [f["stage"] for f in got] == ["searching", "found", "complete"]
+    assert [f["stage"] for f in got] == ["searching", "found", "error"]
     assert "LEASE-02 §1.1" in got[0]["message"]
     found = got[1]
     manifest = json.loads((generated / "manifest.json").read_text())
@@ -287,9 +297,8 @@ def test_investigate_streams_the_checker_evidence_and_invents_no_remeasurement(c
     assert found["quote"] == "those certain premises designated as Suite 115"
     assert found["confidence"] is None, "the checker states no confidence; none is made up"
     assert found["page"] == 2 and len(found["box"]) == 4
-    assert {k: v for k, v in got[2].items() if k != "message"} == {
-        "stage": "complete", "entries": 0, "balanced": None}
-    assert "Suite 118" in got[2]["message"]
+    assert "not cached" in got[2]["message"] and "not searched" in got[2]["message"]
+    assert not any(f["stage"] == "remeasured" for f in got)
 
 
 def test_investigate_without_a_cited_clause_says_not_found(client, january):
@@ -299,7 +308,7 @@ def test_investigate_without_a_cited_clause_says_not_found(client, january):
         conn.execute(text("UPDATE work_item SET evidence = CAST(:e AS jsonb) WHERE id = :id"),
                      {"e": json.dumps(evidence), "id": item["id"]})
     got = frames(as_(client, RM).post("/api/exceptions/exc_%d/investigate" % item["id"]))
-    assert [f["stage"] for f in got] == ["searching", "not_found", "complete"]
+    assert [f["stage"] for f in got] == ["searching", "not_found", "error"]
 
 
 def test_investigate_replays_a_recorded_investigation(client, january):

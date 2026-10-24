@@ -37,6 +37,7 @@ import {
   FIXTURE_SCHEDULES,
   FIXTURE_SSE,
   fixtureDocumentUrl,
+  fixturePageUrl,
 } from "./fixtures";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -321,7 +322,46 @@ export function approveException(id: string): Promise<ActionResult> {
   );
 }
 
-/** EXTENSION: POST /api/exceptions/{id}/hold — not in §16. */
+/**
+ * Work states to the four statuses the exception screen knows.
+ *
+ * Mirrors STATUS_BY_STATE in the exceptions router. The item action route
+ * answers with the work state; §16's approve route already maps it.
+ */
+const STATUS_BY_STATE: Record<string, Status> = {
+  NEW: "exception",
+  PROPOSED: "pending_review",
+  NEEDS_INFO: "escalated",
+  HELD: "escalated",
+  APPROVED: "balanced",
+  POSTED: "balanced",
+  CLOSED: "balanced",
+  REJECTED: "balanced",
+};
+
+/**
+ * Any other action: POST /api/items/{item_id}/actions/{action}.
+ *
+ * The queue's own action route takes every human action the state machine has
+ * (resume, reject, close, ...), as the same `perform()` the approve route
+ * uses, so the answer allowed-actions gave the button is the answer the press
+ * gets. Approve, hold and pay-as-billed have exception routes of their own,
+ * which also answer with the work state and the posting.
+ */
+export function performAction(exceptionId: string, action: ItemAction): Promise<ActionResult> {
+  return call(
+    async (): Promise<ActionResult> => {
+      const res = await http<{ state: string }>(
+        `/api/items/${encodeURIComponent(itemIdOf(exceptionId))}/actions/${encodeURIComponent(action)}`,
+        { method: "POST" },
+      );
+      return { exception_id: exceptionId, status: STATUS_BY_STATE[res.state] ?? "pending_review", state: res.state };
+    },
+    () => fxAct(exceptionId, action),
+  );
+}
+
+/** EXTENSION: POST /api/exceptions/{id}/hold — not in §16; the queue's hold, answered with the work state. */
 export function holdException(id: string): Promise<ActionResult> {
   return call(
     () => http<ActionResult>(`/api/exceptions/${encodeURIComponent(id)}/hold`, { method: "POST" }),
@@ -496,9 +536,29 @@ export function ingestDocument(file: File): Promise<unknown> {
 }
 
 /** GET /api/documents/{sha}/pages (named in §16 for box scaling). */
+/**
+ * The wire shape of GET /api/documents/{sha}/pages.
+ *
+ * It numbers each page `number` and names the document `sha256`; everything on
+ * this side calls those `page` and `doc_id`. The two were not the same shape,
+ * so the page lookup in the viewer never matched and no citation box could
+ * draw. Normalising here keeps that mismatch in one place.
+ */
+interface WireDocumentPages {
+  sha256: string;
+  page_count: number;
+  pages: Array<{ number: number; width: number; height: number }>;
+}
+
 export function getDocumentPages(docId: string): Promise<DocumentPages> {
   return call(
-    () => http<DocumentPages>(`/api/documents/${encodeURIComponent(docId)}/pages`),
+    async () => {
+      const wire = await http<WireDocumentPages>(`/api/documents/${encodeURIComponent(docId)}/pages`);
+      return {
+        doc_id: wire.sha256,
+        pages: (wire.pages ?? []).map((p) => ({ page: p.number, width: p.width, height: p.height })),
+      };
+    },
     () => {
       const d = FIXTURE_DOCUMENTS[docId];
       if (!d) throw new ApiError(404, `404 document ${docId} not in fixtures`);
@@ -512,9 +572,18 @@ export function documentUrl(docId: string): string {
   return source === "fixtures" ? fixtureDocumentUrl(docId) : `${API_URL}/api/documents/${encodeURIComponent(docId)}/file`;
 }
 
-/** The live API's PDF route needs the session cookie; fixtures are static files. */
-export function documentNeedsCredentials(): boolean {
-  return source === "api";
+/**
+ * One rendered page: GET /api/documents/{sha}/pages/{n}.png.
+ *
+ * The viewer draws these rather than the PDF itself. The server already
+ * rasterizes with PyMuPDF and serves the result immutable (the sha names the
+ * bytes), so the browser needs no PDF engine, no worker, and no second copy of
+ * the document. Citation boxes are positioned as percentages of the page, so
+ * the render DPI never enters the arithmetic.
+ */
+export function pageImageUrl(docId: string, page: number): string {
+  if (source === "fixtures") return fixturePageUrl(docId, page);
+  return `${API_URL}/api/documents/${encodeURIComponent(docId)}/pages/${page}.png`;
 }
 
 /**

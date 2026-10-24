@@ -78,39 +78,47 @@ class Investigation(BaseModel):
 
 
 class InvoiceLine(BaseModel):
-    """The billed line, boxed on the invoice PDF (api/evidence.py)."""
-    doc_id: str                       # the invoice's sha256
-    page: int
-    box: List[float]                  # [x0, y0, x1, y1], PDF points, origin top-left
-    description: str
-    amount: float
+    """The billed line under review, boxed on the invoice page it came from
+    (api/evidence.py). The whole object is null when the line cannot be
+    located in the stored PDF: a box is never invented."""
+    doc_id: Optional[str] = None      # the invoice's sha256
+    page: Optional[int] = None
+    box: Optional[List[float]] = None  # [x0, y0, x1, y1], PDF points, origin top-left
+    description: Optional[str] = None
+    amount: Optional[float] = None
 
 
 class LeaseCitation(BaseModel):
-    """The clause the expected amount comes from, boxed on the lease PDF."""
-    doc_id: str                       # the lease's sha256
-    page: int
-    box: List[float]
-    label: str                        # "LEASE-02 · §1.1"
-    quote: str
+    """The lease clause the expected amount rests on, as the checker cited it,
+    boxed on the lease PDF."""
+    doc_id: Optional[str] = None      # the lease's sha256
+    page: Optional[int] = None
+    box: Optional[List[float]] = None
+    label: Optional[str] = None       # "LEASE-02 · §1.1"
+    quote: Optional[str] = None
     match_score: Optional[float] = None   # docs.citations' score for the located quote
 
 
 class ExceptionDetail(BaseModel):
     exception_id: str
     lease_id: Optional[str]
+    clinic_id: Optional[str] = None
     period: Optional[date]
+    charge_type: Optional[str] = None
     expected: Optional[float]
     actual: Optional[float]
     delta: Optional[float]
     status: str
-    investigation: Investigation
+    confidence: Optional[float] = None
+    invoice_line: Optional[InvoiceLine] = None
+    lease_citation: Optional[LeaseCitation] = None
+    # None when nothing has been investigated: an empty Investigation would
+    # read on screen as an investigation that found nothing, which is a
+    # different claim.
+    investigation: Optional[Investigation]
     # Added after §16 (the fixture's keys above are frozen; these only add).
     item_id: Optional[int] = None     # the work item: /api/items/{item_id}
     state: Optional[str] = None       # the work state behind `status`, e.g. POSTED
-    clinic_id: Optional[str] = None
-    charge_type: Optional[str] = None
-    confidence: Optional[float] = None
     proposal: Optional[str] = None    # what the checker proposed: hold | approve
     reason: Optional[str] = None      # the checker's reason, in words
     rule: Optional[str] = None        # the checker rule that decided it
@@ -122,8 +130,6 @@ class ExceptionDetail(BaseModel):
     resolution: Optional[str] = None       # upheld | pay_as_billed, once decided
     resolved_by: Optional[str] = None
     override_reason: Optional[str] = None  # the controller's reason for paying as billed
-    invoice_line: Optional[InvoiceLine] = None
-    lease_citation: Optional[LeaseCitation] = None
 
 
 # --- POST /api/exceptions/{id}/approve ----------------------------------------

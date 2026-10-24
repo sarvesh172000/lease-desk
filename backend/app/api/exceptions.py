@@ -45,11 +45,12 @@ Work state -> the four statuses the UI knows (DESIGN.md §16):
 """
 
 import json
+import logging
 import math
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -57,8 +58,10 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
+from ..agents import investigation_run
 from ..auth.deps import SessionActor, current_actor
 from ..docs.storage import LocalStorage
+from ..records.ingest import stable_id
 from ..work import charges
 from . import evidence as where
 from .deps import get_data_dir, get_engine, get_gateway_engine, get_storage
@@ -73,6 +76,8 @@ from .schemas import (
     InvoiceLine,
     LeaseCitation,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["exceptions"], dependencies=[Depends(current_actor)])
 
@@ -140,12 +145,12 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
         flat = _flatten(row)
         ev = flat["evidence"]
         charge = where.document_for_charge(conn, _str(ev.get("charge_id")) or row["charge_id"])
+        lease_sha = _lease_sha(conn, data_dir, flat["lease_id"])
     billed = row["charge_amount"] if row["charge_amount"] is not None else row["amount"]
     pay = None if billed is None else charges.payable(
         {"kind": "CHARGE_CHECK", "proposal": row["proposal"], "evidence": ev}, billed)
     line = where.invoice_line(storage, charge)
-    cited = where.lease_citation(storage, where.lease_sha(data_dir, flat["lease_id"]),
-                                 flat["lease_id"], ev.get("proof"))
+    cited = where.lease_citation(storage, lease_sha, flat["lease_id"], ev.get("proof"))
     return ExceptionDetail(
         **{k: flat[k] for k in ("exception_id", "lease_id", "period", "expected",
                                 "actual", "delta", "status")},
@@ -223,42 +228,113 @@ def sse_delay() -> float:
     return 0.45
 
 
+def investigation_runner() -> Callable[..., Any]:
+    """The modification agent's caller (agents/investigation_run.run). A
+    dependency so a test can put a fake in its place without patching."""
+    return investigation_run.run
+
+
 @router.post("/exceptions/{exc_id}/investigate", response_class=StreamingResponse,
              responses={200: {"content": {"text/event-stream": {}}}})
 def investigate(exc_id: str, eng: Engine = Depends(get_engine),
                 data_dir: Path = Depends(get_data_dir),
                 storage: Optional[LocalStorage] = Depends(get_storage),
-                delay: float = Depends(sse_delay)) -> StreamingResponse:
-    """§16 #5 as `data: {...}` frames. Nothing is run or invented here:
+                delay: float = Depends(sse_delay),
+                run: Callable[..., Any] = Depends(investigation_runner)) -> StreamingResponse:
+    """§16 #5: what explains this variance, as `data: {...}` frames.
 
-    - an item whose evidence holds an investigation replays it: searching,
-      found (one frame per cited document) or not_found, remeasured (only
-      when the investigation recorded balances before and after), complete;
-    - otherwise the stages are the checker's own evidence: searching the
-      lease for the clause, found (the clause it cited, located on the page)
-      or not_found, then complete with the entries on record (none for a
-      charge check, so `balanced` is null rather than a claim).
+    - An item whose evidence already holds an investigation replays it:
+      searching, found (one frame per ranked source) or not_found, remeasured
+      (only when the engine recorded balances before and after), complete.
+    - Otherwise the modification agent searches the mailbox
+      (agents/investigation_run.py): the model nominates documents, trust.py
+      ranks them, the engine remeasures. The frames are read off its result,
+      which is then recorded on the work item, merged into the checker's own
+      evidence, so a reload replays it and the approval that follows is
+      against the same figures. Unexplained is a valid outcome (not_found).
+    - When the agent cannot run (no model and nothing cached, or it failed),
+      the frames are the checker's own evidence, honestly: the clause it
+      cited (located on the lease page) or not_found, then an `error` frame
+      saying why the mailbox was not searched. No remeasurement is invented.
+
+    Nothing is posted here: an investigation proposes, a person approves.
     """
     with eng.connect() as conn:
         row = _row(conn, exc_id)
-    frames = _stages(_flatten(row), storage, data_dir)
+        flat = _flatten(row)
+        lease_sha = _lease_sha(conn, data_dir, flat["lease_id"])
+    frames = _investigation_stream(eng, row["id"], flat, storage, lease_sha, run)
 
     def stream() -> Iterator[str]:
         for i, frame in enumerate(frames):
             if i and delay:
                 time.sleep(delay)
-            yield "data: %s\n\n" % json.dumps(frame)
+            yield _sse(frame)
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
-def _stages(flat: Dict[str, Any], storage: Optional[LocalStorage], data_dir: Path) -> List[Dict[str, Any]]:
-    ev = flat["evidence"]
-    raw = ev.get("investigation")
-    if isinstance(raw, dict):
-        return _replay(flat, _investigation(raw), raw)
+def _sse(event: dict) -> str:
+    return "data: %s\n\n" % json.dumps(event)
 
+
+def _investigation_stream(eng: Engine, item_id: int, flat: Dict[str, Any],
+                          storage: Optional[LocalStorage], lease_sha: Optional[str],
+                          run: Callable[..., Any]) -> Iterator[Dict[str, Any]]:
+    """The frames, lazily: the agent runs once the response has started."""
+    raw = flat["evidence"].get("investigation")
+    if isinstance(raw, dict) and raw:
+        yield from _replay(flat, raw)
+        return
+    if not flat["lease_id"]:
+        yield from _checker_frames(flat, storage, lease_sha)
+        yield {"stage": "complete", "entries": 0, "balanced": None,
+               "message": _str(flat.get("reason")) or "Nothing more on record."}
+        return
+
+    try:
+        result, searched = run(lease_id=flat["lease_id"], period=flat["period"],
+                               expected=flat["expected"], actual=flat["actual"],
+                               delta=flat["delta"])
+    except investigation_run.NoModel as exc:
+        yield from _checker_frames(flat, storage, lease_sha)
+        yield {"stage": "error", "message": "%s The mailbox was not searched; what is shown is "
+                                            "the checker's own evidence." % exc}
+        return
+    except Exception as exc:  # noqa: BLE001 - the stream owns the error
+        log.exception("investigation failed for work item %s", item_id)
+        yield from _checker_frames(flat, storage, lease_sha)
+        yield {"stage": "error", "message": "The investigation failed: %s" % exc}
+        return
+
+    payload = investigation_run.to_payload(result)
+    yield from _replay(flat, payload, searched=searched)
+    try:
+        _record(eng, item_id, payload)
+    except Exception:  # noqa: BLE001 - the finding stands even if recording fails
+        log.exception("could not record the investigation on work item %s", item_id)
+        yield {"stage": "error",
+               "message": "Found, but could not be recorded; it will not survive a reload."}
+
+
+def _record(eng: Engine, item_id: int, payload: dict) -> None:
+    """Merge the investigation into the item's evidence, leaving the checker's
+    own findings untouched."""
+    with eng.connect() as conn:
+        with conn.begin():
+            conn.execute(text("""
+                UPDATE work_item
+                   SET evidence = COALESCE(evidence, '{}'::jsonb)
+                                  || jsonb_build_object('investigation', CAST(:inv AS jsonb))
+                 WHERE id = :id
+            """), {"id": item_id, "inv": json.dumps(payload)})
+
+
+def _checker_frames(flat: Dict[str, Any], storage: Optional[LocalStorage],
+                    lease_sha: Optional[str]) -> List[Dict[str, Any]]:
+    """searching, then found (the clause the checker cited) or not_found."""
+    ev = flat["evidence"]
     lease_id = flat["lease_id"]
     proof = ev.get("proof") if isinstance(ev.get("proof"), dict) else {}
     section = proof.get("section")
@@ -270,7 +346,7 @@ def _stages(flat: Dict[str, Any], storage: Optional[LocalStorage], data_dir: Pat
     }]
     quote = _str(proof.get("quote"))
     if quote:
-        cited = where.lease_citation(storage, where.lease_sha(data_dir, lease_id), lease_id, proof)
+        cited = where.lease_citation(storage, lease_sha, lease_id, proof)
         frames.append({"stage": "found", "doc_id": cited["doc_id"] if cited else None,
                        "quote": quote, "confidence": flat["confidence"],
                        "source": cited["label"] if cited else None,
@@ -279,24 +355,27 @@ def _stages(flat: Dict[str, Any], storage: Optional[LocalStorage], data_dir: Pat
     else:
         frames.append({"stage": "not_found",
                        "message": "No clause is cited for this charge."})
-    frames.append({"stage": "complete", "entries": 0, "balanced": None,
-                   "message": _str(flat.get("reason")) or "Nothing more on record."})
     return frames
 
 
-def _replay(flat: Dict[str, Any], inv: Investigation, raw: dict) -> List[Dict[str, Any]]:
-    """The recorded investigation, stage by stage."""
-    frames: List[Dict[str, Any]] = [{
-        "stage": "searching",
-        "message": "Searching for what explains the %s variance on %s" % (
+def _replay(flat: Dict[str, Any], raw: dict, searched: Optional[int] = None) -> List[Dict[str, Any]]:
+    """An investigation, stage by stage, read off what it recorded."""
+    inv = _investigation(raw) or Investigation()
+    if searched is not None:
+        message = "Searching %s documents…" % "{:,}".format(searched)
+    else:
+        message = "Searching for what explains the %s variance on %s" % (
             "${:,.2f}".format(flat["delta"]) if flat["delta"] is not None else "billed",
-            flat["lease_id"] or "this lease"),
-    }]
-    for e in inv.evidence:
-        frames.append({"stage": "found", "doc_id": e.doc_id, "quote": e.quote,
-                       "confidence": inv.confidence, "trust_rank": e.trust_rank,
-                       "source": e.source, "page": e.page, "box": e.box})
-    if not inv.evidence:
+            flat["lease_id"] or "this lease")
+    frames: List[Dict[str, Any]] = [{"stage": "searching", "message": message}]
+    # A source the investigation ranked but which does not explain the
+    # variance is not a finding.
+    if inv.explains_variance is not False and inv.evidence:
+        for e in inv.evidence:
+            frames.append({"stage": "found", "doc_id": e.doc_id, "quote": e.quote,
+                           "confidence": inv.confidence, "trust_rank": e.trust_rank,
+                           "source": e.source, "page": e.page, "box": e.box})
+    else:
         frames.append({"stage": "not_found",
                        "message": "The investigation found no explaining document."})
     if inv.liability_before is not None and inv.liability_after is not None:
@@ -323,6 +402,23 @@ def _row(conn: Connection, exc_id: str):
     if row is None:
         raise HTTPException(404, "no exception %r" % exc_id)
     return row
+
+
+# --- the documents behind the two panes ------------------------------------------
+
+def _lease_sha(conn: Connection, data_dir: Path, lease_id: Optional[str]) -> Optional[str]:
+    """The stored lease PDF for `lease_id`: the generator's manifest, else the
+    ingested document. Ingest names a lease document
+    `stable_id("datagen.leases", lease_id)` (records/ingest.py), so that link
+    needs no column of its own. A lease never ingested simply has none."""
+    if not lease_id:
+        return None
+    sha = where.lease_sha(data_dir, lease_id)
+    if sha:
+        return sha
+    row = conn.execute(text("SELECT sha256 FROM source_document WHERE id = :id AND kind = 'lease'"),
+                       {"id": stable_id("datagen.leases", lease_id)}).first()
+    return row[0] if row else None
 
 
 # --- shaping ---------------------------------------------------------------------
@@ -354,10 +450,15 @@ def _flatten(row) -> Dict[str, Any]:
     }
 
 
-def _investigation(raw: Optional[dict]) -> Investigation:
-    """The investigation exactly as recorded, nulls where nothing was."""
-    if not isinstance(raw, dict):
-        return Investigation()
+def _investigation(raw: Optional[dict]) -> Optional[Investigation]:
+    """The investigation exactly as recorded, or None if there was none.
+
+    The distinction matters on screen: an empty Investigation renders as an
+    investigation that ran and explained nothing, rather than as one that was
+    never run.
+    """
+    if not isinstance(raw, dict) or not raw:
+        return None
     evidence = [_lenient(Evidence, e) for e in _list(raw.get("evidence")) if isinstance(e, dict)]
     entries = [Entry(account=str(e.get("account") or ""), debit=_money(e.get("debit")) or 0.0,
                      credit=_money(e.get("credit")) or 0.0)

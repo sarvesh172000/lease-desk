@@ -1,3 +1,6 @@
+"use client";
+
+import { motion, useReducedMotion } from "framer-motion";
 import { journalTotals } from "@/lib/journal";
 import { ledger, money } from "@/lib/format";
 import type { JournalLine } from "@/lib/types";
@@ -19,6 +22,7 @@ export function JournalEntryTable({
   balanced?: boolean;
   emptyMessage?: string;
 }) {
+  const reduce = useReducedMotion();
   if (!entries.length) {
     return <EmptyState title={emptyMessage}>Nothing will post until an investigation proposes entries.</EmptyState>;
   }
@@ -62,7 +66,11 @@ export function JournalEntryTable({
         </tfoot>
       </table>
 
-      <div
+      <motion.div
+        key={ok ? "ok" : "bad"}
+        initial={reduce ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
         role="status"
         data-testid="balance-assertion"
         data-balanced={ok ? "true" : "false"}
@@ -71,9 +79,15 @@ export function JournalEntryTable({
           ok ? "border-ok-line bg-ok-soft text-ok" : "border-bad-line bg-bad-soft text-bad",
         )}
       >
-        <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-xs font-bold">
+        <motion.span
+          aria-hidden
+          initial={false}
+          animate={ok && !reduce ? { scale: [1, 1.25, 1] } : { scale: 1 }}
+          transition={{ duration: 0.36, ease: "easeOut", delay: 0.12 }}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current text-xs font-bold"
+        >
           {ok ? "=" : "≠"}
-        </span>
+        </motion.span>
         {ok ? (
           <span>
             <strong>Balanced.</strong> Debits equal credits at <span className="num font-semibold">{money(t.debit)}</span>.
@@ -88,7 +102,7 @@ export function JournalEntryTable({
             <strong>Mismatch:</strong> the lines tie but the engine reported <code>balanced: false</code>. Do not approve.
           </span>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

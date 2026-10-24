@@ -70,6 +70,17 @@ class RunMeta:
         return "%s/%s" % (self.model, self.prompt_ref)
 
 
+def _default_cache_dir() -> str:
+    """Where cached bodies live. A setting, because the API runs in a container
+    whose working directory is not writable and whose cache must be the same
+    one the eval warms on the host."""
+    try:
+        from ..settings import get_settings
+        return get_settings().llm_cache_dir
+    except Exception:  # noqa: BLE001 - a cache path must never stop a call
+        return ".cache/llm"
+
+
 class LLM:
     def __init__(
         self,
@@ -82,7 +93,7 @@ class LLM:
         max_retries: int = 3,
     ):
         self.registry = registry or PromptRegistry()
-        self.cache = cache or ResponseCache(Path(".cache/llm"))
+        self.cache = cache or ResponseCache(Path(_default_cache_dir()))
         self.usage = usage or UsageLog()
         self.model = model
         # Retries are the SDK's job: it already backs off on 429, 5xx and

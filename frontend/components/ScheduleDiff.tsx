@@ -1,3 +1,6 @@
+"use client";
+
+import { motion, useReducedMotion } from "framer-motion";
 import { money, period as fmtPeriod, signedMoney } from "@/lib/format";
 import type { Schedule, ScheduleRow } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,7 @@ export function ScheduleDiff({
   fromPeriod?: string;
   months?: number;
 }) {
+  const reduce = useReducedMotion();
   const hasDelta = diff.liability_delta != null || diff.rou_delta != null;
   const rows: Array<{ label: string; before: number | null; after: number | null; delta?: number | null }> = [
     { label: "Lease liability", before: diff.liability_before, after: diff.liability_after, delta: diff.liability_delta },
@@ -66,7 +70,18 @@ export function ScheduleDiff({
               <td className="py-2.5 pl-3 font-medium">{r.label}</td>
               <td className="num px-3 py-2.5 text-right text-ink-muted">{money(r.before)}</td>
               <td className="num px-3 py-2.5 text-right font-semibold">{money(r.after)}</td>
-              {hasDelta ? <td className="num px-3 py-2.5 text-right text-accent">{signedMoney(r.delta)}</td> : null}
+              {hasDelta ? (
+                <td className="num px-3 py-2.5 text-right">
+                  <motion.span
+                    className="font-semibold text-accent"
+                    initial={reduce ? false : { opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={reduce ? { duration: 0 } : { duration: 0.32, ease: "easeOut" }}
+                  >
+                    {signedMoney(r.delta)}
+                  </motion.span>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -91,13 +106,20 @@ export function ScheduleDiff({
                 const b = m2.get(p);
                 const changed = a && b && a.payment !== b.payment;
                 return (
-                  <tr key={p} className="border-b border-line/60">
-                    <td className="py-1.5 pl-3">{fmtPeriod(`${p}-01`)}</td>
+                  <motion.tr
+                    key={p}
+                    layout={reduce ? false : "position"}
+                    className={cn("border-b border-line/60", changed && "bg-accent-soft/50")}
+                  >
+                    <td className="relative py-1.5 pl-3">
+                      {changed ? <span aria-hidden className="absolute left-0 top-0 h-full w-[3px] bg-accent" /> : null}
+                      {fmtPeriod(`${p}-01`)}
+                    </td>
                     <td className="num px-2 py-1.5 text-right text-ink-muted">{a ? money(a.payment) : "—"}</td>
                     <td className={cn("num px-2 py-1.5 text-right", changed && "font-semibold text-accent")}>{b ? money(b.payment) : "—"}</td>
                     <td className="num px-2 py-1.5 text-right text-ink-muted">{a ? money(a.liability_close) : "—"}</td>
                     <td className="num px-2 py-1.5 pr-3 text-right">{b ? money(b.liability_close) : "—"}</td>
-                  </tr>
+                  </motion.tr>
                 );
               })}
             </tbody>
