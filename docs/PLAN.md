@@ -14,15 +14,15 @@ targets and repo layout are his and do not change. Full-scope phases live in
 
 | | |
 |---|---|
-| **Stage** | 2 of 7 complete on Person A's side |
-| **Tests** | 127 passing, all offline, no API key needed |
-| **Built** | Storage, LLM layer, data generator, document pipeline, abstraction agent with citations |
+| **Stage** | **Stages 1–4 complete on Person A's side** |
+| **Tests** | 174 passing, all offline, no API key needed |
+| **Built** | Everything Person A owns through Stage 4: storage, LLM layer, data generator, document pipeline, abstraction, checker, trust ranking, modification agent, remeasurement |
 | **Not built** | Everything Person B owns. No database, no API, no UI yet. |
 | **Demo data** | 5 leases, 6 invoices, $112,759.69 billed, $25,736.36 of it wrong |
 
 ### Next task for each of us
 
-- **Sarvesh →** `agents/checker.py` with the three rules (Stage 3)
+- **Sarvesh →** Stage 5: answer key, `eval/run.py`, EDGAR lease, adversarial set
 - **Jenil →** Stage 1: repo scaffolding, Postgres schema, the four DB roles
 
 **Jenil is the critical path.** Nothing Person A has built is reachable from a
@@ -80,7 +80,7 @@ browser until the work layer and web shell exist.
 | B | `work/gateway.py` — `post_journal()`, idempotency, APPROVED-only | TODO |
 | B | Chart of accounts, trial balance, Beancount export for Fava | TODO |
 | A | `docs/citations.py` — quote to bounding box, fuzzy, match score | **DONE** (early) |
-| A | `agents/checker.py` — **three rules, see below** | **NEXT** |
+| A | `agents/checker.py` — **three rules, see below** | **DONE** — 5/5 caught, 0 false holds |
 
 ### The checker needs three rules, not one
 
@@ -105,11 +105,11 @@ And E6 must **not** be held: CLINIC-04's $400 step looks like an unexplained
 
 | Who | Task | Status |
 |---|---|---|
-| A | 8–12 `.eml` threads: the real amendment, one unauthorized claim, noise, one injection | TODO |
-| A | `agents/modification.py` — find the cause, propose a new `lease_version` | TODO |
+| A | 10 `.eml` threads: the amendment, an unauthorized claim, a forged sender, an injection, 5 noise | **DONE** |
+| A | `agents/modification.py` — find the cause, propose a new `lease_version` | **DONE** |
 | A | Source trust ranking (6 ranks) — already written into `amendment_search/v1.md` | **DONE** |
-| A | Confidence from extraction score, read quality, source agreement, trust gap | TODO |
-| A | Wire `remeasure.py` into the subledger, propose for controller approval | TODO |
+| A | Confidence from source rank, trust gap, agreement, failed verification | **DONE** |
+| A | Wire `remeasure.py` into the subledger, propose for controller approval | **DONE** — +$443,255.70, balanced |
 | B | Item detail as a case file: invoice left, lease right, both boxed | TODO |
 | B | Before/after schedules, entries with debits = credits shown, Approve button | TODO |
 | B | Audit timeline with a "chain verified" badge | TODO |
@@ -212,8 +212,8 @@ build next."
 |---|---|
 | Fresh clone to running app with `make up migrate seed run-month M=2026-01` | TODO |
 | 5 leases abstracted, every field boxed on its page | **DONE** (agent + citations; needs a real API run) |
-| January catches all 5 errors and does **not** hold the correct-but-odd one | TODO |
-| The amendment is found from email, remeasured, approved by the controller | TODO |
+| January catches all 5 errors and does **not** hold the correct-but-odd one | **DONE** |
+| The amendment is found from email, remeasured, proposed for the controller | **DONE** (approval needs the UI) |
 | `lease_agent` cannot insert into `journal_entry` | TODO |
 | `verify_chain()` names a tampered row | TODO |
 | An approver cannot approve their own answer, and the denial is logged | TODO |

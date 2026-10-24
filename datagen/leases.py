@@ -63,6 +63,7 @@ class LeaseTerms:
     security_deposit: float
     renewal: RenewalOption
     discount_rate: float
+    amendment: Optional["Amendment"] = None
 
     @property
     def term_years(self) -> int:
@@ -73,18 +74,39 @@ class LeaseTerms:
         return round(self.rsf * self.cam_estimate_psf_annual / 12, 2)
 
     def rent_schedule(self) -> List[RentStep]:
-        """One step per escalation year, the last truncated at expiration."""
+        """One step per escalation year, the last truncated at expiration.
+
+        With an amendment, the original schedule is cut short on the day before
+        the amendment takes effect and a fresh schedule runs from the new base.
+        """
+        if self.amendment is None:
+            return self._steps_from(
+                self.commencement, self.expiration,
+                self.base_rent_monthly, self.escalation)
+
+        cut = self.amendment.effective - timedelta(days=1)
+        before = self._steps_from(
+            self.commencement, cut, self.base_rent_monthly, self.escalation)
+        after = self._steps_from(
+            self.amendment.effective,
+            self.amendment.new_expiration or self.expiration,
+            self.amendment.new_base_rent
+            if self.amendment.new_base_rent is not None else self.base_rent_monthly,
+            self.amendment.new_escalation or self.escalation,
+        )
+        return before + after
+
+    def _steps_from(self, start: date, end: date, rent: float,
+                    escalation: "Escalation") -> List[RentStep]:
         steps: List[RentStep] = []
-        rent = self.base_rent_monthly
-        start = self.commencement
-        while start <= self.expiration:
-            end = min(_add_months(start, 12) - timedelta(days=1), self.expiration)
-            steps.append(RentStep(start, end, round(rent, 2)))
-            start = end + timedelta(days=1)
-            if self.escalation.kind == "fixed_percent":
-                rent = round(rent * (1 + self.escalation.amount), 2)
+        while start <= end:
+            stop = min(_add_months(start, 12) - timedelta(days=1), end)
+            steps.append(RentStep(start, stop, round(rent, 2)))
+            start = stop + timedelta(days=1)
+            if escalation.kind == "fixed_percent":
+                rent = round(rent * (1 + escalation.amount), 2)
             else:
-                rent = round(rent + self.escalation.amount, 2)
+                rent = round(rent + escalation.amount, 2)
         return steps
 
     def rent_for(self, period: date) -> float:
@@ -178,3 +200,76 @@ def _days_in_month(year: int, month: int) -> int:
 
 def _money(value: float) -> str:
     return "{:,.2f}".format(value)
+
+
+@dataclass(frozen=True)
+class Amendment:
+    """A change to a lease that accounting was never told about.
+
+    This is the whole product in one object. It was signed, it was filed by
+    facilities, the landlord invoiced the new amount and AP paid it — and the
+    rent schedule in the books still runs the old terms.
+    """
+
+    amendment_id: str
+    lease_id: str
+    effective: date
+    executed: date
+    summary: str
+    new_expiration: Optional[date] = None
+    new_base_rent: Optional[float] = None
+    new_escalation: Optional[Escalation] = None
+    # The sentence in the source document that states the change.
+    proof_quote: str = ""
+
+    def applies_to(self, period: date) -> bool:
+        return period >= self.effective
+
+
+# CLINIC-01's second amendment: three more years in exchange for lower rent.
+# Effective 1 July 2026, which is where the books start disagreeing with cash.
+SECOND_AMENDMENT = Amendment(
+    amendment_id="LEASE-01-A2",
+    lease_id="LEASE-01",
+    effective=date(2026, 7, 1),
+    executed=date(2026, 6, 18),
+    summary=("Term extended three years to 31 December 2031. Base rent reduced "
+             "to $17,400.00 per month effective 1 July 2026, with the annual "
+             "escalation reduced from 3.00% to 2.50%."),
+    new_expiration=date(2031, 12, 31),
+    new_base_rent=17_400.00,
+    new_escalation=Escalation("fixed_percent", 0.025, 7),
+    proof_quote=("Base rent reduced to $17,400 per month effective July 1, 2026"),
+)
+
+AMENDMENTS: List[Amendment] = [SECOND_AMENDMENT]
+
+
+def amendment_for(lease_id: str) -> Optional[Amendment]:
+    for amendment in AMENDMENTS:
+        if amendment.lease_id == lease_id:
+            return amendment
+    return None
+
+
+def amended(terms: "LeaseTerms", amendment: Amendment) -> "LeaseTerms":
+    """The lease as it stands after an amendment.
+
+    Rent before the effective date is untouched; the schedule restarts from the
+    new base on the effective date and escalates on its own anniversary.
+    """
+    return LeaseTerms(
+        lease_id=terms.lease_id,
+        clinic_id=terms.clinic_id,
+        landlord_id=terms.landlord_id,
+        commencement=terms.commencement,
+        expiration=amendment.new_expiration or terms.expiration,
+        rsf=terms.rsf,
+        base_rent_monthly=terms.base_rent_monthly,
+        escalation=terms.escalation,
+        cam_estimate_psf_annual=terms.cam_estimate_psf_annual,
+        security_deposit=terms.security_deposit,
+        renewal=terms.renewal,
+        discount_rate=terms.discount_rate,
+        amendment=amendment,
+    )

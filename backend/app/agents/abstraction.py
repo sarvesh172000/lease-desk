@@ -155,12 +155,15 @@ class Abstraction:
         steps, rent, cursor = [], float(self.value("base_rent_monthly")), start
         while cursor <= end:
             stop = min(_add_months(cursor, 12) - timedelta(days=1), end)
+            rent = round(rent, 2)
             steps.append({
                 "start": cursor.isoformat(),
                 "end": stop.isoformat(),
-                "monthly_rent": round(rent, 2),
+                "monthly_rent": rent,
             })
             cursor = stop + timedelta(days=1)
+            # Escalate the stated figure, not the unrounded one — see
+            # engine/remeasurement.py for why.
             rent = rent * (1 + amount) if kind == "fixed_percent" else rent + amount
 
         return {
