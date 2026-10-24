@@ -68,18 +68,29 @@ export function InvestigationTimeline({
     setError(null);
     setState("running");
     try {
+      let failed: string | null = null;
       await investigate(
         exceptionId,
         (ev) => {
+          if (ev.stage === "error") {
+            failed = ev.message;
+            return;
+          }
           setEvents((prev) => [...prev, ev]);
           onEventRef.current?.(ev);
         },
         ctrl.signal,
       );
-      if (!ctrl.signal.aborted) setState("done");
+      if (ctrl.signal.aborted) return;
+      if (failed) {
+        setError(failed);
+        setState("error");
+      } else {
+        setState("done");
+      }
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setError(e instanceof Error ? e.message : String(e));
+      setError("Investigation stream failed: " + (e instanceof Error ? e.message : String(e)));
       setState("error");
     }
   }, [exceptionId]);
@@ -162,7 +173,7 @@ export function InvestigationTimeline({
 
       {state === "error" ? (
         <p role="alert" className="mt-3 rounded border border-bad-line bg-bad-soft px-3 py-2 text-sm text-bad">
-          Investigation stream failed: <span className="font-mono">{error}</span>
+          {error}
         </p>
       ) : null}
 

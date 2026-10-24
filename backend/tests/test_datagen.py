@@ -135,3 +135,47 @@ def test_different_leases_render_differently():
         for t in build_leases(company)
     }
     assert len(digests) == 5
+
+
+# --- what the landlord bills, versus what the books expect -----------------
+
+def test_the_landlord_bills_the_amendment_the_books_have_not_seen():
+    """The variance the product exists to catch has to be in the generated
+    month, not only in the tests: from the amendment's effective date the
+    invoice is for the new rent while the books still run the old schedule."""
+    from datetime import date
+
+    from datagen.build import billed_as
+    from datagen.company import build_company
+    from datagen.leases import SECOND_AMENDMENT, build_leases
+
+    company = build_company()
+    books = {t.lease_id: t for t in build_leases(company)}
+
+    before = {t.lease_id: t for t in billed_as(company, date(2026, 1, 1))}
+    assert before["LEASE-01"].base_rent_monthly == books["LEASE-01"].base_rent_monthly
+    assert before["LEASE-01"].expiration == books["LEASE-01"].expiration
+
+    after = {t.lease_id: t for t in billed_as(company, SECOND_AMENDMENT.effective)}
+    assert after["LEASE-01"].expiration == SECOND_AMENDMENT.new_expiration
+    assert after["LEASE-01"].expiration != books["LEASE-01"].expiration
+    # Every other lease is untouched: one amendment, one lease.
+    for lease_id in books:
+        if lease_id != "LEASE-01":
+            assert after[lease_id].expiration == books[lease_id].expiration
+
+
+def test_a_month_before_the_amendment_generates_as_it_always_did():
+    """January must stay byte-identical, or every stored sha and the whole
+    answer key move under us."""
+    from datetime import date
+
+    from datagen.build import billed_as
+    from datagen.company import build_company
+    from datagen.leases import build_leases
+
+    company = build_company()
+    assert [t.to_dict() if hasattr(t, "to_dict") else t
+            for t in billed_as(company, date(2026, 1, 1))] == \
+           [t.to_dict() if hasattr(t, "to_dict") else t
+            for t in build_leases(company)]

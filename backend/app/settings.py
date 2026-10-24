@@ -31,6 +31,7 @@ class Settings:
     db_owner_password: str
     role_passwords: Dict[str, str]
     data_dir: str
+    llm_cache_dir: str
     demo_mode: bool
     session_secret: str = DEV_SESSION_SECRET
     cookie_secure: bool = False     # True behind HTTPS; browsers then refuse it over http
@@ -74,6 +75,9 @@ def get_settings() -> Settings:
             role: env("LEASEDESK_%s_PASSWORD" % role.upper(), role) for role in DB_ROLES
         },
         data_dir=env("LEASEDESK_DATA_DIR", "data/generated"),
+        # Shared with the host: an answer the eval cached is one the API serves,
+        # so a cache warmed once runs the demo with no network at all.
+        llm_cache_dir=env("LEASEDESK_LLM_CACHE_DIR", ".cache/llm"),
         demo_mode=env("LEASEDESK_DEMO_MODE", "1") == "1",
         session_secret=env("LEASEDESK_SESSION_SECRET", DEV_SESSION_SECRET),
         cookie_secure=env("LEASEDESK_COOKIE_SECURE", "0") == "1",

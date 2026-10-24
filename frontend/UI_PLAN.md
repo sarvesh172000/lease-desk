@@ -307,10 +307,30 @@ page request 404'd; the page viewer crashed on pdf.js and is now the server's
 own PNG renders; and the page-size lookup compared `page` against the API's
 `number`, so no citation box could ever draw.
 
-**The one thing still missing for the demo:** `POST /api/exceptions/{id}/investigate`
-does not exist. "Run investigation" 404s on live data, so the timeline, the
-proposed entries and the schedule diff stay empty there. All of it works
-against fixtures (`NEXT_PUBLIC_USE_FIXTURES=1`, exception
-`exc_01_jul_amendment`), which is where the $443,255.70 remeasurement and the
-balanced $447,880.44 entries were verified. Wiring the investigation agent to
-that route is what turns the live screen into the demo.
+`POST /api/exceptions/{id}/investigate` is now built: it runs the modification
+agent over the mailbox, streams the four stages, and records what it found on
+the work item so the screen survives a reload.
+
+**Two things stand between it and the moment on live data:**
+
+1. **A model key, once.** The agent reads the mailbox, and the response cache
+   is empty. Put `ANTHROPIC_API_KEY=...` in `.env` and run the investigation
+   once; the answer is then cached under `.cache/llm`, which the API and the
+   eval share, and every later run is offline. Without it the timeline shows
+   exactly that, rather than failing silently.
+2. **Generate the month the amendment is in.** The seeded month is January
+   2026, whose exceptions are a duplicate and a CAM over-bill — real holds,
+   but no amendment to find, so an honest investigation returns
+   "unexplained". The amendment takes effect 1 July 2026:
+
+   ```bash
+   python -m datagen.build --out data/generated --month 2026-07
+   make seed && make run-month M=2026-07
+   ```
+
+   `datagen/build.py` now bills from the lease *as amended* while the books
+   still run the old schedule — that gap is the variance. A month before the
+   amendment generates byte-identically, so January is untouched.
+
+Note the two months do not coexist: `build.py` generates one billing month, so
+this replaces January rather than adding to it.

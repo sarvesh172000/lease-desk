@@ -117,7 +117,9 @@ export type InvestigationEvent =
   | { stage: "searching"; message: string }
   | { stage: "found"; doc_id: string; quote: string; confidence: number }
   | { stage: "remeasured"; liability_delta: number; rou_delta: number }
-  | { stage: "complete"; entries: number; balanced: boolean };
+  | { stage: "complete"; entries: number; balanced: boolean }
+  /** EXTENSION: the run could not finish. Carries why, and ends the stream. */
+  | { stage: "error"; message: string };
 
 /** EXTENSION shape for GET /api/leases/{id}/schedule?version= (§16 says only "Schedule rows"). */
 export interface ScheduleRow {

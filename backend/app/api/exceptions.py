@@ -25,15 +25,20 @@ Work state -> the four statuses the UI knows (DESIGN.md §16):
     POSTED, CLOSED, REJECTED     balanced, and no longer listed as open
 """
 
+import json
+import logging
 import math
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
+from ..agents import investigation_run
 from ..auth.deps import SessionActor, current_actor
 from ..docs.citations import locate
 from ..docs.storage import LocalStorage
@@ -43,6 +48,8 @@ from .documents import cached_document
 from .items import perform
 from .schemas import (ApproveResult, Entry, Evidence, ExceptionDetail, ExceptionSummary,
                       Investigation, InvoiceLine, LeaseCitation)
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["exceptions"], dependencies=[Depends(current_actor)])
 
@@ -120,6 +127,80 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
         lease_citation=_lease_citation(flat["evidence"], lease_sha, storage),
         investigation=_investigation(flat["evidence"].get("investigation")),
     )
+
+
+@router.post("/exceptions/{exc_id}/investigate")
+def investigate_exception(exc_id: str, eng: Engine = Depends(get_engine)) -> StreamingResponse:
+    """§16 #5: search the corpus for what explains this variance, as it happens.
+
+    The four stages are sent as they become known, not on a timer: `searching`
+    goes out before the model is asked anything, and the rest are read off the
+    finished investigation. The agent is one call, so the pause between the
+    first stage and the others is the model actually reading the mailbox.
+
+    What it finds is recorded on the work item, so the screen still has it
+    after a reload and the approval that follows is against the same figures.
+    Nothing is posted here: an investigation proposes, a person approves.
+    """
+    match = _ID.match(exc_id)
+    if match is None:
+        raise HTTPException(404, "no exception %r" % exc_id)
+    item_id = int(match.group(1))
+    with eng.connect() as conn:
+        row = conn.execute(text(_SELECT + " AND w.id = :id"), {"id": item_id}).mappings().first()
+    if row is None:
+        raise HTTPException(404, "no exception %r" % exc_id)
+    flat = _flatten(row)
+    if not flat["lease_id"]:
+        raise HTTPException(409, "exception %s is not about a lease" % exc_id)
+
+    return StreamingResponse(_investigation_stream(eng, item_id, flat),
+                             media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store",
+                                      "X-Accel-Buffering": "no"})
+
+
+def _sse(event: dict) -> str:
+    return "data: %s\n\n" % json.dumps(event, separators=(",", ":"))
+
+
+def _investigation_stream(eng: Engine, item_id: int, flat: Dict[str, Any]) -> Iterator[str]:
+    """The stages, then the record. Errors are a stage too, so the timeline
+    says what went wrong instead of stopping silently."""
+    try:
+        result, searched = investigation_run.run(
+            lease_id=flat["lease_id"], period=flat["period"],
+            expected=flat["expected"], actual=flat["actual"], delta=flat["delta"])
+    except investigation_run.NoModel as exc:
+        yield _sse({"stage": "error", "message": str(exc)})
+        return
+    except Exception as exc:  # noqa: BLE001 - the stream owns the error
+        log.exception("investigation failed for work item %s", item_id)
+        yield _sse({"stage": "error", "message": "The investigation failed: %s" % exc})
+        return
+
+    payload = investigation_run.to_payload(result)
+    for event in investigation_run.events(payload, searched):
+        yield _sse(event)
+    try:
+        _record(eng, item_id, payload)
+    except Exception:  # noqa: BLE001 - the finding stands even if recording fails
+        log.exception("could not record the investigation on work item %s", item_id)
+        yield _sse({"stage": "error",
+                    "message": "Found, but could not be recorded; it will not survive a reload."})
+
+
+def _record(eng: Engine, item_id: int, payload: dict) -> None:
+    """Merge the investigation into the item's evidence, leaving the checker's
+    own findings untouched."""
+    with eng.connect() as conn:
+        with conn.begin():
+            conn.execute(text("""
+                UPDATE work_item
+                   SET evidence = COALESCE(evidence, '{}'::jsonb)
+                                  || jsonb_build_object('investigation', CAST(:inv AS jsonb))
+                 WHERE id = :id
+            """), {"id": item_id, "inv": json.dumps(payload)})
 
 
 class ApproveBody(BaseModel):
