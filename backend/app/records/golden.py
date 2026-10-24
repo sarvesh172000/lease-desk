@@ -63,7 +63,9 @@ def load_org(conn: Connection, company) -> None:
 # names a real row, and so can() can refuse them like anyone else.
 AGENTS = [("agent:abstraction", "Lease abstraction agent"),
           ("agent:checker", "Charge checker"),
-          ("agent:modification", "Lease modification agent")]
+          ("agent:modification", "Lease modification agent"),
+          ("agent:resolver", "Resolver (reminders and escalations)"),
+          ("agent:policy", "Policy learner")]
 
 
 def load_actors(conn: Connection, company) -> None:

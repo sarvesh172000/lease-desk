@@ -52,6 +52,14 @@ GRANT INSERT ON source_document, raw_row TO lease_agent;           -- ingestion
 GRANT INSERT, UPDATE ON sync_cursor TO lease_agent;
 GRANT INSERT ON lease_version, lease_term TO lease_agent;          -- drafts; a person confirms
 GRANT INSERT, UPDATE ON work_item, question, agent_run, tool_call, job TO lease_agent;
+-- The policy learner proposes policies. Nobody updates one: its status follows
+-- its POLICY work item, by trigger (sql/006_policies.sql).
+DO $$
+BEGIN
+    IF to_regprocedure('policy_follow_work_item()') IS NOT NULL THEN
+        GRANT INSERT ON policy TO lease_agent;
+    END IF;
+END $$;
 GRANT INSERT ON audit_event TO lease_agent;
 
 -- --------------------------------------------------------------- api
@@ -83,6 +91,40 @@ BEGIN
         GRANT SELECT (id, name, role, email, region_id, entity_id, active) ON actor
             TO lease_agent, lease_reader;
         GRANT INSERT, UPDATE ON actor TO lease_gateway;
+    END IF;
+END $$;
+
+-- ---------------------------------------------- disputes, obligations
+-- Migration 0006 (007_disputes.sql). Guarded like actor above, so an earlier
+-- migration that re-applies this file before the tables exist still runs.
+-- reader, api and gateway already read them through ALL TABLES.
+--   dispute     the disputes agent drafts; the API records landlord replies
+--               (status, credits, refusal reason); the gateway records what
+--               it sent and posted (outbox and journal entry ids).
+--   obligation  the obligations agent computes and refreshes it.
+DO $$
+BEGIN
+    IF to_regclass('public.dispute') IS NOT NULL THEN
+        GRANT SELECT, INSERT ON dispute TO lease_agent;
+        GRANT UPDATE (status, credited_amount, credits, credit_memo_ref, refusal_reason,
+                      updated_at) ON dispute TO lease_api;
+        GRANT UPDATE (status, letter_outbox_id, sent_at, receivable_entry_id,
+                      writeoff_entry_id, updated_at) ON dispute TO lease_gateway;
+    END IF;
+    IF to_regclass('public.obligation') IS NOT NULL THEN
+        GRANT SELECT, INSERT, UPDATE ON obligation TO lease_agent;
+    END IF;
+END $$;
+
+-- ----------------------------------------------------------- pairing
+-- Chat pairing (migration 0007). The API mints codes, claims them and
+-- revokes pairings; nothing else writes here, and the worker cannot even
+-- read it. The reader and the gateway keep the SELECT that ALL TABLES gave
+-- them: only hashes are stored.
+DO $$
+BEGIN
+    IF to_regclass('public.pairing') IS NOT NULL THEN
+        GRANT INSERT, UPDATE ON pairing TO lease_api;
     END IF;
 END $$;
 

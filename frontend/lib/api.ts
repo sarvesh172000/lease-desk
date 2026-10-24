@@ -10,21 +10,38 @@
  */
 
 import type {
+  DisputeDetail,
+  DisputeList,
+  DisputeReply,
+  ObligationList,
   ActionResult,
   Actor,
   AllowedActions,
   AuditResponse,
   ChargeCheck,
+  DemoResetResult,
   DocumentPages,
+  EvidencePackSubject,
   ExceptionDetail,
   ExceptionSummary,
   InvestigationEvent,
   ItemAction,
+  ItemSources,
   LeaseSummary,
   LeaseVersion,
+  MonthMetricName,
+  MonthSummary,
+  MonthSummaryRow,
+  Questions,
   Schedule,
   Status,
+  PairingCode,
+  PairingList,
   Summary,
+  WhyAnswer,
+  BacktestRun,
+  PolicyDetail,
+  PolicyList,
 } from "./types";
 import {
   FIXTURE_ACTORS,
@@ -598,6 +615,45 @@ export function getAllowedActions(exceptionId: string): Promise<AllowedActions> 
 }
 
 // ---------------------------------------------------------------------------
+// EXTENSION: the resolver
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/items/{id}/sources → the sources weighed, the trust decision and its
+ * explanation, confidence with its reasons, the route and any open question.
+ * Takes a work item id or an exception id (`exc_42`). Fixtures carry no sources.
+ */
+export function getItemSources(itemOrExceptionId: number | string): Promise<ItemSources> {
+  const id = itemIdFor(String(itemOrExceptionId));
+  return call(
+    () => http<ItemSources>(`/api/items/${encodeURIComponent(id)}/sources`),
+    () => ({
+      item_id: Number(id) || 0,
+      kind: "CHARGE_CHECK",
+      state: "PROPOSED",
+      sources: [],
+      decision: null,
+      explanation: null,
+      confidence: null,
+      confidence_reasons: [],
+      route: null,
+      asked_to: null,
+      payment_due: null,
+      question: null,
+      computed: false,
+    }),
+  );
+}
+
+/** GET /api/questions[?mine=1] → open questions with due dates and dollars at stake (Today screen). */
+export function getQuestions(mine = true): Promise<Questions> {
+  return call(
+    () => http<Questions>(`/api/questions${mine ? "?mine=1" : ""}`),
+    () => ({ business_date: new Date().toISOString().slice(0, 10), total: 0, questions: [] }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 
@@ -662,6 +718,280 @@ export function demoSwitch(actorId: string): Promise<Actor> {
       if (!a) throw new ApiError(404, `404 actor ${actorId}`);
       fx.actor = a;
       return clone(a);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Demo: run summary and reset (C2)
+// ---------------------------------------------------------------------------
+
+/**
+ * EXTENSION: GET /api/summary/month?period=YYYY-MM&entity= — the month's run
+ * summary ("January 2026, ...: 5 clinics, 12 charges checked, ..."), every
+ * number with its drill-down. Blank entity = every entity. Live API only.
+ */
+export function getMonthSummary(period: string, entity?: string): Promise<MonthSummary> {
+  const q = new URLSearchParams({ period, entity: entity ?? "" });
+  return call(
+    () => http<MonthSummary>(`/api/summary/month?${q.toString()}`),
+    () => {
+      throw new ApiError(501, "501 the month summary needs the live API");
+    },
+  );
+}
+
+/** EXTENSION: GET /api/summary/month/items — exactly the rows behind one number of the month summary. */
+export function getMonthSummaryItems(period: string, metric: MonthMetricName, entity?: string): Promise<MonthSummaryRow[]> {
+  const q = new URLSearchParams({ period, metric, entity: entity ?? "" });
+  return call(
+    () => http<MonthSummaryRow[]>(`/api/summary/month/items?${q.toString()}`),
+    () => [],
+  );
+}
+
+/**
+ * EXTENSION: POST /api/demo/reset — restore the demo snapshot (controller
+ * only; 403 for anyone else, recorded as a denied event; 404 when demo mode
+ * is off). Replaces the audit trail with the snapshot's.
+ */
+export function resetDemo(): Promise<DemoResetResult> {
+  return call(
+    () => http<DemoResetResult>("/api/demo/reset", { method: "POST" }),
+    () => {
+      throw new ApiError(501, "501 demo reset needs the live API");
+    },
+  );
+}
+
+/** EXTENSION (B9): POST /api/items/{id}/why — two or three sentences plus the rows used. */
+export function askWhy(itemId: number | string, question?: string): Promise<WhyAnswer> {
+  return call(
+    () =>
+      http<WhyAnswer>(`/api/items/${encodeURIComponent(String(itemId))}/why`, {
+        method: "POST",
+        body: JSON.stringify(question ? { question } : {}),
+      }),
+    () => {
+      throw new ApiError(501, "501 Why? needs the live API");
+    },
+  );
+}
+
+/**
+ * EXTENSION (C8): POST /api/pairing/codes — a one-time code (ten minutes, works
+ * once) that pairs an ASI:One chat with the signed-in person. Show it on Today;
+ * they send "pair <code>" to the Northbay Lease Desk agent.
+ */
+export function createPairingCode(): Promise<PairingCode> {
+  return call(
+    () => http<PairingCode>("/api/pairing/codes", { method: "POST" }),
+    () => {
+      throw new ApiError(501, "501 pairing needs the live API");
+    },
+  );
+}
+
+/** EXTENSION (C8): GET /api/pairing — the signed-in person's live chat pairings. */
+export function getPairings(): Promise<PairingList> {
+  return call(
+    () => http<PairingList>("/api/pairing"),
+    () => ({ pairings: [] }),
+  );
+}
+
+/** EXTENSION (C8): POST /api/pairing/{id}/revoke — unpair one of your chats (204). */
+export function revokePairing(pairingId: number): Promise<void> {
+  return call(
+    () => http<void>(`/api/pairing/${encodeURIComponent(String(pairingId))}/revoke`, { method: "POST" }),
+    () => {
+      throw new ApiError(501, "501 pairing needs the live API");
+    },
+  );
+}
+
+/** EXTENSION (B9): POST /api/evidence-packs — the PDF (auditor or controller). */
+export async function requestEvidencePack(
+  subject: EvidencePackSubject,
+): Promise<{ pdf: Blob; chainVerified: boolean | null; brokenSeq: number | null }> {
+  if (source === "fixtures") throw new ApiError(501, "501 evidence packs need the live API");
+  const res = await fetch(`${API_URL}/api/evidence-packs`, {
+    method: "POST",
+    credentials: "include",
+    headers: { Accept: "application/pdf", "Content-Type": "application/json" },
+    body: JSON.stringify({ subject }),
+  });
+  if (res.status === 401) redirectToLogin();
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = typeof body?.detail === "string" ? body.detail : JSON.stringify(body);
+    } catch {
+      /* not json */
+    }
+    throw new ApiError(res.status, `${res.status} ${detail}`);
+  }
+  // The stamp is always in the PDF; these headers are only readable cross-origin
+  // if the API exposes them (CORS expose_headers), so null means "see the PDF".
+  const verified = res.headers.get("X-Chain-Verified");
+  const broken = res.headers.get("X-Chain-Broken-Seq");
+  return {
+    pdf: await res.blob(),
+    chainVerified: verified === null ? null : verified === "true",
+    brokenSeq: broken ? Number(broken) : null,
+  };
+}
+
+/** The live API's PDF route needs the session cookie; fixtures are static files. */
+export function documentNeedsCredentials(): boolean {
+  return source === "api";
+}
+
+// ---------------------------------------------------------------------------
+// Disputes and obligations (backend/app/api/disputes.py, obligations.py).
+// No fixtures yet: in fixtures mode the register and the calendar are empty
+// and a dispute read or write is a 404.
+// ---------------------------------------------------------------------------
+
+const EMPTY_DISPUTES: DisputeList = {
+  counts: { drafted: 0, sent: 0, acknowledged: 0, credited: 0, partially_credited: 0, refused: 0 },
+  total: 0,
+  disputes: [],
+};
+
+function noFixture(what: string): never {
+  throw new ApiError(404, `404 ${what} is not available in fixtures mode`);
+}
+
+function query(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams(
+    Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== "")
+      .map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return qs ? `?${qs}` : "";
+}
+
+/** GET /api/disputes?status=&clinic_id= → the dispute register */
+export function getDisputes(params: { status?: string; clinic_id?: string } = {}): Promise<DisputeList> {
+  return call(
+    () => http<DisputeList>(`/api/disputes${query(params)}`),
+    () => clone(EMPTY_DISPUTES),
+  );
+}
+
+/** GET /api/disputes/{id} → letter, status history, receivable */
+export function getDispute(disputeId: string): Promise<DisputeDetail> {
+  return call(
+    () => http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}`),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** POST /api/disputes/{id}/approve {reason?} → the regional manager approves the letter; the gateway sends it */
+export function approveDisputeLetter(disputeId: string, reason?: string): Promise<DisputeDetail> {
+  return call(
+    () =>
+      http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}/approve`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      }),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** POST /api/disputes/{id}/receivable/approve {reason?} → controller only: recognise the landlord receivable */
+export function approveDisputeReceivable(disputeId: string, reason?: string): Promise<DisputeDetail> {
+  return call(
+    () =>
+      http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}/receivable/approve`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      }),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** POST /api/disputes/{id}/reply → record the landlord's reply (AP clerk or controller) */
+export function recordDisputeReply(disputeId: string, reply: DisputeReply): Promise<DisputeDetail> {
+  return call(
+    () =>
+      http<DisputeDetail>(`/api/disputes/${encodeURIComponent(disputeId)}/reply`, {
+        method: "POST",
+        body: JSON.stringify(reply),
+      }),
+    () => noFixture(`dispute ${disputeId}`),
+  );
+}
+
+/** GET /api/obligations?within_days=&lease_id=&kind= → critical dates from the business date */
+export function getObligations(
+  params: { within_days?: number; lease_id?: string; kind?: string } = {},
+): Promise<ObligationList> {
+  return call(
+    () => http<ObligationList>(`/api/obligations${query(params)}`),
+    () => ({
+      today: new Date().toISOString().slice(0, 10),
+      within_days: params.within_days ?? 365,
+      total: 0,
+      obligations: [],
+    }),
+  );
+}
+
+/** GET /api/policies */
+export function getPolicies(): Promise<PolicyList> {
+  return call(
+    () => http<PolicyList>("/api/policies"),
+    () => ({ counts: { proposed: 0, approved: 0, rejected: 0, retired: 0 }, policies: [] }),
+  );
+}
+
+/** GET /api/policies/{id} */
+export function getPolicy(id: number): Promise<PolicyDetail> {
+  return call(
+    () => http<PolicyDetail>(`/api/policies/${id}`),
+    () => {
+      throw new ApiError(404, `404 no policy ${id} in fixtures mode`);
+    },
+  );
+}
+
+/** POST /api/policies/{id}/backtest */
+export function backtestPolicy(id: number): Promise<BacktestRun> {
+  return call(
+    () => http<BacktestRun>(`/api/policies/${id}/backtest`, { method: "POST" }),
+    () => {
+      throw new ApiError(409, "409 backtests need the live API");
+    },
+  );
+}
+
+/** Approve or reject a policy = that action on its POLICY work item; can() decides. */
+export function decidePolicy(workItemId: number, action: "approve" | "reject", reason?: string): Promise<{ state: string }> {
+  return call(
+    () =>
+      http<{ state: string }>(`/api/items/${workItemId}/actions/${action}`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      }),
+    () => {
+      throw new ApiError(409, "409 policies cannot be decided in fixtures mode");
+    },
+  );
+}
+
+/** POST /api/policies/onboard (controller): queue the learner over a year's history. */
+export function onboardPolicies(entityId: string, year = 2025): Promise<{ job_id: number; entity_id: string; year: number }> {
+  return call(
+    () =>
+      http<{ job_id: number; entity_id: string; year: number }>("/api/policies/onboard", {
+        method: "POST",
+        body: JSON.stringify({ entity_id: entityId, year }),
+      }),
+    () => {
+      throw new ApiError(409, "409 onboarding needs the live API");
     },
   );
 }

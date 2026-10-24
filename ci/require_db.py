@@ -6,7 +6,10 @@ service into a green build, so CI loads this plugin:
 
     python -m pytest -p ci.require_db
 
-and the run fails if any platform test skipped, or if none ran at all.
+and the run fails if any platform test skipped, or if none ran at all. The one
+exception is a test that needs an optional package CI does not install (the
+Fetch.ai uAgents runtime, agents_fetch/requirements.txt): it skips on the
+import, not on the database.
 Nothing else in the suite is affected; this file is not a conftest and is only
 active when named with -p.
 """
@@ -14,6 +17,10 @@ active when named with -p.
 import pytest
 
 PLATFORM = "backend/tests/platform/"
+
+# Optional packages whose absence may skip a platform test without failing CI.
+OPTIONAL = ("uagents", "uagents_core")
+_OPTIONAL_SKIPS = tuple("could not import '%s'" % m for m in OPTIONAL)
 
 _ran = 0
 _skipped = []
@@ -23,10 +30,17 @@ def pytest_runtest_logreport(report):
     global _ran
     if not report.nodeid.startswith(PLATFORM):
         return
+    if hasattr(report, "wasxfail"):
+        # An expected failure ran against the database; pytest only reports
+        # it as skipped.
+        if report.when == "call":
+            _ran += 1
+        return
     if report.skipped:
         # A skip raised in setup (the `database` fixture) is reported there.
         reason = report.longrepr[-1] if isinstance(report.longrepr, tuple) else str(report.longrepr)
-        _skipped.append((report.nodeid, reason))
+        if not any(s in reason for s in _OPTIONAL_SKIPS):
+            _skipped.append((report.nodeid, reason))
     elif report.when == "call":
         _ran += 1
 

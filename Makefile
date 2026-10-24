@@ -111,6 +111,31 @@ demo: demo-data    ## demo-data, then the API on :8000 and the web app on :3000 
 	  (cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev) & \
 	  wait
 
+# Demo snapshots (C2; not part of the frozen list). See ops/snapshots/README.md.
+#
+#   LEASEDESK_DB_PORT=5432 LEASEDESK_DB_NAME=leasedesk_demo make demo-reset   # host Postgres
+#   make demo-reset                                                            # Compose (:5433)
+#
+# demo-snapshot builds the demo-data state in a scratch database of its own
+# (<db>_snapshot, dropped afterwards) and pg_dumps it to DEMO_SNAPSHOT with a
+# manifest. demo-reset restores it over LEASEDESK_DB_NAME in one transaction,
+# re-applies the role grants, verifies the chain and the row counts against
+# the manifest and prints the time; it builds the snapshot first when it is
+# missing or stale. A reset REPLACES audit_event: demo database, demo mode only.
+.PHONY: demo-snapshot demo-reset
+DEMO_SNAPSHOT ?= ops/snapshots/demo.dump
+DEMO_SNAPSHOT_DB ?= $(or $(LEASEDESK_DB_NAME),leasedesk)_snapshot
+
+demo-snapshot:     ## build demo-data in a scratch db, pg_dump it to DEMO_SNAPSHOT (+ manifest)
+	$(PY) -m app.demo.snapshot fresh-db $(DEMO_SNAPSHOT_DB)
+	$(MAKE) demo-data LEASEDESK_DB_NAME=$(DEMO_SNAPSHOT_DB) DEMO_CONFIRM=1
+	$(PY) -m app.demo.snapshot dump --database $(DEMO_SNAPSHOT_DB) --out "$(DEMO_SNAPSHOT)"
+	$(PY) -m app.demo.snapshot drop-db $(DEMO_SNAPSHOT_DB)
+
+demo-reset:        ## restore DEMO_SNAPSHOT over the demo database in under 30 s (builds it if missing)
+	@$(PY) -m app.demo.reset --check --snapshot "$(DEMO_SNAPSHOT)" || $(MAKE) demo-snapshot
+	$(PY) -m app.demo.reset --snapshot "$(DEMO_SNAPSHOT)"
+
 # Developer tooling (not part of the frozen list).
 .PHONY: lint ci
 
@@ -122,3 +147,27 @@ lint:              ## ruff on the platform scope set in ruff.toml (pip install r
 ci: lint           ## what CI runs, locally: lint, the suite with database tests required, the eval
 	$(PY) -m pytest -rs -p ci.require_db
 	$(MAKE) eval
+
+# B10 (not part of the frozen list): the demo's "Limits" beat, live. The agent
+# tries to approve, a manager tries to approve their own answer, and a raw SQL
+# INSERT INTO journal_entry as lease_agent: all three refused, printed from the
+# audit timeline, then verify_chain(). Uses a throwaway LIMITS_DEMO item that a
+# controller rejects and closes; nothing else in the database changes.
+.PHONY: prove-limits
+prove-limits:      ## three forbidden actions refused and on record (needs LEASEDESK_DEMO_MODE=1)
+	$(PY) -m app.work.limits
+
+# Chaos (C3; not part of the frozen list). See ops/chaos/README.md.
+#
+#   LEASEDESK_DB_PORT=5432 make chaos      # host Postgres
+#   make chaos                             # Compose (:5433)
+#
+# January on two scratch databases of its own (created, migrated, dropped):
+# A uninterrupted, B with the worker SIGKILLed twice mid-job and restarted.
+# Fails unless both end identical, both chains verify, replay equals live and
+# the books balance; then January CHAOS_SOAK more times on A, nothing growing.
+.PHONY: chaos
+CHAOS_SOAK ?= 20
+
+chaos:             ## kill the worker mid-month on a scratch db: identical results, then a soak
+	$(PY) -m ops.chaos.acceptance --soak $(CHAOS_SOAK)

@@ -9,7 +9,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
+  approveDisputeLetter,
+  approveDisputeReceivable,
+  getDispute,
+  getDisputes,
+  getObligations,
+  recordDisputeReply,
   approveException,
+  backtestPolicy,
+  decidePolicy,
+  getPolicies,
+  getPolicy,
+  onboardPolicies,
   confirmLeaseVersion,
   getAllowedActions,
   getAudit,
@@ -19,18 +30,25 @@ import {
   getDocumentPages,
   getException,
   getExceptions,
+  getItemSources,
   getLeaseVersions,
   getLeases,
   getMe,
+  getMonthSummary,
+  getMonthSummaryItems,
+  getQuestions,
   getSchedule,
   getSummary,
   holdException,
   payAsBilledException,
   performAction,
+  resetDemo,
   subscribeDataSource,
   type DataSource,
 } from "./api";
-import type { ActionResult, ItemAction } from "./types";
+import type {
+  DisputeDetail,
+  DisputeReply, ActionResult, DemoResetResult, BacktestRun, ItemAction, MonthMetricName } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -143,5 +161,126 @@ export function usePayAsBilled(exceptionId: string) {
     onSettled: () => {
       for (const k of AFTER_ACTION) void qc.invalidateQueries({ queryKey: [k] });
     },
+  });
+}
+
+/** The month's run summary for the guided stepper; every number has a drill-down. */
+export function useMonthSummary(period: string, entity?: string) {
+  return useQuery({ queryKey: ["month-summary", period, entity ?? ""], queryFn: () => getMonthSummary(period, entity) });
+}
+
+/** The rows behind one number of the month summary (enabled once a metric is picked). */
+export function useMonthSummaryItems(period: string, metric: MonthMetricName | null, entity?: string) {
+  return useQuery({
+    queryKey: ["month-summary-items", period, metric, entity ?? ""],
+    queryFn: () => getMonthSummaryItems(period, metric!, entity),
+    enabled: !!metric,
+  });
+}
+
+/** The controller's demo reset; afterwards every query refetches, since every table changed. */
+export function useDemoReset() {
+  const qc = useQueryClient();
+  return useMutation<DemoResetResult, Error, void>({
+    mutationFn: () => resetDemo(),
+    onSettled: () => void qc.invalidateQueries(),
+  });
+}
+
+/** The resolver's view of one item: sources, trust explanation, confidence, route. */
+export function useItemSources(itemOrExceptionId?: number | string | null) {
+  return useQuery({
+    queryKey: ["item-sources", itemOrExceptionId ?? null],
+    queryFn: () => getItemSources(itemOrExceptionId!),
+    enabled: itemOrExceptionId != null && itemOrExceptionId !== "",
+  });
+}
+
+/** Open questions waiting on me (or, mine=false, everything in my scope). */
+export function useQuestions(mine = true) {
+  return useQuery({ queryKey: ["questions", mine], queryFn: () => getQuestions(mine) });
+}
+
+/** Everything a dispute action can change on screen. */
+const AFTER_DISPUTE = ["dispute", "disputes", "summary", "audit"];
+
+function useDisputeMutation<V>(fn: (vars: V) => Promise<DisputeDetail>) {
+  const qc = useQueryClient();
+  return useMutation<DisputeDetail, Error, V>({
+    mutationFn: fn,
+    onSettled: () => {
+      for (const k of AFTER_DISPUTE) void qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
+export function useDisputes(params: { status?: string; clinic_id?: string } = {}) {
+  return useQuery({ queryKey: ["disputes", params], queryFn: () => getDisputes(params) });
+}
+
+export function useDispute(disputeId?: string | null) {
+  return useQuery({
+    queryKey: ["dispute", disputeId],
+    queryFn: () => getDispute(disputeId!),
+    enabled: !!disputeId,
+    retry: false,
+  });
+}
+
+/** The regional manager approves the letter; the gateway queues it in the outbox. */
+export function useApproveDisputeLetter(disputeId: string) {
+  return useDisputeMutation<string | undefined>((reason) => approveDisputeLetter(disputeId, reason));
+}
+
+/** The controller approves recognising the landlord receivable. */
+export function useApproveDisputeReceivable(disputeId: string) {
+  return useDisputeMutation<string | undefined>((reason) => approveDisputeReceivable(disputeId, reason));
+}
+
+/** Record the landlord's reply: acknowledged, credit (full or partial) or refusal. */
+export function useRecordDisputeReply(disputeId: string) {
+  return useDisputeMutation<DisputeReply>((reply) => recordDisputeReply(disputeId, reply));
+}
+
+export function useObligations(params: { within_days?: number; lease_id?: string; kind?: string } = {}) {
+  return useQuery({ queryKey: ["obligations", params], queryFn: () => getObligations(params) });
+}
+
+/** Every policy with status, version, precedent count and backtest summary. */
+export function usePolicies() {
+  return useQuery({ queryKey: ["policies"], queryFn: getPolicies });
+}
+
+/** One policy: rule, versions, evidence, stored backtest, rejection, citations. */
+export function usePolicy(id: number | null | undefined) {
+  return useQuery({ queryKey: ["policy", id], queryFn: () => getPolicy(id as number), enabled: id != null, retry: false });
+}
+
+/** Run a policy's backtest now; refetches the policy so a refreshed result shows. */
+export function useBacktestPolicy(id: number) {
+  const qc = useQueryClient();
+  return useMutation<BacktestRun, Error, void>({
+    mutationFn: () => backtestPolicy(id),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["policy", id] }),
+  });
+}
+
+/** Approve or reject a policy through its work item. */
+export function useDecidePolicy() {
+  const qc = useQueryClient();
+  return useMutation<{ state: string }, Error, { workItemId: number; action: "approve" | "reject"; reason?: string }>({
+    mutationFn: ({ workItemId, action, reason }) => decidePolicy(workItemId, action, reason),
+    onSettled: () => {
+      for (const k of ["policies", "policy", "audit"]) void qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
+/** Controller: queue onboarding over a year's history. */
+export function useOnboardPolicies() {
+  const qc = useQueryClient();
+  return useMutation<{ job_id: number; entity_id: string; year: number }, Error, { entityId: string; year?: number }>({
+    mutationFn: ({ entityId, year }) => onboardPolicies(entityId, year),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["policies"] }),
   });
 }

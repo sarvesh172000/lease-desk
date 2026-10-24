@@ -446,7 +446,32 @@ def _deliver_ap_batch(row: Mapping, out_dir: Path) -> None:
     tmp.replace(target)
 
 
-DELIVERERS: Dict[str, Callable[[Mapping, Path], None]] = {"ap_batch": _deliver_ap_batch}
+def _deliver_email(row: Mapping, out_dir: Path) -> None:
+    """Write the message as an .eml file, atomically, like a batch file.
+    Mailpit (Phase 2, Compose) replaces the file with SMTP delivery; the
+    outbox row, its key and exactly-once claiming stay the same."""
+    from email.message import EmailMessage
+    from email.utils import formataddr
+
+    p = row["payload"]
+    msg = EmailMessage()
+    msg["Message-ID"] = "<%s>" % p["message_id"]
+    if p.get("in_reply_to"):
+        msg["In-Reply-To"] = "<%s>" % p["in_reply_to"]
+    msg["From"] = formataddr((p.get("from_name") or "", p["from"]))
+    msg["To"] = formataddr((p.get("to_name") or "", p["to"]))
+    msg["Date"] = p["date"]
+    msg["Subject"] = p["subject"]
+    msg["X-Lease-Desk-Key"] = row["idempotency_key"]
+    msg.set_content(p["body"])
+    target = out_dir / ("%s.eml" % safe_filename(row["idempotency_key"]))
+    tmp = target.with_suffix(".eml.tmp")
+    tmp.write_text(msg.as_string())
+    tmp.replace(target)
+
+
+DELIVERERS: Dict[str, Callable[[Mapping, Path], None]] = {"ap_batch": _deliver_ap_batch,
+                                                          "email": _deliver_email}
 
 
 def safe_filename(key: str) -> str:
@@ -459,14 +484,21 @@ def send_outbox(conn: Connection, out_dir: Union[str, Path],
 
     Each row is claimed with FOR UPDATE SKIP LOCKED, delivered, and marked in
     its own transaction, so a concurrent sender skips it rather than sending
-    it again. A failed delivery counts an attempt; after `max_attempts` the row
-    is marked failed. This function commits, so pass a connection with no
-    work of its own in progress.
+    it again. A failed delivery counts an attempt. When the *target* is
+    unavailable (an OSError: the outbox directory or mail server cannot be
+    reached or written) the row stays pending however many attempts that
+    takes, and the next call tries again: the outbox retries until the target
+    returns, then sends once. Any other failure (a payload the deliverer
+    cannot handle) marks the row failed after `max_attempts`. This function
+    commits, so pass a connection with no work of its own in progress.
     """
     if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
         raise ValueError("max_attempts must be a positive integer")
     out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass                    # the target is down; each delivery below says so and is retried
     if conn.in_transaction():
         conn.commit()
     sent: List[int] = []
@@ -479,6 +511,8 @@ def send_outbox(conn: Connection, out_dir: Union[str, Path],
         tried.append(row["id"])
         try:
             DELIVERERS[row["kind"]](row, out)
+        except OSError:                                     # the target is down: retry later
+            _mark_failed_attempt(conn, row, None)
         except Exception:                                   # noqa: BLE001  any failure counts
             _mark_failed_attempt(conn, row, max_attempts)
         else:
@@ -497,14 +531,319 @@ def _claim(conn: Connection, tried: List[int]) -> Optional[Mapping]:
     """), {"tried": tried}).mappings().first()
 
 
-def _mark_failed_attempt(conn: Connection, row: Mapping, max_attempts: int) -> None:
-    status = "failed" if row["attempts"] + 1 >= max_attempts else "pending"
+def _mark_failed_attempt(conn: Connection, row: Mapping, max_attempts: Optional[int]) -> None:
+    """Count an attempt. max_attempts None: the target was unavailable, so the
+    row stays pending for the next send, however many attempts that takes."""
+    status = ("failed" if max_attempts is not None and row["attempts"] + 1 >= max_attempts
+              else "pending")
     conn.execute(text("UPDATE outbox SET attempts = attempts + 1, status = :s WHERE id = :id"),
                  {"s": status, "id": row["id"]})
 
 
 def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, default=str)
+
+
+# ---------------------------------------------------------------- disputes
+#
+# PHASE_2.md group 11. work/disputes.py drafts and records; these doors send
+# and post, on lease_gateway, each idempotent on its own key:
+#
+#   dispute_letter:<id>:<round>      the letter (or a follow-up) in the outbox
+#   dispute_receivable:<id>          Dr Landlord receivable / Cr Accounts payable
+#   dispute_credit:<id>:<memo ref>   Dr Accounts payable / Cr Landlord receivable
+#   dispute_writeoff:<id>            Dr expense / Cr Landlord receivable (or AP)
+#
+# disputes.py's docstring explains the accounting. sync_disputes() runs every
+# door that applies; the dispute routes call it after each action.
+
+@dataclass(frozen=True)
+class DisputeSync:
+    sent: List[int]            # outbox ids queued by this call
+    recognized: List[int]      # journal entry ids
+    cleared: List[int]
+    written_off: List[int]
+    closed: List[int]          # work item ids closed
+
+
+def send_dispute_letter(conn: Connection, dispute_id: str) -> Optional[int]:
+    """Queue the approved letter as an `email` outbox row and mark the
+    dispute sent. Returns the outbox id; a letter already queued for this
+    round returns its id and queues nothing. Only a letter whose last
+    approval on record is a regional manager's or a controller's is sent."""
+    from . import disputes
+
+    d = _dispute(conn, dispute_id, lock=True)
+    item = _item(conn, d["work_item_id"])
+    if item["state"] != "APPROVED":
+        raise WrongState("dispute %s: work item %s is %s; only an approved letter is sent"
+                         % (dispute_id, item["id"], item["state"]))
+    approval = _last_allowed(conn, item["id"], "approve")
+    if approval is None or approval["role"] not in disputes.LETTER_APPROVERS:
+        raise GatewayError("dispute %s has no regional manager's or controller's approval on "
+                           "record; the letter is not sent" % dispute_id)
+    rnd = _count_allowed(conn, item["id"], "approve")
+    key = "dispute_letter:%s:%d" % (dispute_id, rnd)
+    existing = _outbox_row(conn, key)
+    if existing is not None:
+        return existing["id"]
+
+    from ..jobs import clock
+
+    today = clock.today(conn)
+    facts = d["facts"]
+    remaining = d["amount"] - d["credited_amount"]
+    body = d["letter"] if rnd == 1 else disputes.render_letter(
+        facts, round=rnd, refusal=d["refusal_reason"], remaining=remaining,
+        on=today.isoformat())
+    tenant = facts["tenant"]
+    payload = {
+        "dispute_id": dispute_id, "round": rnd, "work_item_id": item["id"],
+        "message_id": "dispute-%s-r%d@lease-desk" % (dispute_id.lower(), rnd),
+        "in_reply_to": ("dispute-%s-r%d@lease-desk" % (dispute_id.lower(), rnd - 1)
+                        if rnd > 1 else None),
+        "from": tenant.get("email") or "ap@lease-desk.local",
+        "from_name": "%s, %s" % (tenant["signer"], tenant["entity"]),
+        "to": d["notice_to"]["email"], "to_name": d["notice_to"]["attn"],
+        "notice_address": d["notice_to"]["address"],
+        "date": _mail_date(today), "subject": disputes.letter_subject(facts, rnd),
+        "body": body, "amount": str(remaining),
+        "attachments": [doc for doc in facts.get("documents", []) if doc.get("document_id")],
+        "approved_by": approval["actor_id"],
+    }
+    outbox_id = conn.execute(text("""
+        INSERT INTO outbox (kind, payload, idempotency_key)
+        VALUES ('email', CAST(:payload AS jsonb), :key)
+        ON CONFLICT (idempotency_key) DO NOTHING RETURNING id
+    """), {"payload": _json(payload), "key": key}).scalar()
+    if outbox_id is None:                                   # a concurrent send won
+        return _outbox_row(conn, key)["id"]
+    conn.execute(text("""
+        UPDATE dispute SET status = 'sent', letter_outbox_id = :o, sent_at = now(),
+               updated_at = now() WHERE id = :id
+    """), {"o": outbox_id, "id": dispute_id})
+    append_event(conn, actor_id=GATEWAY_ACTOR, action="send_letter", subject_type="dispute",
+                 subject_id=dispute_id, diff={"from": d["status"], "to": "sent"},
+                 evidence={"outbox_id": outbox_id, "key": key, "round": rnd,
+                           "approved_by": approval["actor_id"], "to": payload["to"],
+                           "amount": str(remaining)})
+    return outbox_id
+
+
+def post_dispute_receivable(conn: Connection, dispute_id: str) -> Optional[int]:
+    """Post the receivable a controller approved recognising:
+    Dr Landlord receivable / Cr Accounts payable for what is still in
+    dispute, dated the business day. Returns the entry id (the original one
+    on a repeat), or None when no approved recognition exists."""
+    from ..jobs import clock
+    from . import disputes
+
+    d = _dispute(conn, dispute_id, lock=True)
+    item = disputes.receivable_item(conn, dispute_id)
+    key = "dispute_receivable:%s" % dispute_id
+    earlier = posting.existing_entry(conn, key)
+    if earlier is not None:
+        return earlier["id"]
+    if item is None or item["state"] != "APPROVED":
+        return None
+    approval = _last_allowed(conn, item["id"], "approve")
+    if approval is None or approval["role"] != disputes.RECOGNISER:
+        raise GatewayError("dispute %s: no controller's approval to recognise the receivable "
+                           "on record" % dispute_id)
+    amount = d["amount"] - d["credited_amount"]
+    if amount <= 0:
+        raise GatewayError("dispute %s has nothing left in dispute to recognise" % dispute_id)
+    on = clock.today(conn)
+    entry_id = post_journal(
+        conn, item["id"], [(disputes.LANDLORD_RECEIVABLE, amount, 0, d["clinic_id"]),
+                           (ACCOUNTS_PAYABLE, 0, amount, d["clinic_id"])],
+        key, entity_id=d["entity_id"], date=on, period=on.replace(day=1),
+        memo="Landlord receivable recognised: dispute %s, %s" % (dispute_id, d["landlord_id"]),
+        entry_type="dispute_receivable", post_evidence={"dispute_id": dispute_id})
+    conn.execute(text("UPDATE dispute SET receivable_entry_id = :e, updated_at = now() "
+                      "WHERE id = :id"), {"e": entry_id, "id": dispute_id})
+    append_event(conn, actor_id=GATEWAY_ACTOR, action="recognize_receivable",
+                 subject_type="dispute", subject_id=dispute_id,
+                 evidence={"journal_entry_id": entry_id, "amount": str(amount),
+                           "approved_by": approval["actor_id"],
+                           "credits_before": len(d["credits"] or [])})
+    return entry_id
+
+
+def clear_dispute_credits(conn: Connection, dispute_id: str) -> List[int]:
+    """Clear the recognised receivable by each credit memo matched to the
+    dispute since it was recognised: Dr Accounts payable / Cr Landlord
+    receivable, dated the memo's date. A dispute with no recognised
+    receivable has nothing in the books to clear. Returns new entry ids."""
+    from . import disputes
+
+    d = _dispute(conn, dispute_id, lock=True)
+    if d["receivable_entry_id"] is None:
+        return []
+    before = conn.execute(text("""
+        SELECT evidence->>'credits_before' FROM audit_event
+         WHERE subject_type = 'dispute' AND subject_id = :id AND action = 'recognize_receivable'
+           AND allowed ORDER BY seq LIMIT 1
+    """), {"id": dispute_id}).scalar()
+    item = disputes.receivable_item(conn, dispute_id)
+    made = []
+    for credit in (d["credits"] or [])[int(before or 0):]:
+        key = "dispute_credit:%s:%s" % (dispute_id, credit["credit_memo_ref"])
+        if posting.existing_entry(conn, key) is not None:
+            continue
+        amount = Decimal(credit["amount"])
+        on = date.fromisoformat(credit["received_on"])
+        posting.require_open_period(conn, d["entity_id"], on.replace(day=1))
+        result = posting.write_entry(
+            conn, entity_id=d["entity_id"], entry_date=on, period=on.replace(day=1),
+            memo="Credit memo %s matched to dispute %s" % (credit["credit_memo_ref"], dispute_id),
+            entry_type="dispute_credit", idempotency_key=key,
+            work_item_id=item["id"] if item else None,
+            lines=posting.normalize_lines([(ACCOUNTS_PAYABLE, amount, 0, d["clinic_id"]),
+                                           (disputes.LANDLORD_RECEIVABLE, 0, amount,
+                                            d["clinic_id"])]))
+        if result.created:
+            made.append(result.entry_id)
+            append_event(conn, actor_id=GATEWAY_ACTOR, action="clear_receivable",
+                         subject_type="dispute", subject_id=dispute_id,
+                         evidence={"journal_entry_id": result.entry_id, "amount": str(amount),
+                                   "credit_memo_ref": credit["credit_memo_ref"]})
+    return made
+
+
+def settle_dispute(conn: Connection, dispute_id: str) -> Dict[str, List[int]]:
+    """Close what a settled dispute leaves open.
+
+    Fully credited: the DISPUTE item (APPROVED, letter out) and a posted
+    receivable item close. Conceded (the regional manager rejected the
+    reopened item and a controller closed it): the uncredited remainder is
+    written off, Dr expense / Cr Landlord receivable for what was
+    recognised and Cr Accounts payable for the rest, once."""
+    from . import disputes
+
+    d = _dispute(conn, dispute_id, lock=True)
+    item = _item(conn, d["work_item_id"])
+    out: Dict[str, List[int]] = {"written_off": [], "closed": []}
+    remaining = d["amount"] - d["credited_amount"]
+    gateway = None
+    if d["status"] == "credited" and remaining == 0 and item["state"] == "APPROVED":
+        gateway = gateway or _gateway_actor(conn)
+        transition(conn, gateway, item["id"], "close",
+                   reason="landlord credited the dispute in full",
+                   evidence={"dispute_id": dispute_id, "credited": str(d["credited_amount"])})
+        out["closed"].append(item["id"])
+    conceded = item["state"] == "CLOSED" and _conceded(conn, item["id"])
+    if conceded and remaining > 0 and d["writeoff_entry_id"] is None:
+        out["written_off"].append(_write_off(conn, d, item, remaining))
+    rec = disputes.receivable_item(conn, dispute_id)
+    if rec is not None and rec["state"] == "POSTED" and (
+            (d["status"] == "credited" and remaining == 0) or conceded):
+        open_balance = Decimal(disputes.receivable(conn, dispute_id)["open"])
+        if open_balance == 0:
+            gateway = gateway or _gateway_actor(conn)
+            transition(conn, gateway, rec["id"], "close", reason="receivable cleared",
+                       evidence={"dispute_id": dispute_id})
+            out["closed"].append(rec["id"])
+    return out
+
+
+def _conceded(conn: Connection, item_id: int) -> bool:
+    """Rejected by a regional manager (or controller) after the landlord's
+    reply, then closed by a controller: the decision to bear the cost."""
+    close = _last_allowed(conn, item_id, "close")
+    reject = _last_allowed(conn, item_id, "reject")
+    return (close is not None and reject is not None and close["role"] == "controller"
+            and reject["seq"] < close["seq"])
+
+
+def _write_off(conn: Connection, d: Mapping, item: Mapping, remaining: Decimal) -> int:
+    from ..jobs import clock
+    from . import disputes
+
+    open_balance = Decimal(disputes.receivable(conn, d["id"])["open"])
+    from_receivable = min(open_balance, remaining)
+    lines = [(disputes.expense_account(d["charge_type"]), remaining, 0, d["clinic_id"])]
+    if from_receivable > 0:
+        lines.append((disputes.LANDLORD_RECEIVABLE, 0, from_receivable, d["clinic_id"]))
+    if remaining - from_receivable > 0:
+        lines.append((ACCOUNTS_PAYABLE, 0, remaining - from_receivable, d["clinic_id"]))
+    on = clock.today(conn)
+    key = "dispute_writeoff:%s" % d["id"]
+    posting.require_open_period(conn, d["entity_id"], on.replace(day=1))
+    result = posting.write_entry(
+        conn, entity_id=d["entity_id"], entry_date=on, period=on.replace(day=1),
+        memo="Dispute %s conceded: $%s borne as cost" % (d["id"], remaining),
+        entry_type="dispute_writeoff", idempotency_key=key, work_item_id=item["id"],
+        lines=posting.normalize_lines(lines))
+    conn.execute(text("UPDATE dispute SET writeoff_entry_id = :e, updated_at = now() "
+                      "WHERE id = :id"), {"e": result.entry_id, "id": d["id"]})
+    if result.created:
+        append_event(conn, actor_id=GATEWAY_ACTOR, action="write_off", subject_type="dispute",
+                     subject_id=d["id"], evidence={"journal_entry_id": result.entry_id,
+                                                   "amount": str(remaining),
+                                                   "from_receivable": str(from_receivable)})
+    return result.entry_id
+
+
+def sync_disputes(conn: Connection, *, entity_id: Optional[str] = None,
+                  dispute_id: Optional[str] = None) -> DisputeSync:
+    """Every gateway step that applies, for one dispute or all of an entity's:
+    send approved letters, post approved receivables, clear credit memos,
+    settle. Idempotent; a second call does nothing."""
+    from . import disputes
+
+    ids = [dispute_id] if dispute_id else list(conn.execute(text("""
+        SELECT id FROM dispute WHERE CAST(:e AS text) IS NULL OR entity_id = :e ORDER BY id
+    """), {"e": entity_id}).scalars())
+    out = DisputeSync([], [], [], [], [])
+    for did in ids:
+        d = _dispute(conn, did)
+        if _item(conn, d["work_item_id"])["state"] == "APPROVED":
+            key = "dispute_letter:%s:%d" % (did, _count_allowed(conn, d["work_item_id"], "approve"))
+            if _outbox_row(conn, key) is None:
+                out.sent.append(send_dispute_letter(conn, did))
+        rec = disputes.receivable_item(conn, did)
+        if rec is not None and rec["state"] == "APPROVED":
+            entry = post_dispute_receivable(conn, did)
+            if entry is not None:
+                out.recognized.append(entry)
+        out.cleared.extend(clear_dispute_credits(conn, did))
+        settled = settle_dispute(conn, did)
+        out.written_off.extend(settled["written_off"])
+        out.closed.extend(settled["closed"])
+    return out
+
+
+def _dispute(conn: Connection, dispute_id: str, lock: bool = False) -> Mapping:
+    row = conn.execute(text("SELECT * FROM dispute WHERE id = :id"
+                            + (" FOR UPDATE" if lock else "")), {"id": dispute_id}).mappings().first()
+    if row is None:
+        raise GatewayError("no dispute %s" % dispute_id)
+    return row
+
+
+def _last_allowed(conn: Connection, item_id: int, action: str) -> Optional[Mapping]:
+    return conn.execute(text("""
+        SELECT e.seq, e.actor_id, e.reason, e.evidence, a.role
+          FROM audit_event e LEFT JOIN actor a ON a.id = e.actor_id
+         WHERE e.subject_type = 'work_item' AND e.subject_id = :sid
+           AND e.action = :action AND e.allowed
+         ORDER BY e.seq DESC LIMIT 1
+    """), {"sid": str(item_id), "action": action}).mappings().first()
+
+
+def _count_allowed(conn: Connection, item_id: int, action: str) -> int:
+    return conn.execute(text("""
+        SELECT count(*) FROM audit_event WHERE subject_type = 'work_item' AND subject_id = :sid
+           AND action = :action AND allowed
+    """), {"sid": str(item_id), "action": action}).scalar_one()
+
+
+def _mail_date(d: date) -> str:
+    from datetime import datetime, timezone
+    from email.utils import format_datetime
+
+    return format_datetime(datetime(d.year, d.month, d.day, 17, 0, tzinfo=timezone.utc))
 
 
 # --------------------------------------------------------------------- CLI

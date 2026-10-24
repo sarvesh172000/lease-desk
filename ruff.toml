@@ -19,9 +19,12 @@ include = [
     "backend/app/jobs/**/*.py",
     "backend/app/records/**/*.py",
     "backend/app/api/**/*.py",
+    "backend/app/demo/**/*.py",
     "backend/app/main.py",
     "backend/app/settings.py",
     "backend/tests/platform/**/*.py",
+    "backend/tests/test_fetch_grammar.py",
+    "agents_fetch/**/*.py",
 ]
 # `include` only steers discovery. Explicit paths (pre-commit, editors) are
 # kept in scope by this exclude list plus force-exclude.
@@ -51,7 +54,7 @@ select = ["E", "W", "F", "I", "B"]
 ignore = ["E741"]
 
 [lint.isort]
-known-first-party = ["app", "leasedesk", "datagen", "eval"]
+known-first-party = ["app", "leasedesk", "datagen", "eval", "agents_fetch"]
 
 [lint.per-file-ignores]
 # Alembic revisions are generated; keep their header layout.

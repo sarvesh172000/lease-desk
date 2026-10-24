@@ -46,6 +46,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
+from ..jobs.queue import enqueue
 from ..work import charges, gateway
 from ..work.events import events_for
 from ..work.roles import Actor
@@ -280,6 +281,8 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
                 else:
                     row = transition(conn, work_actor(actor), item_id, action,
                                      reason=reason, patch=patch)
+                if action == "answer" and row["kind"] == gateway.CHARGE_CHECK:
+                    _learn_from_answer(conn, row["id"])
         except Denied as exc:
             raise HTTPException(403, exc.reason) from None
         except UnknownItem:
@@ -297,6 +300,19 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
                 row = dict(conn.execute(text("SELECT * FROM work_item WHERE id = :id"),
                                         {"id": row["id"]}).mappings().one())
     return ActionResult(state=row["state"], item=_public_item(row), posting=posting)
+
+
+def _learn_from_answer(conn: Connection, item_id: int) -> None:
+    """An answer on a charge check may teach a policy: queue the policy
+    learner (work/policy_learner.py) for it, in the answer's own transaction,
+    so the worker proposes the policy as agent:policy."""
+    question_id = conn.execute(text("""
+        SELECT id FROM question WHERE work_item_id = :id AND answered_by IS NOT NULL
+         ORDER BY answered_at DESC, id DESC LIMIT 1
+    """), {"id": item_id}).scalar()
+    if question_id is not None:
+        enqueue(conn, "policy_learn", {"question_id": question_id},
+                idempotency_key="policy_learn:question:%d" % question_id)
 
 
 def _is_charge_check(conn: Connection, item_id: int) -> bool:

@@ -152,12 +152,17 @@ def create_item(conn: Connection, actor: Actor, *, kind: str, subject_type: str,
 
 def transition(conn: Connection, actor: Actor, item_id: Any, action: str, *,
                reason: Optional[str] = None, evidence: Optional[Mapping] = None,
-               patch: Optional[Mapping] = None) -> Dict[str, Any]:
+               patch: Optional[Mapping] = None,
+               policy_ref: Optional[str] = None) -> Dict[str, Any]:
     """Move one item by one action and return the projected work_item row.
 
     patch: columns from PATCHABLE to change alongside the move. For `ask` it
     also carries the question ({"asked_to", "body", "due_at"}; body defaults
     to reason); for `answer`, {"answer"} (defaults to reason).
+
+    policy_ref: the approved policy that drove this decision, as
+    `policy:<id>@v<version>` (work/policies.py); it goes on the event's
+    policy_ref column.
     """
     if action not in ACTIONS:
         raise IllegalTransition("unknown action %r; the actions are %s" % (action, ", ".join(ACTIONS)))
@@ -197,7 +202,8 @@ def transition(conn: Connection, actor: Actor, item_id: Any, action: str, *,
     if action == "approve" and item["subject_type"] == "lease_version":
         diff["confirms"] = {"lease_version_id": _as_id(item["subject_id"])}
 
-    _append_and_project(conn, actor, action, item["id"], diff, reason=reason, evidence=evidence)
+    _append_and_project(conn, actor, action, item["id"], diff, reason=reason, evidence=evidence,
+                        policy_ref=policy_ref)
     return _row(conn, item["id"])
 
 
@@ -213,12 +219,13 @@ def record_denial(conn: Connection, actor: Actor, action: str, item: Mapping, re
 # ------------------------------------------------------------------ helpers
 
 def _append_and_project(conn: Connection, actor: Actor, action: str, item_id: int,
-                        diff: Mapping, *, reason=None, evidence=None) -> Event:
+                        diff: Mapping, *, reason=None, evidence=None, policy_ref=None) -> Event:
     # Project exactly what was stored: the diff after its JSON round trip,
     # which is also what replay will read back.
     diff = _jsonable(diff)
     event = append_event(conn, actor_id=actor.id, action=action, subject_type="work_item",
-                         subject_id=item_id, reason=reason, diff=diff, evidence=evidence)
+                         subject_id=item_id, reason=reason, diff=diff, evidence=evidence,
+                         policy_ref=policy_ref)
     apply(conn, project(event))
     return event
 
