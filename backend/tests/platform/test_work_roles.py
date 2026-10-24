@@ -2,10 +2,10 @@
 
 import pytest
 from sqlalchemy import text
+from work_world import ACTORS, world_fixture  # noqa: F401  (the `world` fixture)
 
 from app.db.models import ACTOR_ROLES
 from app.work.roles import GATEWAY_ACTOR, ROLES, Actor, UnknownActor, can, load_actor
-from work_world import ACTORS, world_fixture  # noqa: F401  (the `world` fixture)
 
 A = ACTORS
 BAY = {"kind": "CHARGE_CHECK", "entity_id": "ENT-CA", "region_id": "REG-BAY",

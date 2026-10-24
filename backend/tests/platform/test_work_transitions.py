@@ -9,14 +9,21 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
+from work_world import ACTORS, bay_item, engine_for, world_fixture  # noqa: F401  (the `world` fixture)
 
 from app.db.models import WORK_STATES
 from app.work.events import events_for, verify_chain
 from app.work.transitions import (
-    ACTIONS, TRANSITIONS, Denied, IllegalTransition, UnknownItem, allowed_actions, create_item,
-    load_item, transition,
+    ACTIONS,
+    TRANSITIONS,
+    Denied,
+    IllegalTransition,
+    UnknownItem,
+    allowed_actions,
+    create_item,
+    load_item,
+    transition,
 )
-from work_world import ACTORS, bay_item, engine_for, world_fixture  # noqa: F401  (the `world` fixture)
 
 A = ACTORS
 

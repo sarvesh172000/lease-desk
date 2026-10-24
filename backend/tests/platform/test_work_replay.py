@@ -3,12 +3,12 @@ byte for byte."""
 
 import pytest
 from sqlalchemy import text
+from work_world import ACTORS, bay_item, engine_for, world_fixture  # noqa: F401  (the `world` fixture)
 
 from app.db.bootstrap import execute_raw
 from app.work import replay as replay_module
 from app.work.replay import rebuild, replay, snapshot
 from app.work.transitions import Denied, create_item, transition
-from work_world import ACTORS, bay_item, engine_for, world_fixture  # noqa: F401  (the `world` fixture)
 
 A = ACTORS
 

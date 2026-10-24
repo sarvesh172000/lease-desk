@@ -14,15 +14,20 @@ import itertools
 from hypothesis import HealthCheck, event, given, settings
 from hypothesis import strategies as st
 from sqlalchemy import text
+from work_world import ACTORS, engine_for, world_fixture  # noqa: F401  (the `world` fixture)
 
 from app.db.models import WORK_STATES
 from app.work.events import events_for, verify_chain
 from app.work.replay import replay
 from app.work.roles import ROLES, Actor, can
 from app.work.transitions import (
-    ACTIONS, TRANSITIONS, Denied, IllegalTransition, create_item, transition,
+    ACTIONS,
+    TRANSITIONS,
+    Denied,
+    IllegalTransition,
+    create_item,
+    transition,
 )
-from work_world import ACTORS, engine_for, world_fixture  # noqa: F401  (the `world` fixture)
 
 SETTINGS = settings(max_examples=50, deadline=None, database=None,
                     suppress_health_check=[HealthCheck.too_slow])

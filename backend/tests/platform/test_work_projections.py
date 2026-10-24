@@ -6,11 +6,11 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
+from work_world import ACTORS, bay_item, world_fixture  # noqa: F401  (the `world` fixture)
 
 from app.work.events import Event
 from app.work.projections import ProjectionError, RowChange, apply, apply_event, project
 from app.work.transitions import create_item, transition
-from work_world import ACTORS, bay_item, world_fixture  # noqa: F401  (the `world` fixture)
 
 AT = datetime(2026, 1, 31, 12, tzinfo=timezone.utc)
 
