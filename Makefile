@@ -13,11 +13,11 @@ export
 .PHONY: up up-all down logs migrate seed run-month replay eval test check-grants \
         prove-roles export-ledger api
 
-up:                ## start db, minio, api and worker, and wait until healthy
-	docker compose up -d --build --wait db minio api worker
+up:                ## start db, api and worker, and wait until healthy
+	docker compose up -d --build --wait db api worker
 
-up-all:            ## also start web (A8) and fava (A7)
-	docker compose --profile web --profile ledger up -d --build
+up-all:            ## also start minio, web (A8) and fava (A7)
+	docker compose --profile storage --profile web --profile ledger up -d --build
 
 down:
 	docker compose down
