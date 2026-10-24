@@ -41,7 +41,8 @@ LEASEDESK_DB_PORT=5432 LEASEDESK_DB_NAME=leasedesk_demo make demo
 ```
 
 `make demo` = `make demo-data` (create the database if missing, `migrate`,
-`seed`, `dev-passwords`, `run-month M=2026-01`; all idempotent) and then the API
+`seed`, `dev-passwords`, `run-month M=2026-01`, then confirm the leases and
+run the month again; all idempotent) and then the API
 (`cd backend && python3 -m uvicorn app.main:app --port 8000`) and
 `npm run dev` together until Ctrl-C. The same by hand, in three terminals:
 
@@ -51,6 +52,30 @@ make demo-data
 make api                                                    # :8000
 cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev   # :3000
 ```
+
+**Lease confirmation.** The checker only uses lease terms a regional manager
+has confirmed (PHASE_1.md group 9). The first `run-month` drafts version 1 of
+each of the five leases (every term with its page, box, quote and
+confidence, plus one LEASE_ABSTRACTION work item each) and checks nothing: the
+twelve charges wait. By default `make demo-data` then confirms the five
+versions as Dana Whitfield (`PER-RM-BAY`) with `python -m app.work.confirm_leases`
+(demo mode only; it is the same approve the UI sends, so each confirmation is
+a hash-chained event in her name) and runs the month again, so the demo opens
+on the twelve checked charges and five holds. To show the confirmation
+itself, start from a fresh database with
+
+```bash
+LEASEDESK_DB_PORT=5432 LEASEDESK_DB_NAME=leasedesk_demo DEMO_CONFIRM=0 make demo
+```
+
+then open a lease (Leases → a row), check a field against its boxed clause
+(the **p.N** link opens the cited page with the box), press **Confirm lease
+terms** as Dana, and run `make run-month M=2026-01` in another terminal: the
+charges of the confirmed leases are checked and appear on the dashboard.
+Which path read the terms is shown on the card: *read by the abstraction
+agent* (ANTHROPIC_API_KEY set, or the LLM cache warm) or *from the generated
+lease terms* (located in the real PDF by the citation check, never presented
+as a model output).
 
 To start over, drop the demo database (`DROP DATABASE leasedesk_demo`) and run
 `make demo-data` again. Seeded people, all with password `demo` (the header's

@@ -11,6 +11,18 @@ is `done` and never runs again. `record_findings()` is idempotent on its own
 too (a charge that already has a CHARGE_CHECK item is skipped), so even a
 checking job retried after a crash adds no second item.
 
+Only confirmed leases are checked (PHASE_1.md group 9). The checker's rules
+come from the *confirmed* lease_version 1 terms (`lease_versions.confirmed_rules`),
+never from the generator. A charge whose lease has no confirmed version is
+not checked at all: no item is proposed against unconfirmed terms. It waits,
+and the checking job's result says so (`waiting`, `waiting_leases` with the
+reason per lease, and `confirmed`, the set of confirmed version ids it ran
+with). Once a regional manager confirms more leases, the next `run_month`
+sees that the month's last checking job left charges waiting under a
+different confirmed set and enqueues one more checking job, keyed
+`run_month:<entity>:<YYYY-MM>:checking@<confirmed set>`. Same set, same key:
+running the month again with nothing newly confirmed enqueues nothing.
+
 Two id systems meet here. The checker names a charge the way the generator
 does, `<invoice>-L<n>`; the database names it `md5(source | source_id)` of the
 raw AP row. The bridge is the raw row: `landlord_charge.raw_ref -> raw_row.id`,
@@ -81,7 +93,32 @@ def run_month(conn: Connection, entity_id: str, period: Any) -> Dict[str, int]:
         ids[step] = enqueue(conn, step, payload, idempotency_key=job_key(entity_id, month, step),
                             depends_on=previous)
         previous = (ids[step],)
+    recheck = _recheck_key(conn, entity_id, month)
+    if recheck is not None:
+        ids["recheck"] = enqueue(conn, "checking", payload, idempotency_key=recheck,
+                                 depends_on=(ids["abstraction"],))
     return ids
+
+
+def _recheck_key(conn: Connection, entity_id: str, month: date) -> Optional[str]:
+    """The key of one more checking job, when the month's latest checking job
+    finished with charges waiting on leases and the set of confirmed versions
+    has changed since. None otherwise (including while a check is pending)."""
+    from .lease_versions import confirmed_rules
+
+    last = conn.execute(text("""
+        SELECT status, payload->'result' AS result FROM job
+         WHERE kind = 'checking' AND payload->>'entity_id' = :e AND payload->>'period' = :p
+         ORDER BY id DESC LIMIT 1
+    """), {"e": entity_id, "p": month.isoformat()}).first()
+    if last is None or last.status != "done" or not last.result:
+        return None
+    if not last.result.get("waiting"):
+        return None
+    now = confirmed_rules(conn, entity_id).fingerprint
+    if now == last.result.get("confirmed"):
+        return None
+    return "%s@%s" % (job_key(entity_id, month, "checking"), now)
 
 
 # ------------------------------------------------------- loading charges
@@ -119,34 +156,33 @@ def charge_ids_by_source_id(conn: Connection, source_ids: Iterable[str]) -> Dict
     return {r.source_id: r.id for r in rows}
 
 
-def lease_rules():
-    """Confirmed lease rules. Until abstraction (A3) is wired into the run,
-    they are built from the generator's terms, as the eval does."""
-    from datagen.company import build_company
-    from datagen.leases import build_leases
-
-    from ..engine.from_datagen import rules_from_terms
-
-    company = build_company()
-    return rules_from_terms(build_leases(company), company)
-
-
-def check_period(conn: Connection, entity_id: str, period: Any) -> Dict[str, int]:
-    """Load the period's charges, run the checker, and record every finding."""
+def check_period(conn: Connection, entity_id: str, period: Any) -> Dict[str, Any]:
+    """Load the period's charges, check those on a confirmed lease, and
+    record every finding. Charges on unconfirmed leases are counted as
+    waiting and left alone."""
     from ..agents.checker import check_month
+    from .lease_versions import confirmed_rules
 
     month = parse_period(period)
     charges = load_charges(conn, entity_id, month)
-    findings = check_month(charges, lease_rules(), month)
-    counts = record_findings(conn, findings, month)
-    counts.update(charges=len(charges), findings=len(findings),
-                  holds=sum(1 for f in findings if f.is_hold))
+    confirmed = confirmed_rules(conn, entity_id)
+    ready = [c for c in charges if c.lease_id in confirmed.rules]
+    waiting = [c for c in charges if c.lease_id not in confirmed.rules]
+    findings = check_month(ready, confirmed.rules, month)
+    counts: Dict[str, Any] = record_findings(conn, findings, month, versions=confirmed.versions)
+    waiting_leases = sorted({c.lease_id for c in waiting})
+    counts.update(charges=len(charges), checked=len(ready), findings=len(findings),
+                  holds=sum(1 for f in findings if f.is_hold), waiting=len(waiting),
+                  waiting_leases={lid: confirmed.waiting.get(lid, "no confirmed lease_version")
+                                  for lid in waiting_leases},
+                  confirmed=confirmed.fingerprint)
     return counts
 
 
 # ------------------------------------------------------ findings -> work
 
-def record_findings(conn: Connection, findings: Iterable, period: Any) -> Dict[str, int]:
+def record_findings(conn: Connection, findings: Iterable, period: Any,
+                    versions: Optional[Mapping[str, int]] = None) -> Dict[str, int]:
     """Turn each checker finding into a proposed CHARGE_CHECK work item.
 
     One item per finding, about the landlord charge it judged
@@ -155,7 +191,8 @@ def record_findings(conn: Connection, findings: Iterable, period: Any) -> Dict[s
     proposal (`approve` or `hold`), reason and evidence, as `agent:checker`.
     A charge that already has an item is skipped, so this is safe to repeat
     (create_item is idempotent on its own as well). Returns created/skipped
-    counts.
+    counts. `versions` (lease_id -> confirmed lease_version id) is cited in
+    each item's evidence as `lease_version_id`.
     """
     findings = list(findings)
     month = parse_period(period)
@@ -185,13 +222,15 @@ def record_findings(conn: Connection, findings: Iterable, period: Any) -> Dict[s
             clinic_id=f.charge.clinic_id, period=month, title=_title(f),
             amount=round(f.billed, 2))
         transition(conn, actor, item["id"], "propose", reason=f.reason, patch={
-            "proposal": f.proposal, "reason": f.reason, "evidence": evidence(f, ids)})
+            "proposal": f.proposal, "reason": f.reason,
+            "evidence": evidence(f, ids, (versions or {}).get(f.charge.lease_id))})
         existing.add(charge_id)
         created += 1
     return {"created": created, "skipped": skipped}
 
 
-def evidence(finding, ids: Mapping[str, str]) -> Dict[str, Any]:
+def evidence(finding, ids: Mapping[str, str],
+             lease_version_id: Optional[int] = None) -> Dict[str, Any]:
     """What a person needs to judge the proposal, as plain JSON, in the shape
     the read API documents (api/exceptions.py): lease_id, charge_id (the
     landlord_charge id), charge_ids, charge_type, billed, supported, then the
@@ -216,6 +255,7 @@ def evidence(finding, ids: Mapping[str, str]) -> Dict[str, Any]:
         "charge_ref": charge.charge_id,
         "invoice_id": charge.invoice_id,
         "related": related,
+        "lease_version_id": lease_version_id,
     }
 
 

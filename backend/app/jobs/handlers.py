@@ -10,10 +10,13 @@ The three monthly steps, and what each honestly does today:
   ingest       Seeding (`make seed`) already ingests the generator's exports,
                so this checks the period's raw rows and charges are present
                and reports the counts. Nothing there is a failure, not a pass.
-  abstraction  Skipped, and says so: the leases come pre-confirmed from the
-               generator until the abstraction agent (A3) is wired into the run.
-  checking     The real step: the period's charges against the lease rules,
-               every finding proposed as a CHARGE_CHECK work item.
+  abstraction  Drafts lease_version 1 for every lease that has none, each term
+               cited to its page and box, and opens one LEASE_ABSTRACTION item
+               per draft for a regional manager to confirm (lease_versions.py
+               says which path read the terms: the agent or the generator).
+  checking     The period's charges against the *confirmed* lease rules, every
+               finding proposed as a CHARGE_CHECK work item. Charges on a lease
+               with no confirmed version wait, and the result says why.
 """
 
 from typing import Any, Callable, Dict, Mapping
@@ -21,12 +24,10 @@ from typing import Any, Callable, Dict, Mapping
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from .lease_versions import draft_versions
 from .monthly import AP_SOURCE, check_period, parse_period
 
 Handler = Callable[[Connection, Mapping[str, Any]], Dict[str, Any]]
-
-ABSTRACTION_SKIPPED = ("skipped: leases come pre-confirmed from the generator "
-                       "until A3 is wired")
 
 
 class HandlerError(RuntimeError):
@@ -56,8 +57,9 @@ def ingest(conn: Connection, payload: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def abstraction(conn: Connection, payload: Mapping[str, Any]) -> Dict[str, Any]:
-    _scope(payload)
-    return {"status": "skipped", "reason": ABSTRACTION_SKIPPED}
+    entity_id, period = _scope(payload)
+    # The history cross-check reads the cash paid before the month being run.
+    return dict(status="drafted", **draft_versions(conn, entity_id, history_until=period))
 
 
 def checking(conn: Connection, payload: Mapping[str, Any]) -> Dict[str, Any]:

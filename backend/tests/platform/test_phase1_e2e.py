@@ -1,10 +1,12 @@
 """Phase 1's Definition of Done, end to end, on the session's throwaway database.
 
-    datagen.build -> seed -> run_month + worker -> a regional manager approves
-    the good charges and upholds the holds -> the gateway posts what is owed
-    (the billed amount of a good charge, only the undisputed amount of a held
-    one, nothing for a charge nothing supports) -> the AP clerk releases ->
-    the outbox writes the CSV -> trial balance, Beancount, verify_chain() and
+    datagen.build -> seed -> run_month + worker (drafts the five lease versions,
+    checks nothing against unconfirmed terms) -> a regional manager confirms
+    the leases -> run_month again checks the twelve charges -> the manager
+    approves the good charges and upholds the holds -> the gateway posts what
+    is owed (the billed amount of a good charge, only the undisputed amount of
+    a held one, nothing for a charge nothing supports) -> the AP clerk releases
+    -> the outbox writes the CSV -> trial balance, Beancount, verify_chain() and
     replay all agree, and not one disputed dollar is in the books
 
 Every step runs as the database role its process really uses: the worker as
@@ -21,6 +23,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import lease_world as lw
 import pytest
 from beancount import loader
 from beancount.core import data as bc
@@ -57,8 +60,9 @@ def generated(tmp_path_factory):
 
 
 @pytest.fixture
-def seeded(clean, generated):
+def seeded(clean, generated, monkeypatch):
     seed(Path(generated), clean["lease_agent"], clean["lease_gateway"])
+    lw.use_documents(monkeypatch, generated)
     # A manager from another region, to be refused. Phase 1 seeds one region.
     with clean["owner"].begin() as conn:
         conn.execute(text("INSERT INTO region (id, name) VALUES ('REG-DESERT', 'Desert')"))
@@ -96,10 +100,43 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
     eng = seeded
     reader = eng["lease_reader"]
 
-    # 1. The month: three jobs, every charge checked, every finding proposed.
+    # 1. The month: three jobs. Abstraction drafts lease_version 1 of each of
+    #    the five leases, every term boxed on its page, and proposes one
+    #    LEASE_ABSTRACTION item each. Nothing is confirmed yet, so the checker
+    #    proposes nothing: the twelve charges wait, and the job says why.
     outcomes = month(eng)
     assert [(o.job.kind, o.status) for o in outcomes] == [
         ("ingest", "done"), ("abstraction", "done"), ("checking", "done")]
+    assert outcomes[1].result["versions"] == 5
+    assert set(outcomes[1].result["paths"].values()) == {"abstraction:generator"}
+    assert (outcomes[2].result["created"], outcomes[2].result["waiting"]) == (0, 12)
+    assert q(reader, "SELECT count(*) FROM work_item WHERE kind = 'CHARGE_CHECK'") == 0
+    with reader.connect() as conn:
+        drafts = conn.execute(text("""
+            SELECT w.id, w.state, w.proposed_by, v.id AS version_id, v.lease_id
+              FROM work_item w JOIN lease_version v ON v.id::text = w.subject_id
+             WHERE w.kind = 'LEASE_ABSTRACTION' ORDER BY v.lease_id
+        """)).mappings().all()
+        boxed = conn.execute(text(
+            "SELECT count(*) FROM lease_term WHERE bbox IS NOT NULL AND page IS NOT NULL")).scalar()
+    assert len(drafts) == 5 and {d["state"] for d in drafts} == {"PROPOSED"}
+    assert {d["proposed_by"] for d in drafts} == {"agent:abstraction"}
+    assert boxed == 5 * 13
+
+    # 1b. A Desert manager may not confirm a Bay Area lease; the Bay Area
+    #     manager confirms all five, each one a hash-chained approve.
+    with pytest.raises(Denied, match="region"):
+        act(eng, "lease_api", RM_DESERT, drafts[0]["id"], "approve")
+    for d in drafts:
+        assert act(eng, "lease_api", RM_BAY, d["id"], "approve")["state"] == "APPROVED"
+    assert q(reader, "SELECT count(*) FROM lease_version WHERE confirmed_by = :rm",
+             rm=RM_BAY) == 5
+
+    # 1c. The month again: one more checking job, now against the confirmed
+    #     terms. Every charge checked, every finding proposed.
+    outcomes = month(eng)
+    assert [(o.job.kind, o.status) for o in outcomes] == [("checking", "done")]
+    assert (outcomes[0].result["created"], outcomes[0].result["holds"]) == (12, 5)
     with reader.connect() as conn:
         items = conn.execute(text("""
             SELECT w.id, w.state, w.proposal, w.subject_id, c.amount, w.evidence
@@ -119,6 +156,9 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
         act(eng, "lease_api", RM_DESERT, good[0]["id"], "approve")
     with reader.connect() as conn:
         refused = [e for e in events_for(conn, "work_item", good[0]["id"]) if not e.allowed]
+        assert all(e["evidence"]["lease_version_id"] in {d["version_id"] for d in drafts}
+                   for e in conn.execute(text(
+                       "SELECT evidence FROM work_item WHERE kind = 'CHARGE_CHECK'")).mappings())
     assert [(e.actor_id, e.action) for e in refused] == [(RM_DESERT, "approve")]
     assert "REG-DESERT" in refused[0].reason
 
@@ -209,7 +249,7 @@ def test_january_from_seed_to_posted_books_then_again_adds_nothing(seeded, tmp_p
             report = replay(conn)
             tx.rollback()
     assert report.identical, report.differences[:5]
-    assert report.rows["work_item"] == 12 and report.rows["question"] == 1
+    assert report.rows["work_item"] == 17 and report.rows["question"] == 1
 
     # 9. January again: no new jobs, items, entries, outbox rows or events.
     before = footprint(eng)

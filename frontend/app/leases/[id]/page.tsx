@@ -1,5 +1,6 @@
 "use client";
 
+import { LeaseVersionPanel } from "@/components/LeaseVersionPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
@@ -50,6 +51,8 @@ export default function LeaseDetailPage() {
         <Fact label="Term ends" value={day(lease.end)} />
         <Fact label="Open exceptions" value={String(mine.filter((e) => e.status !== "balanced").length)} />
       </div>
+
+      <LeaseVersionPanel leaseId={leaseId} />
 
       {mine.length ? (
         <Card>
