@@ -8,3 +8,12 @@ data/generated
 data/ledger
 frontend/node_modules
 .env
+
+# Not part of the image (the web service mounts frontend/ instead).
+.github
+.claude
+.cache
+.ruff_cache
+frontend
+eval/report.json
+eval/history.csv
