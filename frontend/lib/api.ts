@@ -29,6 +29,8 @@ import type {
   MonthSummaryRow,
   Schedule,
   Status,
+  PairingCode,
+  PairingList,
   Summary,
   WhyAnswer,
 } from "./types";
@@ -724,6 +726,38 @@ export function askWhy(itemId: number | string, question?: string): Promise<WhyA
       }),
     () => {
       throw new ApiError(501, "501 Why? needs the live API");
+    },
+  );
+}
+
+/**
+ * EXTENSION (C8): POST /api/pairing/codes — a one-time code (ten minutes, works
+ * once) that pairs an ASI:One chat with the signed-in person. Show it on Today;
+ * they send "pair <code>" to the Northbay Lease Desk agent.
+ */
+export function createPairingCode(): Promise<PairingCode> {
+  return call(
+    () => http<PairingCode>("/api/pairing/codes", { method: "POST" }),
+    () => {
+      throw new ApiError(501, "501 pairing needs the live API");
+    },
+  );
+}
+
+/** EXTENSION (C8): GET /api/pairing — the signed-in person's live chat pairings. */
+export function getPairings(): Promise<PairingList> {
+  return call(
+    () => http<PairingList>("/api/pairing"),
+    () => ({ pairings: [] }),
+  );
+}
+
+/** EXTENSION (C8): POST /api/pairing/{id}/revoke — unpair one of your chats (204). */
+export function revokePairing(pairingId: number): Promise<void> {
+  return call(
+    () => http<void>(`/api/pairing/${encodeURIComponent(String(pairingId))}/revoke`, { method: "POST" }),
+    () => {
+      throw new ApiError(501, "501 pairing needs the live API");
     },
   );
 }

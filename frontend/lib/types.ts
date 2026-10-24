@@ -402,3 +402,25 @@ export type EvidencePackSubject =
   | string
   | { type: "work_item" | "journal_entry"; id: number }
   | { type: "lease_period"; lease_id: string; period: string };
+
+/** EXTENSION (C8): POST /api/pairing/codes. `code` is "XXXX-XXXX". */
+export interface PairingCode {
+  code: string;
+  expires_at: string;
+  ttl_seconds: number;
+  instructions: string;
+}
+
+/** EXTENSION (C8): one live ASI:One chat pairing of the signed-in person. */
+export interface Pairing {
+  id: number;
+  /** The ASI:One user's agent address. */
+  chat_user: string;
+  claimed_at: string;
+  expires_at: string;
+}
+
+/** EXTENSION (C8): GET /api/pairing. */
+export interface PairingList {
+  pairings: Pairing[];
+}

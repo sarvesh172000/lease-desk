@@ -220,6 +220,16 @@ actor = Table(
     Column("active", Boolean),
 )
 
+# Chat pairing (migration 0007): an ASI:One user linked to an actor by a
+# one-time code. Hashes only; auth/pairing.py owns the logic.
+pairing = Table(
+    "pairing", metadata, _id(),
+    Column("actor_id", Text), Column("code_hash", Text), Column("code_expires_at", Timestamp),
+    Column("created_at", Timestamp), Column("claimed_at", Timestamp), Column("chat_user", Text),
+    Column("token_hash", Text), Column("token_expires_at", Timestamp),
+    Column("revoked_at", Timestamp), Column("revoked_by", Text),
+)
+
 # 'system' is the gateway (system:gateway, migration 0003): the only actor
 # that may post.
 ACTOR_ROLES = ("regional_manager", "ap_clerk", "controller", "auditor", "agent", "system")

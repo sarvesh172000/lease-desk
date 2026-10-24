@@ -16,7 +16,8 @@ GOLDEN = {"entity", "region", "landlord", "center", "clinic", "lease", "landlord
 RULEBOOK = {"lease_version", "lease_term"}
 WORK = {"work_item", "question", "policy", "agent_run", "tool_call", "job"}
 LEDGER = {"account", "period", "journal_entry", "journal_line"}
-ALL = RECORDS | GOLDEN | RULEBOOK | WORK | LEDGER | {"outbox", "audit_event", "actor"}
+PAIRING = {"pairing"}       # migration 0007: chat pairing, API-written, hashes only
+ALL = RECORDS | GOLDEN | RULEBOOK | WORK | LEDGER | PAIRING | {"outbox", "audit_event", "actor"}
 
 # role -> privilege -> tables. Column-level UPDATEs are listed separately.
 SPEC = {
@@ -29,8 +30,8 @@ SPEC = {
     },
     "lease_api": {
         "SELECT": ALL,
-        "INSERT": {"work_item", "question", "job", "audit_event"},
-        "UPDATE": {"work_item", "question"},
+        "INSERT": {"work_item", "question", "job", "audit_event"} | PAIRING,
+        "UPDATE": {"work_item", "question"} | PAIRING,
     },
     "lease_gateway": {
         "SELECT": ALL,

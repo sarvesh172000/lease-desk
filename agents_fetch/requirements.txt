@@ -1,0 +1,6 @@
+# The Fetch.ai agents only. Kept out of the root requirements.txt so the main
+# install stays light; the backend never imports uagents.
+#     python3 -m venv .venv-agents && ./.venv-agents/bin/pip install -r agents_fetch/requirements.txt
+uagents==0.26.1
+uagents-core==0.4.12
+httpx>=0.27
