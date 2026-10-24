@@ -45,8 +45,16 @@ from ..records.ingest import stable_id
 from .deps import get_engine, get_gateway_engine, get_storage
 from .documents import cached_document
 from .items import perform
-from .schemas import (ApproveResult, Entry, Evidence, ExceptionDetail, ExceptionSummary,
-                      Investigation, InvoiceLine, LeaseCitation)
+from .schemas import (
+    ApproveResult,
+    Entry,
+    Evidence,
+    ExceptionDetail,
+    ExceptionSummary,
+    Investigation,
+    InvoiceLine,
+    LeaseCitation,
+)
 
 log = logging.getLogger(__name__)
 
