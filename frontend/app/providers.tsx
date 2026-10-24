@@ -1,6 +1,7 @@
 "use client";
 
 import { ApiError } from "@/lib/api";
+import { useLiveStatus } from "@/lib/live";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
@@ -18,5 +19,16 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       }),
   );
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <LiveStatus />
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+/** Other windows' approvals refetch this one (lib/live.ts); nothing when unconfigured. */
+function LiveStatus() {
+  useLiveStatus();
+  return null;
 }
