@@ -29,6 +29,13 @@ raw AP row. The bridge is the raw row: `landlord_charge.raw_ref -> raw_row.id`,
 and `raw_row.source_id` is `<invoice>-L<n>`. Charges are loaded with that
 source id as their `charge_id`, and findings are mapped back through it.
 
+Policies (work/policies.py): an approved policy that covers a finding decides
+it, and its `policy:<id>@v<version>` goes on the propose event's policy_ref.
+When any policy is approved, `run_month` also enqueues one `policies` job per
+distinct approved set (`run_month:<entity>:<YYYY-MM>:policies@<set>`), which
+re-decides the month's open items under it. With none approved, neither
+happens and a month runs exactly as it did before policies existed.
+
 Work items are written through the work layer (`app.work.transitions`), never
 by hand, so every item starts with a hash-chained event: `create_item` then
 `transition(..., 'propose')`, as `agent:checker`, on the worker's
@@ -44,6 +51,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from ..work.policies import PolicyBook
 from ..work.roles import load_actor
 from ..work.transitions import create_item, transition
 from .queue import enqueue
@@ -97,7 +105,25 @@ def run_month(conn: Connection, entity_id: str, period: Any) -> Dict[str, int]:
     if recheck is not None:
         ids["recheck"] = enqueue(conn, "checking", payload, idempotency_key=recheck,
                                  depends_on=(ids["abstraction"],))
+    policies = _policies_key(conn, entity_id, month)
+    if policies is not None:
+        ids["policies"] = enqueue(conn, "policies", payload, idempotency_key=policies,
+                                  depends_on=tuple(ids[s] for s in ("checking", "recheck")
+                                                   if s in ids))
     return ids
+
+
+def _policies_key(conn: Connection, entity_id: str, month: date) -> Optional[str]:
+    """The key of a `policies` job (work/policies.apply_policies), when any
+    policy is approved: the month's open charge checks are re-decided under
+    the approved set, once per distinct set. With none approved there is no
+    such job, and the month runs exactly as before policies existed."""
+    from ..work.policies import approved_fingerprint
+
+    now = approved_fingerprint(conn)
+    if now == "none":
+        return None
+    return "%s@%s" % (job_key(entity_id, month, "policies"), now)
 
 
 def _recheck_key(conn: Connection, entity_id: str, month: date) -> Optional[str]:
@@ -208,8 +234,9 @@ def record_findings(conn: Connection, findings: Iterable, period: Any,
                               % ", ".join(unknown))
     existing = _existing_items(conn, [ids[f.charge.charge_id] for f in findings])
     scope = _clinic_scope(conn, {f.charge.clinic_id for f in findings})
+    book = PolicyBook(conn)     # approved policies; none approved changes nothing
 
-    created = skipped = 0
+    created = skipped = cited = 0
     for f in findings:
         charge_id = ids[f.charge.charge_id]
         if charge_id in existing:
@@ -221,12 +248,18 @@ def record_findings(conn: Connection, findings: Iterable, period: Any,
             entity_id=clinic.get("entity_id"), region_id=clinic.get("region_id"),
             clinic_id=f.charge.clinic_id, period=month, title=_title(f),
             amount=round(f.billed, 2))
-        transition(conn, actor, item["id"], "propose", reason=f.reason, patch={
-            "proposal": f.proposal, "reason": f.reason,
-            "evidence": evidence(f, ids, (versions or {}).get(f.charge.lease_id))})
+        proposal, reason, ev, ref = book.decide(
+            charge_id=charge_id, period=month, charge_type=f.charge.charge_type,
+            amount=round(f.billed, 2), lease_id=f.charge.lease_id, clinic_id=f.charge.clinic_id,
+            description=f.charge.description, supported=round(f.supported, 2),
+            checker_rule=f.rule, proposal=f.proposal, reason=f.reason,
+            evidence=evidence(f, ids, (versions or {}).get(f.charge.lease_id)))
+        transition(conn, actor, item["id"], "propose", reason=reason, policy_ref=ref,
+                   patch={"proposal": proposal, "reason": reason, "evidence": ev})
         existing.add(charge_id)
         created += 1
-    return {"created": created, "skipped": skipped}
+        cited += ref is not None
+    return {"created": created, "skipped": skipped, "cited": cited}
 
 
 def evidence(finding, ids: Mapping[str, str],

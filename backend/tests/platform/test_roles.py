@@ -24,7 +24,8 @@ SPEC = {
     "lease_agent": {
         "SELECT": RECORDS | GOLDEN | RULEBOOK | WORK | {"account", "period", "audit_event"},
         "INSERT": {"source_document", "raw_row", "sync_cursor", "lease_version", "lease_term",
-                   "work_item", "question", "agent_run", "tool_call", "job", "audit_event"},
+                   "work_item", "question", "policy", "agent_run", "tool_call", "job",
+                   "audit_event"},
         "UPDATE": {"sync_cursor", "work_item", "question", "agent_run", "tool_call", "job"},
     },
     "lease_api": {

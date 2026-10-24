@@ -98,3 +98,16 @@ def test_journal_entry_work_item_key_is_deferrable_for_replay(engines):
             SELECT condeferrable FROM pg_constraint
              WHERE conname = 'journal_entry_work_item_id_fkey'""")).scalar_one()
     assert deferrable
+
+
+def test_policy_status_is_guarded_by_triggers(engines):
+    """Migration 0005: a policy is born 'proposed' and its status follows its
+    POLICY work item; agent:policy exists to propose them."""
+    with engines["owner"].connect() as conn:
+        triggers = set(conn.execute(text("""
+            SELECT tgname FROM pg_trigger WHERE NOT tgisinternal
+               AND tgrelid IN ('policy'::regclass, 'work_item'::regclass)""")).scalars())
+        agent = conn.execute(text(
+            "SELECT role FROM actor WHERE id = 'agent:policy'")).scalar()
+    assert {"policy_insert_proposed", "work_item_policy_status"} <= triggers
+    assert agent == "agent"

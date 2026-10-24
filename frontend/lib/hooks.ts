@@ -10,6 +10,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   approveException,
+  backtestPolicy,
+  decidePolicy,
+  getPolicies,
+  getPolicy,
+  onboardPolicies,
   confirmLeaseVersion,
   getAllowedActions,
   getAudit,
@@ -29,7 +34,7 @@ import {
   subscribeDataSource,
   type DataSource,
 } from "./api";
-import type { ActionResult, ItemAction } from "./types";
+import type { ActionResult, BacktestRun, ItemAction } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -137,5 +142,44 @@ export function usePayAsBilled(exceptionId: string) {
     onSettled: () => {
       for (const k of AFTER_ACTION) void qc.invalidateQueries({ queryKey: [k] });
     },
+  });
+}
+
+/** Every policy with status, version, precedent count and backtest summary. */
+export function usePolicies() {
+  return useQuery({ queryKey: ["policies"], queryFn: getPolicies });
+}
+
+/** One policy: rule, versions, evidence, stored backtest, rejection, citations. */
+export function usePolicy(id: number | null | undefined) {
+  return useQuery({ queryKey: ["policy", id], queryFn: () => getPolicy(id as number), enabled: id != null, retry: false });
+}
+
+/** Run a policy's backtest now; refetches the policy so a refreshed result shows. */
+export function useBacktestPolicy(id: number) {
+  const qc = useQueryClient();
+  return useMutation<BacktestRun, Error, void>({
+    mutationFn: () => backtestPolicy(id),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["policy", id] }),
+  });
+}
+
+/** Approve or reject a policy through its work item. */
+export function useDecidePolicy() {
+  const qc = useQueryClient();
+  return useMutation<{ state: string }, Error, { workItemId: number; action: "approve" | "reject"; reason?: string }>({
+    mutationFn: ({ workItemId, action, reason }) => decidePolicy(workItemId, action, reason),
+    onSettled: () => {
+      for (const k of ["policies", "policy", "audit"]) void qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
+/** Controller: queue onboarding over a year's history. */
+export function useOnboardPolicies() {
+  const qc = useQueryClient();
+  return useMutation<{ job_id: number; entity_id: string; year: number }, Error, { entityId: string; year?: number }>({
+    mutationFn: ({ entityId, year }) => onboardPolicies(entityId, year),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["policies"] }),
   });
 }
