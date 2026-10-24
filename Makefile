@@ -58,3 +58,15 @@ replay:
 
 export-ledger:
 	@echo "export-ledger: the Beancount export lands in A7" && exit 1
+
+# Developer tooling (not part of the frozen list).
+.PHONY: lint ci
+
+RUFF := $(shell command -v ruff 2>/dev/null || echo $(PY) -m ruff)
+
+lint:              ## ruff on the platform scope set in ruff.toml (pip install ruff)
+	$(RUFF) check
+
+ci: lint           ## what CI runs, locally: lint, the suite with database tests required, the eval
+	$(PY) -m pytest -rs -p ci.require_db
+	$(MAKE) eval
