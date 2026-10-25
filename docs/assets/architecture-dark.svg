@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-label="Lease Desk architecture: people use the web app; the API checks roles and enqueues jobs; the worker reads documents with Claude and runs the ASC 842 engine; the gateway alone writes the books in Postgres; SpacetimeDB mirrors the desk live to open tabs.">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#848B96"/></marker>
+    <style>
+      .t{font-family:Inter,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;fill:#EDEFF3}
+      .e{font-family:"JetBrains Mono",SFMono-Regular,Menlo,monospace;font-size:10px;letter-spacing:2px;fill:#848B96}
+      .b{font-family:Inter,Helvetica,Arial,sans-serif;font-size:12.5px;fill:#AEB4BE}
+      .m{font-family:"JetBrains Mono",SFMono-Regular,Menlo,monospace;font-size:11px;fill:#848B96}
+      .l{font-family:"JetBrains Mono",SFMono-Regular,Menlo,monospace;font-size:10.5px;fill:#848B96}
+      .box{fill:#15181D;stroke:#262A31}
+      .tint{fill:#0F2A26;stroke:#1F5F56}
+      .deep{fill:#10302B;stroke:#5EEAD4}
+      .w{fill:#15181D}
+      .ws{fill:#262A31}
+      .ar{fill:none;stroke:#848B96;stroke-width:1.5;marker-end:url(#a)}
+      .dash{stroke-dasharray:4 4}
+    </style>
+  </defs>
+  <rect width="1200" height="820" rx="18" fill="#0A0B0D"/>
+  <rect x="0" y="0" width="1200" height="820" rx="18" fill="none" stroke="#262A31"/>
+
+  <!-- people -->
+  <rect x="330" y="20" width="540" height="40" rx="20" class="tint"/>
+  <text x="600" y="45" text-anchor="middle" class="b"><tspan font-weight="700" fill="#5EEAD4">People</tspan> · Controller · Regional manager · AP clerk · Auditor</text>
+  <path d="M600 60V100" class="ar"/>
+  <!-- the same desk from an ASI:One chat -->
+  <rect x="900" y="20" width="240" height="40" rx="20" fill="none" stroke="#262A31" stroke-dasharray="4 4"/>
+  <text x="1020" y="39" text-anchor="middle" class="m" style="font-size:10.5px">ASI:One chat · Fetch.ai uAgents</text>
+  <text x="1020" y="52" text-anchor="middle" class="m" style="font-size:10.5px">same API, paired as yourself</text>
+
+  <!-- web app -->
+  <rect x="200" y="104" width="800" height="96" rx="10" class="box"/>
+  <text x="224" y="130" class="e">WEB APP · NEXT.JS 15 · VERCEL</text>
+  <text x="224" y="153" class="t">The desk, one screen per decision</text>
+  <text x="224" y="175" class="b">Welcome · Today · Money screen (invoice | lease, both boxed) · Leases · Disputes · Obligations · Audit trail</text>
+  <text x="224" y="192" class="m">formats and asserts what the API says · does no lease accounting of its own</text>
+
+  <!-- web → api, spacetime → web -->
+  <path d="M600 200V260" class="ar"/>
+  <text x="612" y="236" class="l">HTTPS · session cookie · /api/* forwarded</text>
+  <path d="M1000 260V200" class="ar"/>
+  <text x="1012" y="236" class="l">live updates</text>
+  <text x="1012" y="250" class="l">(websocket)</text>
+
+  <!-- api -->
+  <rect x="460" y="260" width="340" height="92" rx="10" class="box"/>
+  <text x="484" y="286" class="e">API · FASTAPI · AZURE</text>
+  <text x="484" y="309" class="t">Role checks on every action</text>
+  <text x="484" y="331" class="b">Items · exceptions · disputes · leases · audit · Why?</text>
+  <text x="484" y="346" class="m">live investigations (SSE) · never the ledger</text>
+
+  <!-- spacetimedb -->
+  <rect x="860" y="260" width="280" height="92" rx="10" class="box"/>
+  <text x="884" y="286" class="e">SPACETIMEDB · LIVE MIRROR</text>
+  <text x="884" y="309" class="t">Other screens update, no refresh</text>
+  <text x="884" y="331" class="b">desk_status · agent_step</text>
+  <text x="884" y="346" class="m">published on every transition</text>
+
+  <path d="M800 296H860" class="ar"/>
+  <text x="806" y="290" class="l">publish</text>
+
+  <!-- api → worker, api → gateway -->
+  <path d="M520 352V384H230V416" class="ar"/>
+  <text x="240" y="378" class="l">enqueue jobs</text>
+  <path d="M630 352V416" class="ar"/>
+  <text x="642" y="390" class="l">after a person approves</text>
+
+  <!-- worker -->
+  <rect x="60" y="416" width="340" height="104" rx="10" class="box"/>
+  <text x="84" y="442" class="e">WORKER · AZURE</text>
+  <text x="84" y="465" class="t">The jobs, one at a time</text>
+  <text x="84" y="487" class="b">ingest · abstraction · checking · obligations</text>
+  <text x="84" y="503" class="b">disputes · policies · reminders</text>
+  <text x="84" y="517" class="m">drafts work · cannot touch the books</text>
+
+  <!-- gateway -->
+  <rect x="460" y="416" width="340" height="104" rx="10" class="deep"/>
+  <text x="484" y="442" class="e" style="fill:#5EEAD4">GATEWAY · THE ONLY WRITER TO THE BOOKS</text>
+  <text x="484" y="465" class="t" style="fill:#EDEFF3">Re-checks the approval, then acts</text>
+  <text x="484" y="487" class="b" style="fill:#C9E6D6">Posts journal entries · writes the golden tables</text>
+  <text x="484" y="503" class="b" style="fill:#C9E6D6">letters and the AP batch go out through the outbox</text>
+  <text x="484" y="517" class="m" style="fill:#5EEAD4">runs inside the API on its own database role</text>
+
+  <path d="M800 470H860" class="ar"/>
+  <text x="806" y="464" class="l">posts</text>
+
+  <!-- postgres -->
+  <rect x="860" y="416" width="280" height="236" rx="10" class="box"/>
+  <text x="884" y="442" class="e">POSTGRES 16 · SYSTEM OF RECORD</text>
+  <text x="884" y="465" class="t">What the company owes, and why</text>
+  <text x="884" y="490" class="b">leases · terms · charges · work items</text>
+  <text x="884" y="508" class="b">journal · outbox · obligations</text>
+  <line x1="884" y1="526" x2="1116" y2="526" stroke="#262A31"/>
+  <text x="884" y="548" class="b"><tspan font-weight="700" fill="#5EEAD4">audit_event</tspan> · SHA-256 chain, append-only</text>
+  <text x="884" y="566" class="b">triggers refuse every rewrite, the owner's too</text>
+  <line x1="884" y1="584" x2="1116" y2="584" stroke="#262A31"/>
+  <text x="884" y="606" class="b">Four database roles, limits are grants:</text>
+  <text x="884" y="624" class="m">agent · gateway · api · reader</text>
+
+  <!-- api → postgres (dashed: reads, writes events and work items under its own role) -->
+  <path d="M800 336H830V440H860" class="ar dash"/>
+
+  <!-- worker → claude, worker → engine -->
+  <path d="M160 520V556" class="ar"/>
+  <path d="M330 520V538H630V556" class="ar"/>
+
+  <!-- claude -->
+  <rect x="60" y="556" width="340" height="104" rx="10" class="tint"/>
+  <text x="84" y="582" class="e">CLAUDE · ANTHROPIC · READS ONLY</text>
+  <text x="84" y="605" class="t">Reads the documents, decides nothing</text>
+  <text x="84" y="627" class="b">Lease PDF → 13 terms, each with its quote and page</text>
+  <text x="84" y="643" class="b">Mailbox → the document that explains a variance</text>
+  <text x="84" y="657" class="m">structured output · fenced · replayable</text>
+
+  <!-- engine -->
+  <rect x="460" y="556" width="340" height="104" rx="10" class="box"/>
+  <text x="484" y="582" class="e">ASC 842 ENGINE · PLAIN PYTHON · NO MODEL</text>
+  <text x="484" y="605" class="t">The accounting, deterministic</text>
+  <text x="484" y="627" class="b">Schedules · remeasurement · catch-up entries</text>
+  <text x="484" y="643" class="b">CAM pools · CPI escalations</text>
+  <text x="484" y="657" class="m">same inputs, same entries, every time</text>
+
+  <!-- inputs -->
+  <rect x="60" y="700" width="1080" height="80" rx="10" fill="#111417" stroke="#262A31"/>
+  <text x="84" y="726" class="e">INPUTS</text>
+  <text x="84" y="749" class="b"><tspan font-weight="700" fill="#5EEAD4">Lease PDFs</tspan> · <tspan font-weight="700" fill="#5EEAD4">landlord invoices</tspan> · <tspan font-weight="700" fill="#5EEAD4">AP and bank exports</tspan> · <tspan font-weight="700" fill="#5EEAD4">mailbox (.eml)</tspan></text>
+  <text x="84" y="768" class="m">a generated company with an answer key (datagen) · three real SEC lease exhibits · 184 BLS CPI observations</text>
+  <path d="M600 700V660" class="ar dash"/>
+  <path d="M230 700V660" class="ar dash"/>
+</svg>
