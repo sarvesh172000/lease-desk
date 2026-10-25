@@ -45,7 +45,7 @@ interface Labels {
   link: RefObject<HTMLDivElement | null>;
 }
 
-type StripSceneProps = StripProps & { crackStartedAt: number | null; labels: Labels };
+type StripSceneProps = Readonly<StripProps & { crackStartedAt: number | null; labels: Labels }>;
 
 function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedAt, labels }: StripSceneProps) {
   const group = useRef<THREE.Group>(null);
@@ -184,7 +184,7 @@ function Clear() {
 const LABEL =
   "pointer-events-none absolute left-0 top-0 z-[5] whitespace-nowrap rounded-xs border border-line bg-surface/95 font-mono text-2xs shadow-raised";
 
-export default function ChainStrip3D(props: StripProps & { crackStartedAt: number | null }) {
+export default function ChainStrip3D(props: Readonly<StripProps & { crackStartedAt: number | null }>) {
   const block = useRef<HTMLDivElement>(null);
   const link = useRef<HTMLDivElement>(null);
   const selIdx = selectedIndex(props.events, props.selectedSeq);
