@@ -20,6 +20,55 @@ Three things shape this:
 - **The demo needs no model key.** The model answers it uses are committed
   (`data/reference/llm_cache`, copied to `/app/reference`).
 
+## On an Azure for Students subscription (what the live deployment needed)
+
+The live deployment (resource group `leasedesk-rg`; API at
+`https://leasedesk-api.thankfulhill-bf35cf6d.northcentralus.azurecontainerapps.io`)
+ran on *Azure for Students*, which differs from the steps below in four places:
+
+1. **Allowed regions** are set by policy (`az policy assignment list`): here
+   westus2, canadacentral, norwayeast, northcentralus, francecentral. And
+   **Postgres flexible server is not offered in westus2** to this subscription
+   (`az postgres flexible-server list-skus -l <region>` is empty), so the
+   database, the environment and the apps are in **northcentralus**. The
+   registry can stay anywhere.
+2. **ACR Tasks are not allowed** (`az acr build` → `TasksOperationsNotAllowed`).
+   Build locally for the platform Container Apps runs, and push:
+
+   ```bash
+   az acr login -n $ACR
+   docker buildx build --platform linux/amd64 --build-arg BAKE_DEMO_DATA=1 -f backend/Dockerfile \
+     -t $ACR.azurecr.io/leasedesk-backend:1 --push .
+   docker buildx build --platform linux/amd64 -f deploy/Dockerfile.agents \
+     -t $ACR.azurecr.io/leasedesk-agents:1 --push .
+   ```
+3. **The environment is an "express" environment, which has no Jobs.** Run
+   `deploy/setup-demo.sh` from a laptop instead, in the same image, through a
+   firewall rule for the laptop's address that is removed afterwards:
+
+   ```bash
+   IP=$(curl -s https://api.ipify.org)
+   az postgres flexible-server firewall-rule create -g $RG --server-name $PG --name setup-from-laptop \
+     --start-ip-address $IP --end-ip-address $IP
+   docker run --rm -e LEASEDESK_DB_HOST=$PG.postgres.database.azure.com -e LEASEDESK_DB_PORT=5432 \
+     -e LEASEDESK_DB_NAME=leasedesk -e LEASEDESK_DB_OWNER=leasedesk -e LEASEDESK_DB_OWNER_PASSWORD="$PGPASS" \
+     -e LEASEDESK_LEASE_AGENT_PASSWORD="$PW_AGENT" -e LEASEDESK_LEASE_GATEWAY_PASSWORD="$PW_GATEWAY" \
+     -e LEASEDESK_LEASE_API_PASSWORD="$PW_API" -e LEASEDESK_LEASE_READER_PASSWORD="$PW_READER" \
+     -e PGSSLMODE=require -e LEASEDESK_DATA_DIR=/app/data <the backend image> sh /app/deploy/setup-demo.sh
+   az postgres flexible-server firewall-rule delete -g $RG --server-name $PG --name setup-from-laptop --yes
+   ```
+   (In this CLI version the firewall-rule commands take `--server-name` for
+   the server and `--name` for the rule.)
+4. **`az containerapp create --args` cannot take an argument that starts with
+   `-`** (`python -m app.jobs.worker` → "unrecognized arguments"). The worker
+   and the agents were created from a spec instead
+   (`az containerapp create -g $RG -n leasedesk-worker --yaml spec.yaml`), with
+   `command: ["python"]`, `args: ["-m", "app.jobs.worker"]`, the secrets and the
+   registry in it. Keep that file out of git (it holds the secrets) and delete
+   it after use. `az containerapp logs show` does not work on express
+   environments either; `az containerapp replica list` shows each replica's
+   state and restart count.
+
 ## 0. Tools and names
 
 ```bash
@@ -133,7 +182,7 @@ the same seeds give the same addresses and the same Agentverse mailboxes.
    | Name | Value |
    |---|---|
    | `LEASEDESK_API_ORIGIN` | `$API` (the proxy target; server side only) |
-   | `NEXT_PUBLIC_API_URL` | the Vercel URL itself, e.g. `https://lease-desk.vercel.app` |
+   | `NEXT_PUBLIC_API_URL` | `/` (relative: every call goes to this site's `/api`, which the proxy forwards) |
    | `NEXT_PUBLIC_SPACETIME_URI` | `wss://maincloud.spacetimedb.com` (optional) |
    | `NEXT_PUBLIC_SPACETIME_DB` | `leasedesk-live` (optional) |
 

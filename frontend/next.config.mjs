@@ -4,7 +4,8 @@ const nextConfig = {
   // Hosted (docs/DEPLOY.md): the API lives on another site, and its session
   // cookie is SameSite=Lax, which a browser never sends on a cross-site fetch.
   // So /api is proxied through this app: the browser only ever talks to this
-  // origin (set NEXT_PUBLIC_API_URL to it) and the cookie is first-party.
+  // origin (set NEXT_PUBLIC_API_URL to `/`, so calls are relative) and the
+  // cookie is first-party.
   // Unset locally, where the app calls the API directly.
   async rewrites() {
     const api = (process.env.LEASEDESK_API_ORIGIN || "").replace(/\/$/, "");
