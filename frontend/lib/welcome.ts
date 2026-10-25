@@ -47,3 +47,19 @@ export function amendmentCaseId(exceptions: ExceptionSummary[] | undefined): str
   const hit = exceptions?.find((e) => e.charge_type === "base_rent" && e.delta < 0 && e.period.startsWith("2026-07"));
   return hit?.exception_id ?? null;
 }
+
+/** The welcome page's document fan, as beat 1 scrolls through: which page is forward. */
+export type FanState = "rest" | "invoice" | "email" | "figure";
+
+/**
+ * Scroll progress through beat 1 → the fan's state. Four discrete states, so a
+ * page comes forward, holds, and hands over; nothing is interpolated on the way.
+ * With reduced motion the story is told in its final frame.
+ */
+export function fanState(progress: number, reduce = false): FanState {
+  if (reduce) return "figure";
+  if (progress < 0.12) return "rest";
+  if (progress < 0.42) return "invoice";
+  if (progress < 0.7) return "email";
+  return "figure";
+}
