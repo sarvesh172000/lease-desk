@@ -128,7 +128,8 @@ export function useInvestigationRun(exceptionId: string): InvestigationRun {
 
 /** The phase the screen shows: a live run wins; otherwise what is on record. */
 export function phaseOf(run: InvestigationRun, investigated: boolean): Phase {
-  if (run.state === "idle") return investigated ? "settled" : "ready";
+  // a run that stopped (refused, or the stream broke) leaves what is on record, not a mailbox still searching
+  if (run.state === "idle" || run.state === "error") return investigated ? "settled" : "ready";
   return run.stage ?? "searching";
 }
 

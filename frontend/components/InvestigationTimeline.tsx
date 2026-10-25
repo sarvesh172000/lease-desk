@@ -98,7 +98,15 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
  * sent, as it arrives; an investigation already on record shows its result at
  * once, with Replay to watch it again.
  */
-export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun; recorded?: Investigation | null }) {
+/** The server's 403 in words: who may run it, not a number. */
+export function runErrorText(error: string | null | undefined): string {
+  if (!error) return "Stopped.";
+  if (/^403\b|\b403\b/.test(error)) return "Your role cannot run the investigation; the controller or the regional manager can.";
+  if (/^401\b/.test(error)) return "Sign in again to run the investigation.";
+  return error;
+}
+
+export function InvestigationTimeline({ run, recorded, canRun = true }: { run: InvestigationRun; recorded?: Investigation | null; canRun?: boolean }) {
   const reduce = useReducedMotion();
   const settled = run.state === "idle" && !!recorded;
   const finished = !!run.get("complete");
@@ -175,21 +183,23 @@ export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun
 
       {run.state === "error" ? (
         <div role="alert" className="mt-3 flex items-start justify-between gap-3 rounded-sm border border-bad-line bg-bad-soft px-3 py-2 text-sm text-bad">
-          <span>{run.error}</span>
-          <Button size="sm" variant="secondary" onClick={run.start}>
-            Retry
-          </Button>
+          <span>{runErrorText(run.error)}</span>
+          {canRun && !/403/.test(run.error ?? "") ? (
+            <Button size="sm" variant="secondary" onClick={run.start}>
+              Retry
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <span className="text-xs text-ink-muted" role="status">
-          {run.state === "idle" && (recorded ? "On record. Replay to watch it again." : "Not run yet.")}
+          {run.state === "idle" && (recorded ? (canRun ? "On record. Replay to watch it again." : "On record.") : canRun ? "Not run yet." : "Not run yet; the controller or the regional manager runs it.")}
           {run.state === "running" && "Streaming from the investigation…"}
           {run.state === "done" && `${run.events.length} event${run.events.length === 1 ? "" : "s"} received.`}
           {run.state === "error" && "Stopped."}
         </span>
-        {run.state !== "error" ? (
+        {run.state !== "error" && canRun ? (
           <Button
             size="sm"
             variant={run.state === "idle" && !recorded ? "primary" : "secondary"}
