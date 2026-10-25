@@ -156,6 +156,18 @@ _ACTION_RE = re.compile(r"^(%s)%s%s(?:[ \t]*[:,\-]?[ \t]*(.*))?$"
                         % ("|".join(ACTIONS), _WS, _ITEM), re.IGNORECASE | re.DOTALL)
 _PAIR_RE = re.compile(r"^pair(?:%s(?:with|code)?)?[ \t]*([A-Za-z0-9][A-Za-z0-9 \-]{6,12})$"
                       % _WS, re.IGNORECASE)
+# ASI:One may relay "pair ES9Q-CSKA" reworded ("Pair ES9Q With CSKA", "please
+# pair with code ES9Q-CSKA"). Once these words are set aside, what is left must
+# be the code itself: one 8-character token or two 4-character halves. Nothing
+# else is guessed, and the API still decides whether the code is valid.
+_PAIR_WORD_RE = re.compile(r"(?<![a-z])pair(?:ing)?(?![a-z])", re.IGNORECASE)
+_PAIR_FILLER = frozenset("""
+    pair pairing please with code my the a this chat to and using use is me link connect account
+    lease desk northbay asi one asi1 for here now
+""".split())
+
+# Where the one-time code is in the web app.
+CONNECT_CHAT = "your name (top right) → *Connect chat*"
 _REVIEW_RE = re.compile(r"^(?:review|show|open)%s%s[ \t]*[.?!]?$" % (_WS, _ITEM), re.IGNORECASE)
 # "investigate 42", "look into exc_42", "why is 42 off?": the item is all it takes.
 _INVESTIGATE_RE = re.compile(
@@ -221,6 +233,17 @@ def _lease_ref(text: str) -> Optional[str]:
     return None
 
 
+def _loose_pair_code(raw: str) -> Optional[str]:
+    """The code in a reworded pairing message, as XXXX-XXXX, or None."""
+    if not _PAIR_WORD_RE.search(raw):
+        return None
+    tokens = [t for t in re.split(r"[^A-Za-z0-9]+", raw) if t and t.lower() not in _PAIR_FILLER]
+    if [len(t) for t in tokens] not in ([8], [4, 4]):
+        return None
+    code = "".join(tokens).upper()
+    return "%s-%s" % (code[:4], code[4:])
+
+
 def parse(text: Optional[str]) -> Command:
     """One chat message -> one Command. Never raises."""
     raw = (text or "").strip()
@@ -244,6 +267,9 @@ def parse(text: Optional[str]) -> Command:
     m = _PAIR_RE.match(raw)
     if m:
         return Command("pair", text=m.group(1).strip())
+    code = _loose_pair_code(raw)
+    if code:
+        return Command("pair", text=code)
     if first.startswith("pair"):
         return Command("unknown", problem="send exactly: pair XXXX-XXXX")
 
@@ -314,9 +340,9 @@ def render(command: Command) -> Optional[str]:
     return None
 
 
-HELP = """**Northbay Lease Desk** — lease accounting questions and approvals, under your own Lease Desk permissions.
+HELP = f"""**Northbay Lease Desk** — lease accounting questions and approvals, under your own Lease Desk permissions.
 
-First pair this chat with your account: open Lease Desk → Today → *Pair ASI:One*, then send
+First pair this chat with your account: in Lease Desk open {CONNECT_CHAT}, then send
 `pair XXXX-XXXX` (the code works once, for ten minutes).
 
 Then:

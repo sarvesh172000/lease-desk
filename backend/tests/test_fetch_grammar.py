@@ -64,6 +64,31 @@ def test_pair(text, code):
     assert (c.name, c.text) == ("pair", code)
 
 
+@pytest.mark.parametrize("text", ["Pair ES9Q With CSKA", "please pair with code ES9Q-CSKA",
+                                  "pair this chat: ES9Q CSKA", "Pair ES9QCSKA.", "pairing code es9q-cska"])
+def test_pair_survives_asi_one_rewording(text):
+    """ASI:One may relay 'pair ES9Q-CSKA' reworded; the code is still found."""
+    c = parse(text)
+    assert (c.name, c.text.replace(" ", "-").upper()) == ("pair", "ES9Q-CSKA")
+
+
+@pytest.mark.parametrize("text", ["pair me please", "pair 42 with 7", "pair with my lease desk",
+                                  "pair ES9Q with CSKA and AB12", "review 18", "repair the roof ES9QCSKA"])
+def test_the_reworded_reading_never_guesses_a_code(text):
+    """Only one 8-character token or two 4-character halves count as a code."""
+    from agents_fetch.grammar import _loose_pair_code
+    assert _loose_pair_code(text) is None
+
+
+def test_unpair_is_not_read_as_pairing():
+    assert parse("unpair").name == "unpair"
+
+
+def test_help_names_the_button_the_app_has():
+    from agents_fetch.grammar import CONNECT_CHAT, HELP
+    assert "Connect chat" in CONNECT_CHAT and CONNECT_CHAT in HELP and "Pair ASI:One" not in HELP
+
+
 @pytest.mark.parametrize("text", ["what needs me this week?", "What needs me", "inbox", "todo",
                                   "what do I need to do this week?"])
 def test_inbox(text):
