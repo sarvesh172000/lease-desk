@@ -18,6 +18,7 @@ const config: Config = {
         surface: rgb("surface"),
         raised: rgb("raised"),
         sunken: rgb("sunken"),
+        rail: rgb("rail"),
         line: { DEFAULT: rgb("line"), strong: rgb("line-strong") },
         ink: {
           DEFAULT: rgb("ink"),

@@ -66,7 +66,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_280px] gap-6">
         <div className="min-w-0 space-y-6">
           <Card>
             <CardHeader
@@ -123,9 +123,9 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="px-2 py-3 whitespace-nowrap">{period(e.period)}</td>
-                      <td className="num px-2 py-3 text-right text-ink-soft">{money(e.expected)}</td>
-                      <td className="num px-2 py-3 text-right">{money(e.actual)}</td>
-                      <td className={cn("num px-2 py-3 text-right font-semibold", e.delta === 0 ? "text-ink" : "text-bad")}>{signedMoney(e.delta)}</td>
+                      <td className="num whitespace-nowrap px-2 py-3 text-right text-ink-soft">{money(e.expected)}</td>
+                      <td className="num whitespace-nowrap px-2 py-3 text-right">{money(e.actual)}</td>
+                      <td className={cn("num whitespace-nowrap px-2 py-3 text-right font-semibold", e.delta === 0 ? "text-ink" : "text-bad")}>{signedMoney(e.delta)}</td>
                       <td className="num px-2 py-3 pr-5 text-right text-ink-soft">{pct(e.confidence)}</td>
                     </tr>
                   ))}

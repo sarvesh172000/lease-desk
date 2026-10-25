@@ -3,10 +3,11 @@
  *
  * Data source:
  *  - NEXT_PUBLIC_USE_FIXTURES=1  → always fixtures.
- *  - otherwise the API at NEXT_PUBLIC_API_URL (default http://localhost:8000);
- *    if it cannot be reached at all (network error / timeout) the session
- *    switches to fixtures and stays there. HTTP errors are NOT masked: a 403
- *    or 500 from a live API surfaces as an error state.
+ *  - otherwise the API at NEXT_PUBLIC_API_URL (default http://localhost:8000),
+ *    and only the API. If it cannot be reached (network error / timeout) the
+ *    call throws ApiUnreachableError and getApiHealth() reports it, so the
+ *    shell can say so; fixtures are never a silent fallback. HTTP errors are
+ *    not masked either: a 403 or 500 surfaces as an error state.
  */
 
 import type {
@@ -62,25 +63,41 @@ const FORCE_FIXTURES = process.env.NEXT_PUBLIC_USE_FIXTURES === "1";
 const TIMEOUT_MS = 4000;
 
 // ---------------------------------------------------------------------------
-// Data-source state (observable so the header can show a "Fixtures" badge)
+// Data-source state (fixed for the session: fixtures only when asked for)
 // ---------------------------------------------------------------------------
 
 export type DataSource = "api" | "fixtures";
-let source: DataSource = FORCE_FIXTURES ? "fixtures" : "api";
-const listeners = new Set<() => void>();
+const source: DataSource = FORCE_FIXTURES ? "fixtures" : "api";
 
 export function getDataSource(): DataSource {
   return source;
 }
+/** Kept for useDataSource(); the source never changes after load. */
 export function subscribeDataSource(fn: () => void): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
+  void fn;
+  return () => undefined;
 }
-function switchToFixtures(reason: string) {
-  if (source === "fixtures") return;
-  source = "fixtures";
-  if (typeof console !== "undefined") console.warn(`[leasedesk] API unreachable (${reason}); using fixtures`);
-  listeners.forEach((fn) => fn());
+
+// ---------------------------------------------------------------------------
+// API health (observable so the shell can show an "API unreachable" banner)
+// ---------------------------------------------------------------------------
+
+export type ApiHealth = { reachable: true } | { reachable: false; error: string };
+const REACHABLE: ApiHealth = { reachable: true };
+let health: ApiHealth = REACHABLE;
+const healthListeners = new Set<() => void>();
+
+export function getApiHealth(): ApiHealth {
+  return health;
+}
+export function subscribeApiHealth(fn: () => void): () => void {
+  healthListeners.add(fn);
+  return () => healthListeners.delete(fn);
+}
+function setHealth(next: ApiHealth) {
+  if (next.reachable === health.reachable && (next.reachable || (!health.reachable && next.error === health.error))) return;
+  health = next;
+  healthListeners.forEach((fn) => fn());
 }
 
 export class ApiError extends Error {
@@ -93,7 +110,19 @@ export class ApiError extends Error {
   }
 }
 
-class Unreachable extends Error {}
+/** The API could not be reached at all (network error or timeout); no HTTP status. */
+export class ApiUnreachableError extends Error {
+  constructor(message: string) {
+    super(`API unreachable at ${API_URL}: ${message}`);
+    this.name = "ApiUnreachableError";
+  }
+}
+
+function unreachable(e: unknown): ApiUnreachableError {
+  const err = new ApiUnreachableError(e instanceof Error ? e.message : String(e));
+  setHealth({ reachable: false, error: err.message });
+  return err;
+}
 
 /** A live API answered 401 on a data call: the session is gone, so sign in again. */
 function redirectToLogin() {
@@ -132,10 +161,11 @@ async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
       signal: init.signal ?? ctrl.signal,
     });
   } catch (e) {
-    throw new Unreachable(e instanceof Error ? e.message : String(e));
+    throw unreachable(e);
   } finally {
     clearTimeout(timer);
   }
+  setHealth(REACHABLE);
   if (res.status === 401 && !path.startsWith("/api/auth/")) redirectToLogin();
   if (!res.ok) {
     let detail = res.statusText;
@@ -151,18 +181,9 @@ async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Call the API, or the fixture implementation when in / falling back to fixtures mode. */
+/** Call the API, or the fixture implementation in fixtures mode. Never one for the other. */
 async function call<T>(live: () => Promise<T>, fixture: () => T | Promise<T>): Promise<T> {
-  if (source === "fixtures") return fixture();
-  try {
-    return await live();
-  } catch (e) {
-    if (e instanceof Unreachable) {
-      switchToFixtures(e.message);
-      return fixture();
-    }
-    throw e;
-  }
+  return source === "fixtures" ? fixture() : live();
 }
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -438,9 +459,9 @@ export async function investigate(
     });
   } catch (e) {
     if (signal?.aborted) return;
-    switchToFixtures(e instanceof Error ? e.message : String(e));
-    return replay();
+    throw unreachable(e);
   }
+  setHealth(REACHABLE);
   if (!res.ok || !res.body) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -815,12 +836,18 @@ export async function requestEvidencePack(
   subject: EvidencePackSubject,
 ): Promise<{ pdf: Blob; chainVerified: boolean | null; brokenSeq: number | null }> {
   if (source === "fixtures") throw new ApiError(501, "501 evidence packs need the live API");
-  const res = await fetch(`${API_URL}/api/evidence-packs`, {
-    method: "POST",
-    credentials: "include",
-    headers: { Accept: "application/pdf", "Content-Type": "application/json" },
-    body: JSON.stringify({ subject }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/evidence-packs`, {
+      method: "POST",
+      credentials: "include",
+      headers: { Accept: "application/pdf", "Content-Type": "application/json" },
+      body: JSON.stringify({ subject }),
+    });
+  } catch (e) {
+    throw unreachable(e);
+  }
+  setHealth(REACHABLE);
   if (res.status === 401) redirectToLogin();
   if (!res.ok) {
     let detail = res.statusText;
