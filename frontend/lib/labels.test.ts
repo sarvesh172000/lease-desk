@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionLabel, actorKind, attemptLabel, chargeLabel, policyTitle, disputeStatusLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
+import { actionLabel, actorKind, attemptLabel, chargeLabel, checkerRuleLabel, landlordName, landlordNamesFromDescription, policyTitle, disputeStatusLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
 
 describe("labels", () => {
   it("names charge types in words", () => {
@@ -73,5 +73,18 @@ describe("labels", () => {
   it("names dispute statuses", () => {
     expect(disputeStatusLabel("partially_credited")).toBe("Partly credited");
     expect(disputeStatusLabel("drafted")).toBe("Drafted");
+  });
+
+  it("reads landlord names from what the API said, never from a built-in list", () => {
+    expect(landlordNamesFromDescription("LL-PACIFIC", "Pay base rent from Pacific Crest Properties LLC as billed when it equals what was paid the month before.")).toEqual({ "LL-PACIFIC": "Pacific Crest Properties LLC" });
+    expect(landlordNamesFromDescription("LL-SERRA", "Pay operating expense estimate from Serramonte Retail Partners LLC as billed.")).toEqual({ "LL-SERRA": "Serramonte Retail Partners LLC" });
+    expect(landlordNamesFromDescription("LL-X", null)).toEqual({});
+    expect(landlordName("LL-PACIFIC", { "LL-PACIFIC": "Pacific Crest Properties LLC" })).toBe("Pacific Crest Properties LLC");
+    expect(landlordName("LL-UNKNOWN", {})).toBe("LL-UNKNOWN");
+  });
+
+  it("phrases the checker's rules", () => {
+    expect(checkerRuleLabel("amount")).toBe("the amount against the schedule");
+    expect(checkerRuleLabel("premises")).toBe("the premises the lease demises");
   });
 });

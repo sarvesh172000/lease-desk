@@ -6,8 +6,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
 import { ApiError, exceptionIdFor } from "@/lib/api";
 import { day, money, period, timestamp } from "@/lib/format";
-import { useBacktestPolicy, useDecidePolicy, useMe, usePolicy } from "@/lib/hooks";
-import { actionLabel, chargeLabel, policyActionLabel, policyStatusLabel, policyTitle } from "@/lib/labels";
+import { useBacktestPolicy, useDecidePolicy, useDisputes, useMe, usePolicy } from "@/lib/hooks";
+import { actionLabel, chargeLabel, landlordNamesFromDescription, policyActionLabel, policyStatusLabel, policyTitle } from "@/lib/labels";
 import { ruleInWords } from "@/components/policies/words";
 import type { Backtest, PolicyDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,10 @@ function Back() {
 function Policy({ d }: { d: PolicyDetail }) {
   const p = d.policy;
   const me = useMe();
+  // landlord names the API has given us: disputes carry them; the policy's own description names its landlord
+  const disputes = useDisputes();
+  const names: Record<string, string> = { ...landlordNamesFromDescription(p.scope.landlord_id, p.description) };
+  for (const x of disputes.data?.disputes ?? []) names[x.landlord_id] = x.landlord_name;
   const backtest = useBacktestPolicy(p.id);
   const decide = useDecidePolicy();
   const reduce = useReducedMotion();
@@ -114,7 +118,7 @@ function Policy({ d }: { d: PolicyDetail }) {
             <CardHeader eyebrow="The rule" title="In plain words" />
             <CardBody>
               <p className="text-[1.02rem] leading-relaxed text-ink" data-testid="rule-words">
-                {ruleInWords(d.rule).join(" ")}
+                {ruleInWords(d.rule, names).join(" ")}
               </p>
               {p.description ? <p className="mt-3 text-sm text-ink-soft">{p.description}</p> : null}
               <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-3 text-sm">
@@ -329,7 +333,7 @@ function Policy({ d }: { d: PolicyDetail }) {
           decide.mutate({ workItemId: p.work_item_id, action: confirming, reason: reason.trim() || undefined }, { onSettled: () => setConfirming(null) });
         }}
       >
-        <p>{confirming === "approve" ? `From now on, ${ruleInWords(d.rule).join(" ").replace(/^When/, "when")}` : "The rule is rejected and never applied."}</p>
+        <p>{confirming === "approve" ? `From now on, ${ruleInWords(d.rule, names).join(" ").replace(/^When/, "when")}` : "The rule is rejected and never applied."}</p>
         <label htmlFor="policy-reason" className="mt-3 block text-sm font-medium text-ink">
           Reason {confirming === "reject" ? <span className="text-ink-muted">(required)</span> : <span className="text-ink-muted">(optional)</span>}
         </label>

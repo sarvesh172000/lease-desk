@@ -1,0 +1,56 @@
+{
+  "eval": {
+    "measured_at": "2026-10-25T03:25:30+00:00",
+    "by": "make eval",
+    "seed": 20261023,
+    "passed": true,
+    "charges_checked": 12,
+    "held": 5,
+    "planted": 5,
+    "caught": 5,
+    "missed": 0,
+    "false_holds": 0,
+    "dollars_flagged": 25736.36,
+    "dollars_expected": 25736.36,
+    "citations_correct": 5,
+    "sources_searched": 10,
+    "sources_refused": 3,
+    "confidence": 1,
+    "entries_balance": true,
+    "never_posts_alone": true,
+    "held_out_clinics": 18
+  },
+  "limits": {
+    "measured_at": "2026-10-25T03:50:08.105Z",
+    "by": "make prove-limits",
+    "refusals": [
+      {
+        "seq": 270,
+        "actor_id": "agent:checker",
+        "action": "approve",
+        "refused_by": "can()",
+        "reason": "role agent may not approve a LIMITS_DEMO item"
+      },
+      {
+        "seq": 276,
+        "actor_id": "PER-RM-BAY",
+        "action": "approve",
+        "refused_by": "can()",
+        "reason": "separation of duties: PER-RM-BAY answered a question on this item"
+      },
+      {
+        "seq": 278,
+        "actor_id": "agent:checker",
+        "action": "post",
+        "refused_by": "Postgres",
+        "reason": "database refused: permission denied for table journal_entry"
+      }
+    ],
+    "chain_verified": true
+  },
+  "tests": {
+    "counted_at": "2026-10-25T03:50:08.106Z",
+    "backend": 1662,
+    "frontend": 123
+  }
+}
