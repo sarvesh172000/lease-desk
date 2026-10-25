@@ -316,7 +316,7 @@ def render(command: Command) -> Optional[str]:
 
 HELP = """**Northbay Lease Desk** — lease accounting questions and approvals, under your own Lease Desk permissions.
 
-First pair this chat with your account: open Lease Desk → Today → *Pair ASI:One*, then send
+First pair this chat with your account: in Lease Desk open your name (top right) → *Connect chat*, then send
 `pair XXXX-XXXX` (the code works once, for ten minutes).
 
 Then:

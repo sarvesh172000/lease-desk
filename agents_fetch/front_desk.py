@@ -51,9 +51,9 @@ DESCRIPTION = ("Lease accounting for Northbay PT inside ASI:One: what needs you 
                "your own Lease Desk permissions. Pair first with a one-time code from the web app.")
 
 NOT_PAIRED = ("This chat isn't paired with a Lease Desk account yet, so I can't show or change "
-              "anything. Open Lease Desk → Today → *Pair ASI:One* and send `pair XXXX-XXXX` here.")
+              "anything. In Lease Desk, open your name (top right) → *Connect chat* and send `pair XXXX-XXXX` here.")
 BAD_CODE = ("That code didn't work: it may be mistyped, already used, or older than ten minutes. "
-            "Get a fresh one from Lease Desk → Today → *Pair ASI:One*.")
+            "Get a fresh one in Lease Desk: your name (top right) → *Connect chat*.")
 
 FEED_NAME = "front_desk"
 SPECIALISTS = (APPROVALS, RULEBOOK, INVESTIGATION)
