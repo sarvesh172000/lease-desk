@@ -16,14 +16,17 @@ import {
   getObligations,
   recordDisputeReply,
   releaseBatch,
+  answerQuestion,
   approveException,
   askWhy,
   backtestPolicy,
   decidePolicy,
   getPolicies,
+  getPairings,
   getPolicy,
   onboardPolicies,
   confirmLeaseVersion,
+  createPairingCode,
   getAllowedActions,
   getApiHealth,
   getAudit,
@@ -47,6 +50,7 @@ import {
   performAction,
   requestEvidencePack,
   resetDemo,
+  revokePairing,
   subscribeApiHealth,
   subscribeDataSource,
   type ApiHealth,
@@ -54,7 +58,7 @@ import {
 } from "./api";
 import type {
   DisputeDetail,
-  DisputeReply, ActionResult, BatchRelease, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, WhyAnswer } from "./types";
+  DisputeReply, ActionResult, BatchRelease, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, PairingCode, WhyAnswer } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -237,6 +241,17 @@ export function useItemSources(itemOrExceptionId?: number | string | null) {
   });
 }
 
+/** Answer a question on an item; the questions, the item and the audit trail refetch. */
+export function useAnswerQuestion() {
+  const qc = useQueryClient();
+  return useMutation<ActionResult, Error, { itemId: number | string; answer: string }>({
+    mutationFn: ({ itemId, answer }) => answerQuestion(itemId, answer),
+    onSettled: () => {
+      for (const k of ["questions", "exception", "exceptions", "item-sources", "audit", "month-summary"]) void qc.invalidateQueries({ queryKey: [k] });
+    },
+  });
+}
+
 /** Open questions waiting on me (or, mine=false, everything in my scope). */
 export function useQuestions(mine = true) {
   return useQuery({ queryKey: ["questions", mine], queryFn: () => getQuestions(mine) });
@@ -362,5 +377,28 @@ export function useEvidencePack() {
       }
       return { filename, bytes: pdf.size, chainVerified, brokenSeq };
     },
+  });
+}
+
+/** Mint a one-time code for pairing an ASI:One chat (POST /api/pairing/codes). */
+export function usePairingCode() {
+  const qc = useQueryClient();
+  return useMutation<PairingCode, Error, void>({
+    mutationFn: () => createPairingCode(),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["pairings"] }),
+  });
+}
+
+/** The signed-in person's live chat pairings. */
+export function usePairings() {
+  return useQuery({ queryKey: ["pairings"], queryFn: getPairings, retry: false });
+}
+
+/** Revoke one pairing; the list refetches. */
+export function useRevokePairing() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, number>({
+    mutationFn: (id) => revokePairing(id),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["pairings"] }),
   });
 }

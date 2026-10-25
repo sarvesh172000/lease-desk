@@ -8,6 +8,8 @@ import type { Actor } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { CommandPalette, openCommandPalette } from "@/components/ui/CommandPalette";
+import { ConnectChatDialog } from "@/components/shell/ConnectChat";
+import { DemoResetDialog } from "@/components/shell/DemoReset";
 import { ThemeToggle } from "@/components/theme";
 import { Tooltip } from "@/components/ui/Tooltip";
 import * as Menu from "@radix-ui/react-dropdown-menu";
@@ -24,8 +26,10 @@ import {
   Link2,
   LogOut,
   MailWarning,
+  MessageCircle,
   MessageSquareText,
   RefreshCw,
+  RotateCcw,
   Search,
   TriangleAlert,
   WifiOff,
@@ -417,10 +421,13 @@ function RoleSwitcher() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   if (!me.data) return null;
   const current = me.data;
   const people = (actors.data ?? []).filter(isPerson);
   const demo = people.length > 0;
+  const canReset = demo && current.role === "controller";
 
   const become = async (id: string) => {
     if (id === current.id) return;
@@ -488,12 +495,25 @@ function RoleSwitcher() {
               <Menu.Separator className="my-1 h-px bg-line" />
             </>
           ) : null}
+          <Menu.Item className={MENU_ITEM} onSelect={() => setChatOpen(true)} data-testid="menu-connect-chat">
+            <MessageCircle aria-hidden className="h-4 w-4 text-ink-muted" />
+            Connect chat
+          </Menu.Item>
+          {canReset ? (
+            <Menu.Item className={MENU_ITEM} onSelect={() => setResetOpen(true)} data-testid="menu-demo-reset">
+              <RotateCcw aria-hidden className="h-4 w-4 text-esc" />
+              Reset demo
+            </Menu.Item>
+          ) : null}
+          <Menu.Separator className="my-1 h-px bg-line" />
           <Menu.Item className={MENU_ITEM} onSelect={() => void signOut()}>
             <LogOut aria-hidden className="h-4 w-4 text-ink-muted" />
             Sign out
           </Menu.Item>
         </Menu.Content>
       </Menu.Portal>
+      <ConnectChatDialog open={chatOpen} onOpenChange={setChatOpen} />
+      {canReset ? <DemoResetDialog open={resetOpen} onOpenChange={setResetOpen} /> : null}
     </Menu.Root>
   );
 }

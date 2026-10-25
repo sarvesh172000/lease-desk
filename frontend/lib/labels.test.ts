@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionLabel, actorKind, attemptLabel, chargeLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
+import { actionLabel, actorKind, attemptLabel, chargeLabel, policyTitle, disputeStatusLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
 
 describe("labels", () => {
   it("names charge types in words", () => {
@@ -61,5 +61,17 @@ describe("labels", () => {
     expect(actorKind("agent:checker")).toBe("agent");
     expect(actorKind("system:gateway")).toBe("system");
     expect(actorKind("engine")).toBe("system");
+  });
+
+  it("titles a policy by its description, falling back to its name read as words", () => {
+    expect(policyTitle({ name: "onboarding:LL-PACIFIC:base_rent:unchanged", description: "Pay base rent as billed when it matches the prior month" })).toBe("Pay base rent as billed when it matches the prior month");
+    expect(policyTitle({ name: "onboarding:LL-PACIFIC:base_rent:unchanged", description: null })).toBe("Base rent · unchanged · LL-PACIFIC");
+    expect(policyTitle({ name: "onboarding:LL-PACIFIC:cam_estimate:matches_lease", description: "  " })).toBe("CAM estimate · matches lease · LL-PACIFIC");
+    expect(policyTitle({ name: "manual:late_fee_waiver", description: undefined })).toBe("Manual · late fee waiver");
+  });
+
+  it("names dispute statuses", () => {
+    expect(disputeStatusLabel("partially_credited")).toBe("Partly credited");
+    expect(disputeStatusLabel("drafted")).toBe("Drafted");
   });
 });

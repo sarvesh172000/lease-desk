@@ -10,6 +10,7 @@ import { extractorLabel, termLabel } from "@/lib/labels";
 import type { LeaseTerm, LeaseVersion } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Check, Circle, Sparkles, Wrench } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const MONEY_FIELDS = new Set(["base_rent_monthly", "security_deposit", "cam_estimate_psf_annual", "cam_cap", "late_fee"]);
@@ -69,13 +70,23 @@ export function TermsPanel({ leaseId }: { leaseId: string }) {
   const versions = useLeaseVersions(leaseId);
   const confirm = useConfirmLeaseVersion(leaseId);
   const me = useMe();
+  const params = useSearchParams();
   const list = [...(versions.data ?? [])].sort((a, b) => a.version - b.version);
   const [versionNo, setVersionNo] = useState<number | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // ?term=<field> (an obligation's citation) opens on that clause
+  const [selected, setSelected] = useState<string | null>(params?.get("term") ?? null);
   // the newest version opens; a term keeps its selection across versions
   useEffect(() => {
     if (list.length && (versionNo == null || !list.some((v) => v.version === versionNo))) setVersionNo(list[list.length - 1].version);
   }, [list, versionNo]);
+  // the page opens on a clause, never an empty box: base rent, else the first term with a location
+  useEffect(() => {
+    if (selected != null || !list.length) return;
+    const v = list.find((x) => x.version === versionNo) ?? list[list.length - 1];
+    const locatable = v.terms.filter((t) => t.page && t.bbox && t.document_id);
+    const first = locatable.find((t) => t.field === "base_rent_monthly") ?? locatable[0];
+    if (first) setSelected(first.field);
+  }, [list, versionNo, selected]);
 
   if (versions.isLoading) return <LoadingBlock rows={4} label="Loading the lease terms" />;
   if (versions.isError) return <ErrorState title="Could not load the lease terms" error={versions.error} onRetry={() => versions.refetch()} />;
