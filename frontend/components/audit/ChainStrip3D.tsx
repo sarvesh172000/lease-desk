@@ -19,6 +19,9 @@
  * already gone ("Failed to execute 'removeChild' on 'Node'").
  */
 
+// react-three-fiber props (position, args, transparent, intensity…) are not DOM
+// attributes; the "unknown property" rule cannot tell, hence the NOSONAR markers.
+
 import { afterCrack } from "@/lib/chain";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef } from "react";
@@ -158,15 +161,15 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
   });
 
   return (
-    <group ref={group} position={[targetX, 0, 0]}>
+    <group ref={group} position={[targetX, 0, 0]} /* NOSONAR */>
       {/* the links: a bar between every pair of neighbours */}
       {events.map((e, i) =>
         i === 0 ? null : (
-          <mesh key={`l${e.seq}`} position={[(i - 0.5) * GAP, 0.02, 0]}>
-            <boxGeometry args={[GAP - 0.3, 0.035, 0.035]} />
+          <mesh key={`l${e.seq}`} position={[(i - 0.5) * GAP, 0.02, 0]} /* NOSONAR */>
+            <boxGeometry args={[GAP - 0.3, 0.035, 0.035]} /* NOSONAR */ />
             <meshBasicMaterial
               color={linkColor(afterCrack(e.seq, crackSeq), i === selIdx || i - 1 === selIdx, colors)}
-              transparent
+              transparent /* NOSONAR */
               opacity={afterCrack(e.seq, crackSeq) ? 0.5 : 1}
             />
           </mesh>
@@ -178,7 +181,7 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
           ref={(m) => {
             meshes.current[i] = m;
           }}
-          position={[i * GAP, 0.3, 0]}
+          position={[i * GAP, 0.3, 0]} /* NOSONAR */
           onClick={(ev) => {
             ev.stopPropagation();
             onSelect(e.seq);
@@ -186,23 +189,23 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
           onPointerOver={() => (document.body.style.cursor = "pointer")}
           onPointerOut={() => (document.body.style.cursor = "")}
         >
-          <boxGeometry args={[0.3, 0.6, 0.22]} />
+          <boxGeometry args={[0.3, 0.6, 0.22]} /* NOSONAR */ />
           <meshStandardMaterial
             ref={(mt) => {
               mats.current[i] = mt;
             }}
             color={!e.allowed ? colors.bad : colors.accent}
-            emissive={!e.allowed ? colors.bad : colors.accent}
-            emissiveIntensity={0.12}
-            transparent
+            emissive={!e.allowed ? colors.bad : colors.accent} /* NOSONAR */
+            emissiveIntensity={0.12} /* NOSONAR */
+            transparent /* NOSONAR */
             opacity={0.95}
-            roughness={0.5}
+            roughness={0.5} /* NOSONAR */
           />
         </mesh>
       ))}
       {crackIdx >= 0 ? (
-        <mesh position={[(crackIdx - 0.5) * GAP, 0.3, 0.3]} rotation={[0, 0, 0.3]}>
-          <boxGeometry args={[0.05, 1.4, 0.05]} />
+        <mesh position={[(crackIdx - 0.5) * GAP, 0.3, 0.3]} rotation={[0, 0, 0.3]} /* NOSONAR */>
+          <boxGeometry args={[0.05, 1.4, 0.05]} /* NOSONAR */ />
           <meshBasicMaterial color={colors.bad} />
         </mesh>
       ) : null}
@@ -233,8 +236,8 @@ export default function ChainStrip3D(props: Readonly<StripProps & { crackStarted
     <div className="absolute inset-0">
       <Canvas className="!absolute inset-0" dpr={[1, 2]} camera={{ position: [0, 1.1, 5.2], fov: 32, near: 0.1, far: 60 }} gl={{ antialias: true, alpha: true }} aria-hidden>
         <Clear />
-        <ambientLight intensity={1.5} />
-        <directionalLight position={[2, 4, 5]} intensity={1.1} />
+        <ambientLight intensity={1.5} /* NOSONAR */ />
+        <directionalLight position={[2, 4, 5]} intensity={1.1} /* NOSONAR */ />
         <Strip {...props} labels={{ block, link }} />
       </Canvas>
       {sel ? (

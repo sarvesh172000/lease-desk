@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getException } from "@/lib/api";
 import { FIXTURE_DOCUMENTS, SECTION_16_EXCEPTION_DETAIL, fixturePageUrl } from "@/lib/fixtures";
-import { useApiHealth, useDataSource, useExceptions } from "@/lib/hooks";
+import { useApiHealth, useDataSource, useExceptionsWhen, useSignedIn } from "@/lib/hooks";
 import type { DocumentPages, ExceptionDetail, JournalLine } from "@/lib/types";
 import { amendmentCaseId, figureSource, type FigureSource } from "@/lib/welcome";
 
@@ -32,18 +32,19 @@ const FIXTURE_PAGES = { src: fixturePageUrl, sizes: FIXTURE_DOCUMENTS };
 export function useAmendmentCase(): AmendmentCase {
   const dataSource = useDataSource();
   const health = useApiHealth();
-  const list = useExceptions();
+  const signedIn = useSignedIn();
+  const list = useExceptionsWhen(dataSource === "fixtures" || signedIn);
   const id = dataSource === "api" ? amendmentCaseId(list.data) : SECTION_16_EXCEPTION_DETAIL.exception_id;
   const detail = useQuery({
     queryKey: ["exception", id],
     queryFn: () => getException(id!),
-    enabled: !!id,
+    enabled: !!id && (dataSource === "fixtures" || signedIn),
     retry: false,
   });
   // no session, no such exception, or not yet investigated on this desk: the fixture copy, labelled as such
   const refused =
     dataSource === "api" &&
-    (list.isError || detail.isError || (list.isSuccess && !id) || (detail.isSuccess && !detail.data.investigation));
+    (!signedIn || list.isError || detail.isError || (list.isSuccess && !id) || (detail.isSuccess && !detail.data.investigation));
   if (refused) {
     return {
       id: SECTION_16_EXCEPTION_DETAIL.exception_id,

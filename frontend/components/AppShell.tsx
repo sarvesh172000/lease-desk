@@ -144,12 +144,12 @@ function Rail({ pathname }: { pathname: string }) {
       data-compact={compact ? "true" : "false"}
     >
       <Link href="/" aria-label="Lease Desk, Today" className={cn("flex items-center gap-2.5 rounded-sm py-1", compact ? "justify-center px-0" : "px-2")}>
-        <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-xs bg-accent font-mono text-sm font-bold text-accent-ink">
+        <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xs bg-accent font-mono text-sm font-bold text-accent-ink">
           L
         </span>
-        <span className={cn("flex flex-col leading-tight", compact && "sr-only")}>
+        <span className={cn("flex min-w-0 flex-col leading-tight", compact && "sr-only")}>
           <span className="text-[0.95rem] font-semibold tracking-tight text-ink">Lease Desk</span>
-          <span className="text-2xs text-ink-muted">Northbay Physical Therapy</span>
+          <span className="truncate text-2xs text-ink-muted">Northbay Physical Therapy</span>
         </span>
       </Link>
 
@@ -231,16 +231,16 @@ function LiveIndicator({ compact }: { compact?: boolean }) {
   const l = LIVE[state];
   return (
     <Tooltip label={l.title} side="right">
-      <span
-        tabIndex={0}
-        className="flex w-fit items-center gap-2 rounded-xs text-xs text-ink-muted"
+      <button
+        type="button"
+        className="flex w-fit cursor-default items-center gap-2 rounded-xs text-xs text-ink-muted"
         data-testid="live-indicator"
         data-state={state}
       >
         <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", l.dot, l.pulse && "animate-pulse-dot")} />
         <span className={cn(compact && "sr-only")}>{l.label}</span>
         <span className="sr-only">: {l.title}</span>
-      </span>
+      </button>
     </Tooltip>
   );
 }
@@ -254,18 +254,18 @@ function DataSourceBadge({ compact }: { compact?: boolean }) {
     const text = s === "fixtures" ? "Offline demo: fixtures, not a live API" : s === "api" ? "Live API" : "API unreachable";
     return (
       <Tooltip label={text} side="right">
-        <span
-          tabIndex={0}
+        <button
+          type="button"
           data-testid="data-source"
           data-source={s}
           aria-label={text}
           className={cn(
-            "rounded-xs border px-1 py-0.5 font-mono text-2xs font-semibold uppercase",
+            "cursor-default rounded-xs border px-1 py-0.5 font-mono text-2xs font-semibold uppercase",
             s === "fixtures" ? "border-warn-line bg-warn-soft text-warn" : s === "api" ? "border-ok-line bg-ok-soft text-ok" : "border-bad-line bg-bad-soft text-bad",
           )}
         >
           {s === "fixtures" ? "FX" : "API"}
-        </span>
+        </button>
       </Tooltip>
     );
   }

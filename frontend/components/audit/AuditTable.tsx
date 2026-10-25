@@ -25,7 +25,7 @@ function shortTime(at: string): string {
   const t = Date.parse(at);
   return Number.isNaN(t) ? at : timeFmt.format(new Date(t));
 }
-const COLS = "44px 92px minmax(0,1.25fr) minmax(0,1fr) 78px minmax(0,1.45fr) 80px";
+const COLS = "44px 118px minmax(0,1.4fr) minmax(0,1fr) 78px minmax(0,1.35fr) 80px"; // time and actor ids read whole at 13px
 
 /**
  * The rows, newest first, virtualised so thousands scroll like sixty. A row
@@ -119,7 +119,7 @@ export function AuditTable({
                   <span className="block truncate font-medium">{e.actor_name ?? e.actor_id}</span>
                   <span className="block truncate font-mono text-2xs text-ink-muted">
                     {e.actor_id}
-                    {kind !== "person" ? ` · ${kind}` : ""}
+                    {kind !== "person" && !e.actor_id.startsWith(kind) ? ` · ${kind}` : ""}
                   </span>
                 </span>
                 <span className="truncate">
@@ -132,7 +132,7 @@ export function AuditTable({
                 </span>
                 <span className="min-w-0">
                   <span className={cn("text-2xs font-semibold uppercase tracking-wide", e.allowed ? "text-ok" : "text-bad")}>{e.allowed ? "Allowed" : "Refused"}</span>
-                  {e.reason ? <span className="block truncate text-xs text-ink-soft">{e.reason}</span> : null}
+                  {e.reason ? <span className="block truncate text-xs text-ink-soft" title={e.reason}>{e.reason}</span> : null}
                 </span>
                 <span className={cn("num truncate text-right font-mono text-2xs", cracked ? "text-bad line-through" : "text-ink-muted")} title={e.hash ?? undefined} data-testid="row-hash">
                   {e.hash ? e.hash.slice(0, 8) : "—"}

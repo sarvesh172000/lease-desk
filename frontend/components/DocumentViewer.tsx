@@ -52,7 +52,8 @@ export function DocumentViewer({
   overlay?: ReactNode;
 }) {
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const pages = useDocumentPages(docId);
+  // something else holds the stage: no page is drawn, so none is asked for (an email body has no pages to ask about)
+  const pages = useDocumentPages(overlay ? null : docId);
   const pageNo = page ?? 1;
   const size = pages.data?.pages.find((p) => p.page === pageNo) ?? null;
   const validBox = isValidBox(box) ? box : null;
@@ -80,17 +81,18 @@ export function DocumentViewer({
 
   return (
     <section className="flex min-w-0 flex-col overflow-hidden rounded-md border border-line bg-surface shadow-raised">
-      <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-        <div className="min-w-0">
-          <div className="eyebrow">{eyebrow}</div>
-          <div className="truncate text-sm font-semibold" title={typeof title === "string" ? title : undefined}>
-            {title}
+      <header className="border-b border-line px-4 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="eyebrow truncate">{eyebrow}</div>
+            <div className="truncate text-sm font-semibold" title={typeof title === "string" ? title : undefined}>
+              {title}
+            </div>
           </div>
+          {docId && page != null ? <span className="shrink-0 rounded bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-muted">p.{pageNo}</span> : null}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {toolbar}
-          {docId && page != null ? <span className="rounded bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-muted">p.{pageNo}</span> : null}
-        </div>
+        {/* the pane tabs get a row of their own: three of them beside a title is where the title went missing */}
+        {toolbar ? <div className="mt-2 flex items-center">{toolbar}</div> : null}
       </header>
       <div style={{ height }} className="relative min-h-0" data-viewer>
         {overlay ?? body}

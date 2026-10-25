@@ -25,7 +25,7 @@ export function EmailEvidence({ evidence, highlight }: { evidence: Evidence; hig
           </span>
           <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 text-sm">
             <dt className="text-ink-muted">From</dt>
-            <dd className="truncate font-medium text-ink">{evidence.source}</dd>
+            <dd className="break-words font-medium text-ink">{evidence.source.replace("@", "@\u200b")}</dd>
             {evidence.date ? (
               <>
                 <dt className="text-ink-muted">Date</dt>

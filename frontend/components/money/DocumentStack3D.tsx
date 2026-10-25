@@ -7,11 +7,14 @@
  * fetched, so it works offline.
  */
 
+// react-three-fiber props (position, args, transparent, intensity…) are not DOM
+// attributes; the "unknown property" rule cannot tell, hence the NOSONAR markers.
+
 import { Canvas, useFrame } from "@react-three/fiber";
 import { RoundedBox } from "@react-three/drei";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { CARD_KINDS, FOUND_INDEX, type StackProps } from "./DocumentStack";
+import { CARD_KINDS, CARDS, FOUND_INDEX, type StackProps } from "./DocumentStack";
 
 /** A token from globals.css ("10 11 13") as a three.js colour. */
 function token(name: string, fallback: string): THREE.Color {
@@ -96,12 +99,12 @@ function Card({ index, mode, label, onLanded }: { index: number; mode: StackProp
   return (
     <group ref={ref}>
       <RoundedBox args={[1.1, 1.55, 0.02]} radius={0.04} smoothness={2}>
-        <meshStandardMaterial ref={mat} map={tex} transparent roughness={0.6} metalness={0} />
+        <meshStandardMaterial ref={mat} map={tex} transparent roughness={0.6} metalness={0} /* NOSONAR */ />
       </RoundedBox>
       {found && mode === "found" ? (
-        <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[1.26, 1.71]} />
-          <meshBasicMaterial color={token("accent", "white")} transparent opacity={0.35} />
+        <mesh position={[0, 0, -0.02]} /* NOSONAR */>
+          <planeGeometry args={[1.26, 1.71]} /* NOSONAR */ />
+          <meshBasicMaterial color={token("accent", "white")} transparent opacity={0.35} /* NOSONAR */ />
         </mesh>
       ) : null}
     </group>
@@ -117,10 +120,10 @@ export default function DocumentStack3D({ mode, foundLabel, onLanded }: StackPro
       gl={{ antialias: true, alpha: true }}
       aria-hidden
     >
-      <ambientLight intensity={2.2} />
-      <directionalLight position={[2, 3, 4]} intensity={1.2} />
-      {CARD_KINDS.map((_, i) => (
-        <Card key={i} index={i} mode={mode} label={i === FOUND_INDEX ? foundLabel : null} onLanded={i === FOUND_INDEX ? onLanded : undefined} />
+      <ambientLight intensity={2.2} /* NOSONAR */ />
+      <directionalLight position={[2, 3, 4]} intensity={1.2} /* NOSONAR */ />
+      {CARDS.map(({ id }, i) => (
+        <Card key={id} index={i} mode={mode} label={i === FOUND_INDEX ? foundLabel : null} onLanded={i === FOUND_INDEX ? onLanded : undefined} />
       ))}
     </Canvas>
   );

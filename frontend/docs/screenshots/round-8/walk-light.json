@@ -1,0 +1,308 @@
+{
+  "base": "http://localhost:3000",
+  "theme": "light",
+  "reducedMotion": false,
+  "pathMs": 110458,
+  "console": [],
+  "network": [
+    {
+      "step": "setup",
+      "status": 401,
+      "url": "/api/auth/me"
+    },
+    {
+      "step": "welcome",
+      "status": 401,
+      "url": "/api/auth/me"
+    }
+  ],
+  "steps": [
+    {
+      "name": "welcome",
+      "did": true,
+      "readyMs": 81,
+      "total": 504,
+      "cls": 0,
+      "url": "/welcome",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "login",
+      "did": true,
+      "readyMs": 107,
+      "total": 109,
+      "cls": 0.019,
+      "url": "/login",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.019,
+          "t": 16,
+          "who": [
+            "div.w-full.max-w-[420px]"
+          ],
+          "moved": [
+            -115
+          ]
+        }
+      ]
+    },
+    {
+      "name": "today",
+      "did": true,
+      "readyMs": 102,
+      "total": 103,
+      "cls": 0.002,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "money",
+      "did": true,
+      "readyMs": 413,
+      "total": 413,
+      "cls": 0.22,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.035,
+          "t": 50,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.04,
+          "t": 66,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div[balance-assertion].mt-3.flex.items-center",
+            "span.flex.h-7.w-7"
+          ],
+          "moved": [
+            0,
+            755,
+            0
+          ]
+        },
+        {
+          "v": 0.138,
+          "t": 280,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[data-source].rounded-xs.border.px-1",
+            "span.flex.h-7.w-7"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "investigate",
+      "did": false,
+      "readyMs": null,
+      "total": 30066,
+      "cls": 0,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "why",
+      "did": true,
+      "readyMs": 104,
+      "total": 110,
+      "cls": 0,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "evidence-pack",
+      "did": true,
+      "readyMs": 3,
+      "total": 7,
+      "cls": 0,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "switch-dana",
+      "did": true,
+      "readyMs": 110,
+      "total": 633,
+      "cls": 0.004,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "dana-today",
+      "did": true,
+      "readyMs": 10,
+      "total": 11,
+      "cls": 0.11,
+      "url": "/",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.038,
+          "t": 31,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col"
+          ],
+          "moved": [
+            0,
+            17
+          ]
+        },
+        {
+          "v": 0.029,
+          "t": 48,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span.relative.flex-1"
+          ],
+          "moved": [
+            0,
+            17,
+            9
+          ]
+        },
+        {
+          "v": 0.026,
+          "t": 82,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[5 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "jan-hold",
+      "did": false,
+      "readyMs": null,
+      "total": 15038,
+      "cls": 0,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "uphold",
+      "did": false,
+      "readyMs": null,
+      "total": 20656,
+      "cls": 0,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "disputes",
+      "did": true,
+      "readyMs": 112,
+      "total": 114,
+      "cls": 0,
+      "url": "/disputes",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "dispute-letter",
+      "did": true,
+      "readyMs": 102,
+      "total": 103,
+      "cls": 0,
+      "url": "/disputes/DSP-000006",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "audit",
+      "did": true,
+      "readyMs": 32,
+      "total": 33,
+      "cls": 0,
+      "url": "/audit",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "month",
+      "did": true,
+      "readyMs": 107,
+      "total": 108,
+      "cls": 0,
+      "url": "/month",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "leases",
+      "did": true,
+      "readyMs": 5,
+      "total": 6,
+      "cls": 0,
+      "url": "/leases",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "lease-detail",
+      "did": true,
+      "readyMs": 103,
+      "total": 103,
+      "cls": 0,
+      "url": "/leases/LEASE-01",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "cold-today",
+      "cold": true,
+      "readyMs": 110,
+      "total": 117,
+      "nav": {
+        "dcl": 12,
+        "load": 39,
+        "ttfb": 4
+      },
+      "url": "/"
+    },
+    {
+      "name": "cold-money",
+      "cold": true,
+      "readyMs": 127,
+      "total": 155,
+      "nav": {
+        "dcl": 29,
+        "load": 63,
+        "ttfb": 19
+      },
+      "url": "/exceptions/exc_7"
+    }
+  ]
+}

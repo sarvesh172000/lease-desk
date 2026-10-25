@@ -53,7 +53,7 @@ export function JournalEntryTable({
         <tbody>
           {entries.map((l, i) => (
             <motion.tr
-              key={i}
+              key={`${l.account}:${l.debit}:${l.credit}`}
               className="border-b border-line/70"
               initial={play ? { opacity: 0, x: -8 } : false}
               animate={{ opacity: 1, x: 0 }}

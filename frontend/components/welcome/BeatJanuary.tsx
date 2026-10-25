@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { CountUp } from "@/components/data/CountUp";
 import { money } from "@/lib/format";
-import { useApiHealth, useDataSource, useSummary } from "@/lib/hooks";
+import { useApiHealth, useDataSource, useSignedIn, useSummaryWhen } from "@/lib/hooks";
 import { useProof } from "@/lib/proof";
 import { figureSource, shortDate, sourceLabel } from "@/lib/welcome";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,8 @@ export function BeatJanuary() {
   const proof = useProof();
   const source = useDataSource();
   const health = useApiHealth();
-  const summary = useSummary();
+  const signedIn = useSignedIn();
+  const summary = useSummaryWhen(source === "api" && signedIn);
   const ev = proof.data?.eval;
   const live = figureSource({ source, reachable: health.reachable, liveOk: summary.isSuccess, asOf: summary.data?.as_of });
 

@@ -129,7 +129,8 @@ function unreachable(e: unknown): ApiUnreachableError {
 function redirectToLogin() {
   if (typeof window === "undefined") return;
   const here = window.location.pathname + window.location.search;
-  if (window.location.pathname.startsWith("/login")) return;
+  // the public pages read what they can without a session; a stranger stays on them
+  if (window.location.pathname.startsWith("/login") || window.location.pathname.startsWith("/welcome")) return;
   window.location.assign(`/login?next=${encodeURIComponent(here)}`);
 }
 

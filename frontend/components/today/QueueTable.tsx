@@ -10,6 +10,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 
+/** Cell padding: the first and last columns line up with the card edge. */
+function edgePad(i: number, count: number): string {
+  if (i === 0) return "pl-5 pr-2";
+  if (i === count - 1) return "pl-2 pr-5";
+  return "px-2";
+}
+
 export interface QueueRow extends ExceptionSummary {
   /** The clinic in words, from the lease's location. */
   place: string | null;
@@ -114,7 +121,7 @@ export function QueueTable({
       <thead>
         <tr className="table-head">
           {cols.map((c, i) => (
-            <th key={c.key} className={cn("py-2 font-semibold", i === 0 ? "pl-5 pr-2" : i === cols.length - 1 ? "pl-2 pr-5" : "px-2", c.num && "text-right")} data-col={c.key}>
+            <th key={c.key} className={cn("py-2 font-semibold", edgePad(i, cols.length), c.num && "text-right")} data-col={c.key}>
               {c.header}
             </th>
           ))}
@@ -140,7 +147,7 @@ export function QueueTable({
             {cols.map((c, i) => (
               <td
                 key={c.key}
-                className={cn(dense ? "py-2" : "py-3", i === 0 ? "pl-5 pr-2" : i === cols.length - 1 ? "pl-2 pr-5" : "px-2", c.num && "num whitespace-nowrap text-right")}
+                className={cn(dense ? "py-2" : "py-3", edgePad(i, cols.length), c.num && "num whitespace-nowrap text-right")}
               >
                 {c.cell(r)}
               </td>

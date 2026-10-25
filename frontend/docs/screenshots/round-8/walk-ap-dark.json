@@ -1,0 +1,92 @@
+{
+  "base": "http://localhost:3000",
+  "theme": "dark",
+  "reducedMotion": false,
+  "pathMs": 17566,
+  "console": [],
+  "network": [
+    {
+      "step": "setup",
+      "status": 401,
+      "url": "/api/auth/me"
+    },
+    {
+      "step": "welcome",
+      "status": 401,
+      "url": "/api/auth/me"
+    }
+  ],
+  "steps": [
+    {
+      "name": "welcome",
+      "did": true,
+      "readyMs": 497,
+      "total": 905,
+      "cls": 0,
+      "url": "/welcome",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "login",
+      "did": true,
+      "readyMs": 107,
+      "total": 109,
+      "cls": 0.019,
+      "url": "/login",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.019,
+          "t": 19,
+          "who": [
+            "div.w-full.max-w-[420px]"
+          ],
+          "moved": [
+            -115
+          ]
+        }
+      ]
+    },
+    {
+      "name": "today",
+      "did": true,
+      "readyMs": 102,
+      "total": 103,
+      "cls": 0.002,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "audit",
+      "did": true,
+      "readyMs": 107,
+      "total": 109,
+      "cls": 0,
+      "url": "/audit",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "month",
+      "did": true,
+      "readyMs": 8,
+      "total": 9,
+      "cls": 0,
+      "url": "/month",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "leases",
+      "did": true,
+      "readyMs": 9,
+      "total": 10,
+      "cls": 0,
+      "url": "/leases",
+      "overflow": 0,
+      "shifts": []
+    }
+  ]
+}
