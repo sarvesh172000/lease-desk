@@ -9,6 +9,7 @@ after a miss in the process's own cache, and never writes to it.
 |---|---|
 | 5 × `lease_abstraction` | Claude reading each of the five demo leases: 13 terms, each with its page and quote |
 | 1 × `amendment_search` | The July investigation: the mailbox search that finds CLINIC-01's second amendment |
+| 5 × `amendment_search` | The five January holds: each search finds nothing that explains the charge (they are billing errors), so each ends unexplained |
 
 Each file is named by its cache key, a sha256 of the model, the prompt id with
 its version and content hash, the documents (not the random fence nonce), the
