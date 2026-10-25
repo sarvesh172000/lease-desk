@@ -14,10 +14,14 @@ export interface StackProps {
   foundLabel?: string | null;
   /** Called once the found document has landed, so the viewer can swap to it. */
   onLanded?: () => void;
+  /** The case's own page renders, by card kind, to texture the cards; a kind without one is drawn. */
+  textures?: Partial<Record<CardKind, string>>;
 }
 
+export type CardKind = "Invoice" | "Lease page" | "Email";
+
 /** Cards drawn: enough to read as a mailbox, few enough to stay calm. */
-export const CARD_KINDS = ["Invoice", "Lease page", "Email", "Invoice", "Email", "Lease page", "Email", "Invoice", "Email", "Lease page", "Email"];
+export const CARD_KINDS: CardKind[] = ["Invoice", "Lease page", "Email", "Invoice", "Email", "Lease page", "Email", "Invoice", "Email", "Lease page", "Email"];
 export const FOUND_INDEX = 6;
 /** Each card with a stable id, for React keys (a kind repeats, so it can't be the key). */
 export const CARDS = CARD_KINDS.map((kind, n) => ({ kind, id: `card-${n}` }));
@@ -59,7 +63,7 @@ export function DocumentStack(props: StackProps) {
   }, [mode, use3D, reduce, onLanded]);
 
   return (
-    <div className="relative h-full overflow-hidden bg-sunken" data-testid="document-stack" data-mode={mode}>
+    <div className="relative h-full overflow-hidden bg-stage" data-testid="document-stack" data-mode={mode}>
       {use3D ? <Stack3D {...props} /> : <Stack2D {...props} reduce={!!reduce} />}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
         <AnimatePresence mode="wait">
@@ -73,7 +77,7 @@ export function DocumentStack(props: StackProps) {
             {mode === "searching" ? (
               <>
                 Searching{" "}
-                {props.total != null ? <span className="num font-semibold text-ink">{props.total.toLocaleString("en-US")}</span> : "the"} documents…
+                {props.total != null ? <Ticker total={props.total} reduce={!!reduce} /> : "the"} documents…
               </>
             ) : (
               <>
@@ -87,7 +91,25 @@ export function DocumentStack(props: StackProps) {
   );
 }
 
-function Stack2D({ mode, foundLabel, reduce }: StackProps & { reduce: boolean }) {
+/** The document count ticking up over the search, ending on the stream's own number. Not viewport-triggered: the pane is where it is. */
+function Ticker({ total, reduce }: { total: number; reduce: boolean }) {
+  const [shown, setShown] = useState(reduce ? total : 0);
+  useEffect(() => {
+    if (reduce) return setShown(total);
+    let raf = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - started) / 2400);
+      setShown(t < 1 ? Math.round(total * (1 - Math.pow(1 - t, 3))) : total);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [total, reduce]);
+  return <span className="num font-semibold text-ink">{shown.toLocaleString("en-US")}</span>;
+}
+
+function Stack2D({ mode, foundLabel, reduce, textures }: StackProps & { reduce: boolean }) {
   const n = CARD_KINDS.length;
   return (
     <div className="absolute inset-0 flex items-center justify-center [perspective:1000px]">
@@ -109,12 +131,16 @@ function Stack2D({ mode, foundLabel, reduce }: StackProps & { reduce: boolean })
             transition={{ duration: reduce ? 0.3 : 0.6, delay: reduce ? 0 : mode === "searching" ? i * 0.04 : 0, ease: [0.2, 0.8, 0.2, 1] }}
             style={{ zIndex: found && mode === "found" ? 50 : i }}
             className={cn(
-              "absolute h-40 w-28 rounded-xs border bg-surface p-2 shadow-float",
+              "absolute h-40 w-28 overflow-hidden rounded-xs border bg-surface p-2 shadow-float",
               found && mode === "found" ? "border-accent ring-2 ring-accent/40" : "border-line",
             )}
           >
-            <div className="eyebrow truncate">{kind}</div>
-            <div className="mt-2 space-y-1.5">
+            {textures?.[kind] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={textures[kind]} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover object-top" />
+            ) : null}
+            <div className="eyebrow relative truncate">{kind}</div>
+            <div className="relative mt-2 space-y-1.5">
               <div className="h-1.5 w-full rounded bg-line" />
               <div className="h-1.5 w-4/5 rounded bg-line" />
               <div className={cn("h-1.5 w-11/12 rounded", found && mode === "found" ? "bg-warn" : "bg-line")} />

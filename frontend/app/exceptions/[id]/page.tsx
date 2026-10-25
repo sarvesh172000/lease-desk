@@ -22,7 +22,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { WorkStateBadge } from "@/components/WorkStateBadge";
-import { ApiError, itemIdFor } from "@/lib/api";
+import { ApiError, itemIdFor, pageImageUrl } from "@/lib/api";
 import { day, money, signedMoney } from "@/lib/format";
 import { useException, useLeases, useLeaseVersions, useMe, useSchedule } from "@/lib/hooks";
 import { chargeLabel, clinicLabel, monthLong } from "@/lib/labels";
@@ -254,6 +254,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                   <DocumentStack
                     mode={phase === "found" ? "found" : "searching"}
                     total={totalFromMessage(run.get("searching")?.message)}
+                    textures={stackTextures(ex)}
                     foundLabel={run.get("found")?.source ?? run.get("found")?.doc_id}
                     onLanded={onLanded}
                   />
@@ -476,4 +477,14 @@ function MoneyScreenSkeleton() {
       </div>
     </div>
   );
+}
+
+/** The pages this case cites, as the stack's card faces: the invoice, the lease, and the email when it has a page. */
+function stackTextures(ex: ExceptionDetail): Partial<Record<"Invoice" | "Lease page" | "Email", string>> {
+  const out: Partial<Record<"Invoice" | "Lease page" | "Email", string>> = {};
+  if (ex.invoice_line) out.Invoice = pageImageUrl(ex.invoice_line.doc_id, ex.invoice_line.page);
+  if (ex.lease_citation) out["Lease page"] = pageImageUrl(ex.lease_citation.doc_id, ex.lease_citation.page);
+  const ev = ex.investigation?.evidence[0];
+  if (ev?.page) out.Email = pageImageUrl(ev.doc_id, ev.page);
+  return out;
 }
