@@ -107,7 +107,7 @@ function Dispute({ d }: { d: DisputeDetail }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 overflow-hidden rounded-md border border-line bg-surface shadow-raised">
+      <div className="grid grid-cols-2 overflow-hidden rounded-md lg:grid-cols-4 border border-line bg-surface shadow-raised">
         <Figure label="Billed" value={money(s.billed)} />
         <Figure label="Lease supports" value={money(s.supported)} />
         <Figure label="Disputed" value={money(s.amount)} tone="bad" />

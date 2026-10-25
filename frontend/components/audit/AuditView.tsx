@@ -60,7 +60,7 @@ export function AuditView({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-6">
         <div className="shrink-0">
           <div className="eyebrow">Append-only · hash-chained</div>
           <h1 className="text-2xl font-semibold">Audit trail{leaseId ? ` · ${leaseId}` : ""}</h1>
@@ -72,7 +72,7 @@ export function AuditView({
           {fixture ? <div className="mt-1 rounded-xs border border-warn-line bg-warn-soft px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-warn">Fixture · a broken chain, for the demo</div> : null}
         </div>
         {data ? (
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-72">
             <ChainBanner state={state} loading={fetching} onVerify={refetch} verifiedAt={updatedAt || null} />
           </div>
         ) : null}
@@ -161,7 +161,7 @@ export function AuditView({
             </label>
           </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
             {rows.length ? (
               <AuditTable rows={rows} selectedSeq={selectedSeq} onSelect={setSelectedSeq} crackSeq={state.crackSeq} height={TABLE_HEIGHT} />
             ) : (

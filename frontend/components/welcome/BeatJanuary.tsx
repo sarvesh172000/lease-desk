@@ -26,7 +26,7 @@ export function BeatJanuary() {
 
   return (
     <Section id="january" className="min-h-[85vh] py-20 md:py-28">
-      <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
         <div className="lg:sticky lg:top-24 lg:self-start">
           <Reveal>
             <div className="eyebrow mb-3 text-warn">2 · January</div>

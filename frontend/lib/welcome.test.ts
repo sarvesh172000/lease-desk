@@ -64,3 +64,15 @@ describe("people", () => {
     expect(isPerson(actor("PER-X", "agent"))).toBe(false);
   });
 });
+
+describe("the document fan", () => {
+  it("walks rest → invoice → email → figure as beat 1 scrolls", async () => {
+    const { fanState } = await import("./welcome");
+    expect([0, 0.1, 0.2, 0.5, 0.8, 1].map((p) => fanState(p))).toEqual(["rest", "rest", "invoice", "email", "figure", "figure"]);
+  });
+
+  it("tells the story in its final frame when motion is reduced", async () => {
+    const { fanState } = await import("./welcome");
+    expect(fanState(0, true)).toBe("figure");
+  });
+});

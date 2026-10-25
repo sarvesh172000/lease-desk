@@ -12,7 +12,7 @@ import type { Summary } from "@/lib/types";
 export function Tiles({ summary, loading, error, leasesNeedingAttention }: { summary?: Summary; loading: boolean; error: boolean; leasesNeedingAttention?: number }) {
   const s = summary;
   return (
-    <div className="grid grid-cols-4 gap-4" data-testid="tiles">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" data-testid="tiles">
       <MetricTile
         index={0}
         label="Active leases"

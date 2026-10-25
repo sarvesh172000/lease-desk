@@ -54,7 +54,7 @@ export function ScheduleDiff({
   const m2 = byPeriod(v2);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-x-auto">
       <table className="w-full border-collapse text-[0.95rem]" aria-label="Balances before and after">
         <thead>
           <tr className="table-head">
@@ -88,7 +88,7 @@ export function ScheduleDiff({
       </table>
 
       {periods.length ? (
-        <div>
+        <div className="overflow-x-auto">
           <div className="eyebrow mb-1.5">Schedule from {fmtPeriod(fromPeriod)}</div>
           <table className="w-full border-collapse text-sm" aria-label="Schedule rows before and after">
             <thead>

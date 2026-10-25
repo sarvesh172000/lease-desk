@@ -37,9 +37,9 @@ export function HeroCard({ ex, lease, eyebrow = "Needs you first" }: { ex: Excep
       transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}
       aria-labelledby="hero-title"
       data-testid="hero-card"
-      className="relative overflow-hidden rounded-md border border-accent/30 bg-surface p-6 shadow-raised"
+      className="relative min-h-[11rem] overflow-hidden rounded-md border border-accent/30 bg-surface p-6 shadow-raised"
     >
-      <div className="relative flex items-start justify-between gap-6">
+      <div className="relative flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="eyebrow text-accent">{eyebrow}</span>
@@ -59,7 +59,7 @@ export function HeroCard({ ex, lease, eyebrow = "Needs you first" }: { ex: Excep
               : detail.data?.reason ?? "Not investigated yet."}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
+        <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <Link href={`/exceptions/${encodeURIComponent(ex.exception_id)}`} className="inline-flex">
             <Button variant="primary" size="lg" icon={inv ? <ArrowRight aria-hidden className="h-4 w-4" /> : <Play aria-hidden className="h-4 w-4" />} tabIndex={-1}>
               {inv ? "Open" : "Run investigation"}

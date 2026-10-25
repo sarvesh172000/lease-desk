@@ -29,7 +29,7 @@ const ORDER: Stage[] = ["searching", "found", "remeasured", "complete"];
  * stream still reads as four steps. Pacing only delays what is shown; it never
  * invents an event.
  */
-const DWELL_MS: Record<Stage, number> = { searching: 1800, found: 2000, remeasured: 2200, complete: 0 };
+const DWELL_MS: Record<Stage, number> = { searching: 3200, found: 2400, remeasured: 2200, complete: 0 };
 const DWELL_REDUCED_MS = 350;
 
 function stageIndex(ev: InvestigationEvent): number {
@@ -128,7 +128,8 @@ export function useInvestigationRun(exceptionId: string): InvestigationRun {
 
 /** The phase the screen shows: a live run wins; otherwise what is on record. */
 export function phaseOf(run: InvestigationRun, investigated: boolean): Phase {
-  if (run.state === "idle") return investigated ? "settled" : "ready";
+  // a run that stopped (refused, or the stream broke) leaves what is on record, not a mailbox still searching
+  if (run.state === "idle" || run.state === "error") return investigated ? "settled" : "ready";
   return run.stage ?? "searching";
 }
 

@@ -36,7 +36,7 @@ export default function DisputesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="eyebrow">Portfolio · letters to landlords</div>
           <h1 className="text-2xl font-semibold">
@@ -51,7 +51,7 @@ export default function DisputesPage() {
       </div>
 
       {/* the pipeline: every stage with its count; click one to filter */}
-      <ol className="grid grid-cols-6 gap-2" aria-label="Pipeline">
+      <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="Pipeline">
         {STAGES.map((s, i) => {
           const n = counts?.[s] ?? 0;
           const active = status === s;

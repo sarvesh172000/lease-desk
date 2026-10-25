@@ -28,7 +28,7 @@ export function ChainBanner({ state, loading, onVerify, verifiedAt }: { state: C
       data-testid="chain-banner"
       data-verified={ok ? "true" : "false"}
       className={cn(
-        "flex items-center gap-4 rounded-md border px-4 py-3",
+        "flex flex-wrap items-center gap-4 rounded-md border px-4 py-3",
         ok ? "border-ok-line bg-ok-soft" : "border-bad bg-bad-soft shadow-[0_0_0_1px_rgb(var(--bad)/0.4),0_0_32px_-8px_rgb(var(--bad)/0.7)]",
       )}
     >

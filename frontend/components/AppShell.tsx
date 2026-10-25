@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
         <UnreachableBanner />
-        <main className="w-full max-w-[1400px] flex-1 px-6 pb-16 pt-6">
+        <main className="w-full max-w-[1400px] flex-1 px-3 pb-16 pt-6 md:px-6">
           {me.isLoading ? (
             <div className="py-24 text-center text-ink-muted">Checking your session…</div>
           ) : me.isError ? (
@@ -131,10 +131,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 /** The money screen needs the width for two documents side by side, so the rail folds to icons there. */
 const isCompact = (p: string) => /^\/exceptions\/[^/]+/.test(p);
 
+/** Below md the rail folds to icons too: a phone has no room for its labels. */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return; // no media queries (tests): the wide layout
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 function Rail({ pathname }: { pathname: string }) {
   const exceptions = useExceptions();
   const open = exceptions.data?.filter((e) => e.status !== "balanced").length ?? 0;
-  const compact = isCompact(pathname);
+  const narrow = useNarrow();
+  const compact = isCompact(pathname) || narrow;
   return (
     <aside
       className={cn(
@@ -308,16 +323,17 @@ function DataSourceBadge({ compact }: { compact?: boolean }) {
 function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur">
-      <div className="flex h-14 max-w-[1400px] items-center gap-3 px-6">
+      <div className="flex h-14 max-w-[1400px] items-center gap-2 px-3 md:gap-3 md:px-6">
         <ContextPicker />
         <button
           type="button"
           onClick={openCommandPalette}
-          className="flex h-9 w-full max-w-sm items-center gap-2 rounded-sm border border-line bg-surface px-3 text-left text-sm text-ink-muted transition-colors duration-fast ease-out hover:border-line-strong hover:text-ink-soft"
+          aria-label="Jump to a lease, exception, screen"
+          className="flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-sm border border-line bg-surface text-left text-sm text-ink-muted transition-colors duration-fast ease-out hover:border-line-strong hover:text-ink-soft md:w-full md:max-w-sm md:shrink md:justify-start md:px-3"
         >
           <Search aria-hidden className="h-4 w-4" />
-          <span className="flex-1">Jump to a lease, exception, screen…</span>
-          <kbd className="rounded-xs border border-line px-1.5 font-mono text-2xs">⌘K</kbd>
+          <span className="hidden flex-1 md:inline">Jump to a lease, exception, screen…</span>
+          <kbd className="hidden rounded-xs border border-line px-1.5 font-mono text-2xs md:inline">⌘K</kbd>
         </button>
         <div className="ml-auto flex items-center gap-2.5">
           <ThemeToggle />
@@ -347,8 +363,8 @@ function ContextPicker() {
       <Menu.Trigger asChild>
         <button
           type="button"
-          aria-label={`Entity Northbay Coffee, period ${label}`}
-          className="flex h-9 shrink-0 items-center gap-2 rounded-sm border border-line bg-surface px-3 text-sm text-ink transition-colors duration-fast ease-out hover:border-line-strong data-[state=open]:border-line-strong"
+          aria-label={`Entity Northbay Physical Therapy, period ${label}`}
+          className="hidden h-9 shrink-0 items-center gap-2 rounded-sm border border-line bg-surface px-3 text-sm text-ink transition-colors sm:flex duration-fast ease-out hover:border-line-strong data-[state=open]:border-line-strong"
         >
           <span>Northbay Coffee</span>
           <span aria-hidden className="text-ink-faint">/</span>
@@ -454,12 +470,12 @@ function RoleSwitcher() {
           type="button"
           aria-label={`Signed in as ${current.name}, ${roleLine(current)}${demo ? ". Switch person (demo)" : ""}`}
           className={cn(
-            "flex h-10 items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-3 transition-colors duration-fast ease-out hover:border-line-strong data-[state=open]:border-line-strong",
+            "flex h-10 items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-2 transition-colors md:pr-3 duration-fast ease-out hover:border-line-strong data-[state=open]:border-line-strong",
             busy && "opacity-60",
           )}
         >
           <Avatar actor={current} />
-          <span className="flex flex-col items-start leading-tight">
+          <span className="hidden flex-col items-start leading-tight md:flex">
             <span className="text-sm font-semibold text-ink">{current.name}</span>
             <span className="text-2xs text-ink-muted">
               {roleLine(current)}

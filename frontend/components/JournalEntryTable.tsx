@@ -41,7 +41,7 @@ export function JournalEntryTable({
   const sealDelay = play ? entries.length * ROW + 0.25 : 0;
 
   return (
-    <div>
+    <div className="overflow-x-auto">
       <table className={cn("w-full border-collapse", dense ? "text-sm" : "text-[0.95rem]")} aria-label="Proposed journal entries">
         <thead>
           <tr className="table-head">

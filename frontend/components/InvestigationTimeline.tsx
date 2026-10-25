@@ -34,7 +34,12 @@ function liveDetail(ev: InvestigationEvent): ReactNode {
         </span>
       );
     case "not_found":
-      return <span className="text-bad">{ev.message}</span>;
+      return (
+        <span>
+          {ev.message}
+          <span className="mt-0.5 block text-ink-muted">No document changes the lease; the hold stands.</span>
+        </span>
+      );
     case "remeasured":
       return (
         <span className="num">
@@ -45,8 +50,8 @@ function liveDetail(ev: InvestigationEvent): ReactNode {
     case "complete":
       return (
         <span>
-          {ev.entries ? `${ev.entries} entries proposed` : "No entries proposed"}
-          {ev.balanced != null ? (
+          {ev.entries ? `${ev.entries} entries proposed` : "No entries · nothing to post until the charge is explained"}
+          {ev.balanced != null && ev.entries ? (
             <>
               {" · "}
               <span className={cn("font-semibold", ev.balanced ? "text-ok" : "text-bad")}>{ev.balanced ? "balanced" : "not balanced"}</span>
@@ -73,7 +78,10 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
           {ev.page != null ? <span className="text-ink-muted"> · p.{ev.page}</span> : null} · confidence <span className="num font-semibold">{pct(inv.confidence)}</span>
         </span>
       ) : (
-        <span className="text-ink-muted">Nothing on record explains the variance.</span>
+        <span>
+          No explaining document.
+          <span className="mt-0.5 block text-ink-muted">No document changes the lease; the hold stands.</span>
+        </span>
       );
     case "remeasured":
       return inv.liability_before != null && inv.liability_after != null ? (
@@ -81,14 +89,16 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
           Liability {money(inv.liability_before)} → {money(inv.liability_after)}
         </span>
       ) : (
-        <span className="text-ink-muted">No remeasurement.</span>
+        <span className="text-ink-muted">Skipped · nothing changes the lease terms.</span>
       );
     case "complete":
-      return (
+      return inv.entries.length ? (
         <span>
           {inv.entries.length} entries proposed ·{" "}
           <span className={cn("font-semibold", inv.balanced ? "text-ok" : "text-bad")}>{inv.balanced ? "balanced" : "not balanced"}</span>
         </span>
+      ) : (
+        <span>No entries · nothing to post until the charge is explained</span>
       );
   }
 }
@@ -98,7 +108,15 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
  * sent, as it arrives; an investigation already on record shows its result at
  * once, with Replay to watch it again.
  */
-export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun; recorded?: Investigation | null }) {
+/** The server's 403 in words: who may run it, not a number. */
+export function runErrorText(error: string | null | undefined): string {
+  if (!error) return "Stopped.";
+  if (/^403\b|\b403\b/.test(error)) return "Your role cannot run the investigation; the controller or the regional manager can.";
+  if (/^401\b/.test(error)) return "Sign in again to run the investigation.";
+  return error;
+}
+
+export function InvestigationTimeline({ run, recorded, canRun = true }: { run: InvestigationRun; recorded?: Investigation | null; canRun?: boolean }) {
   const reduce = useReducedMotion();
   const settled = run.state === "idle" && !!recorded;
   const finished = !!run.get("complete");
@@ -110,9 +128,10 @@ export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun
       <ol className="relative">
         {STAGES.map((s, i) => {
           const ev = run.get(s.stage) ?? (s.stage === "found" ? run.get("not_found") : undefined);
-          const done = settled || !!ev;
+          const recordedSkip = settled && s.stage === "remeasured" && recorded?.liability_after == null;
+          const done = (settled && !recordedSkip) || !!ev;
           const active = run.state === "running" && i === nextIdx && !finished;
-          const skipped = !done && run.state === "done";
+          const skipped = !done && (run.state === "done" || recordedSkip);
           return (
             <li key={s.stage} className="relative flex gap-3 pb-4 last:pb-0" data-stage={s.stage} data-done={done ? "true" : "false"}>
               {i < STAGES.length - 1 ? (
@@ -163,7 +182,7 @@ export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun
                     </motion.div>
                   ) : skipped ? (
                     <motion.div key="skipped" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-0.5 text-ink-muted">
-                      Skipped · nothing on record changes the lease terms.
+                      Skipped · nothing changes the lease terms.
                     </motion.div>
                   ) : null}
                 </AnimatePresence>
@@ -175,21 +194,23 @@ export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun
 
       {run.state === "error" ? (
         <div role="alert" className="mt-3 flex items-start justify-between gap-3 rounded-sm border border-bad-line bg-bad-soft px-3 py-2 text-sm text-bad">
-          <span>{run.error}</span>
-          <Button size="sm" variant="secondary" onClick={run.start}>
-            Retry
-          </Button>
+          <span>{runErrorText(run.error)}</span>
+          {canRun && !/403/.test(run.error ?? "") ? (
+            <Button size="sm" variant="secondary" onClick={run.start}>
+              Retry
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <span className="text-xs text-ink-muted" role="status">
-          {run.state === "idle" && (recorded ? "On record. Replay to watch it again." : "Not run yet.")}
+          {run.state === "idle" && (recorded ? (canRun ? "On record. Replay to watch it again." : "On record.") : canRun ? "Not run yet." : "Not run yet; the controller or the regional manager runs it.")}
           {run.state === "running" && "Streaming from the investigation…"}
           {run.state === "done" && `${run.events.length} event${run.events.length === 1 ? "" : "s"} received.`}
           {run.state === "error" && "Stopped."}
         </span>
-        {run.state !== "error" ? (
+        {run.state !== "error" && canRun ? (
           <Button
             size="sm"
             variant={run.state === "idle" && !recorded ? "primary" : "secondary"}

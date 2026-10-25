@@ -175,6 +175,23 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
           </mesh>
         ),
       )}
+      {/* the click targets: one flat, unscaled slab per block, filling the gap to its neighbours, so
+          the lifted block's bigger footprint never swallows the clicks meant for the ones beside it */}
+      {events.map((e, i) => (
+        <mesh
+          key={`hit${e.seq}`}
+          position={[i * GAP, 0.3, 0.7]} /* NOSONAR */
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onSelect(e.seq);
+          }}
+          onPointerOver={() => (document.body.style.cursor = "pointer")}
+          onPointerOut={() => (document.body.style.cursor = "")}
+        >
+          <planeGeometry args={[GAP, 1.0]} /* NOSONAR */ />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} /* NOSONAR */ />
+        </mesh>
+      ))}
       {events.map((e, i) => (
         <mesh
           key={e.seq}
@@ -182,12 +199,7 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
             meshes.current[i] = m;
           }}
           position={[i * GAP, 0.3, 0]} /* NOSONAR */
-          onClick={(ev) => {
-            ev.stopPropagation();
-            onSelect(e.seq);
-          }}
-          onPointerOver={() => (document.body.style.cursor = "pointer")}
-          onPointerOut={() => (document.body.style.cursor = "")}
+          raycast={() => null}
         >
           <boxGeometry args={[0.3, 0.6, 0.22]} /* NOSONAR */ />
           <meshStandardMaterial
@@ -233,7 +245,7 @@ export default function ChainStrip3D(props: Readonly<StripProps & { crackStarted
   const prev = selIdx > 0 ? props.events[selIdx - 1] : undefined;
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0 overflow-hidden">
       <Canvas className="!absolute inset-0" dpr={[1, 2]} camera={{ position: [0, 1.1, 5.2], fov: 32, near: 0.1, far: 60 }} gl={{ antialias: true, alpha: true }} aria-hidden>
         <Clear />
         <ambientLight intensity={1.5} /* NOSONAR */ />
