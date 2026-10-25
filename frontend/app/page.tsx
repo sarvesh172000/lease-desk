@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
 import { ApiError, exceptionIdFor } from "@/lib/api";
 import { day, humanize, money, timestamp } from "@/lib/format";
 import { useAudit, useChargeChecks, useExceptions, useLeases, useMe, useMonthSummary, useQuestions, useSummary } from "@/lib/hooks";
-import { monthLong } from "@/lib/labels";
+import { attemptLabel, monthLong } from "@/lib/labels";
 import type { AuditEvent } from "@/lib/types";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -252,7 +252,8 @@ function RefusedPanel() {
                   <span className="rounded-xs bg-bad-soft px-1.5 text-2xs font-semibold uppercase text-bad">Refused</span>
                 </div>
                 <div className="text-sm text-ink-soft">
-                  {humanize(e.action)} <span className="font-mono text-xs text-ink-muted">{e.subject_id}</span>
+                  {attemptLabel(e.action)} <span className="text-ink-muted">{e.subject_type.replace(/_/g, " ")}</span>{" "}
+                  <span className="font-mono text-xs text-ink-muted">{e.subject_id}</span>
                 </div>
                 {e.reason ? <div className="text-xs text-ink-muted">{e.reason}</div> : null}
                 <div className="mt-0.5 text-2xs text-ink-faint">{timestamp(e.at)}</div>

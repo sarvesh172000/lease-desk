@@ -29,7 +29,17 @@ const short = (h?: string | null) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : 
 
 function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedAt }: StripProps & { crackStartedAt: number | null }) {
   const group = useRef<THREE.Group>(null);
+  const { viewport } = useThree();
   const selIdx = useMemo(() => (selectedSeq == null ? events.length - 1 : events.findIndex((e) => e.seq === selectedSeq)), [events, selectedSeq]);
+  // Nothing selected: the newest block sits at the right edge and the strip spans the width, oldest → newest.
+  // A selection glides to the centre; a chain shorter than the width starts at the left edge.
+  const targetX = useMemo(() => {
+    const half = viewport.width / 2;
+    const span = Math.max(0, events.length - 1) * GAP;
+    if (span + 0.6 <= viewport.width) return -half + 0.5;
+    if (selectedSeq == null) return half - 0.5 - span;
+    return Math.min(-half + 0.5, Math.max(half - 0.5 - span, -(Math.max(0, selIdx) * GAP)));
+  }, [viewport.width, events.length, selectedSeq, selIdx]);
   const crackIdx = useMemo(() => (crackSeq == null ? -1 : events.findIndex((e) => e.seq >= crackSeq)), [events, crackSeq]);
   const colors = useMemo(
     () => ({
@@ -48,8 +58,7 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
   useFrame((state) => {
     const g = group.current;
     if (!g) return;
-    const target = -(Math.max(0, selIdx) * GAP);
-    g.position.x += (target - g.position.x) * EASE;
+    g.position.x += (targetX - g.position.x) * EASE;
     const now = state.clock.elapsedTime;
     events.forEach((e, i) => {
       const m = meshes.current[i];
@@ -81,7 +90,7 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
   const prev = selIdx > 0 ? events[selIdx - 1] : undefined;
 
   return (
-    <group ref={group} position={[-(Math.max(0, selIdx) * GAP), 0, 0]}>
+    <group ref={group} position={[targetX, 0, 0]}>
       {/* the links: a bar between every pair of neighbours */}
       {events.map((e, i) =>
         i === 0 ? null : (

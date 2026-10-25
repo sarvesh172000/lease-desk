@@ -1,202 +1,199 @@
 "use client";
 
+import { Runway } from "@/components/leases/Runway";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/ui/States";
 import { day, money, STATUS_LABEL } from "@/lib/format";
-import { useLeases } from "@/lib/hooks";
+import { regionOfLocation, REGION_ORDER } from "@/lib/geo";
+import { useChargeChecks, useLeases, useObligations, useSummary } from "@/lib/hooks";
+import { placeLabel, regionLabel } from "@/lib/labels";
 import type { LeaseSummary, Status } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnFiltersState,
-  type SortingState,
-} from "@tanstack/react-table";
+import { List, Rows3 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const STATUSES: Status[] = ["exception", "pending_review", "escalated", "balanced"];
-const col = createColumnHelper<LeaseSummary>();
-
-const columns = [
-  col.accessor("status", {
-    header: "Status",
-    cell: (c) => <StatusBadge status={c.getValue()} />,
-    filterFn: "equalsString",
-    sortingFn: (a, b) => STATUSES.indexOf(a.original.status) - STATUSES.indexOf(b.original.status),
-  }),
-  col.accessor("lease_id", {
-    header: "Lease",
-    cell: (c) => (
-      <Link href={`/leases/${encodeURIComponent(c.getValue())}`} className="font-medium hover:text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
-        {c.getValue()}
-      </Link>
-    ),
-  }),
-  col.accessor("clinic_id", { header: "Clinic", filterFn: "equalsString" }),
-  col.accessor("location", {
-    header: "Location",
-    cell: (c) => (
-      <div className="min-w-0">
-        <div className="truncate">{c.getValue()}</div>
-        <div className="truncate text-xs text-ink-muted">{c.row.original.lessor}</div>
-      </div>
-    ),
-  }),
-  col.accessor("monthly_rent", { header: "Monthly rent", meta: { num: true }, cell: (c) => money(c.getValue()) }),
-  col.accessor("liability", { header: "Liability", meta: { num: true }, cell: (c) => money(c.getValue()) }),
-  col.accessor("end", { header: "Ends", cell: (c) => day(c.getValue()) }),
-];
 
 export default function LeasesPage() {
   const q = useLeases();
+  const summary = useSummary();
+  const checks = useChargeChecks();
+  const obligations = useObligations({ within_days: 2000 });
   const router = useRouter();
-  const [sorting, setSorting] = useState<SortingState>([{ id: "status", desc: false }]);
-  const [filters, setFilters] = useState<ColumnFiltersState>([]);
+  const [view, setView] = useState<"runway" | "table">("runway");
+  const [status, setStatus] = useState<Status | "">("");
+  const [region, setRegion] = useState("");
   const [search, setSearch] = useState("");
 
   const data = useMemo(() => q.data ?? [], [q.data]);
-  const table = useReactTable({
-    data,
-    columns,
-    state: { sorting, columnFilters: filters, globalFilter: search },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setFilters,
-    onGlobalFilterChange: setSearch,
-    globalFilterFn: "includesString",
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-  });
+  // the clinic's region from the queue when the API knows it; the city table otherwise
+  const regionOfClinic = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of checks.data ?? []) if (c.clinic_id && c.region_id) m.set(c.clinic_id, c.region_id);
+    return m;
+  }, [checks.data]);
+  const regionOf = (l: LeaseSummary) => regionOfClinic.get(l.clinic_id) ?? regionOfLocation(l.location);
 
-  const statusFilter = (filters.find((f) => f.id === "status")?.value as string | undefined) ?? "";
-  const clinicFilter = (filters.find((f) => f.id === "clinic_id")?.value as string | undefined) ?? "";
-  const setFilter = (id: string, value: string) =>
-    setFilters((prev) => [...prev.filter((f) => f.id !== id), ...(value ? [{ id, value }] : [])]);
+  const rows = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return data.filter(
+      (l) =>
+        (!status || l.status === status) &&
+        (!region || regionOf(l) === region) &&
+        (!s || l.location.toLowerCase().includes(s) || l.lessor.toLowerCase().includes(s) || l.lease_id.toLowerCase().includes(s) || l.clinic_id.toLowerCase().includes(s)),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, status, region, search, regionOfClinic]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const l of data) c[l.status] = (c[l.status] ?? 0) + 1;
     return c;
   }, [data]);
-  const clinics = useMemo(() => Array.from(new Set(data.map((l) => l.clinic_id))).sort(), [data]);
-  const rows = table.getRowModel().rows;
+  const regions = useMemo(() => {
+    const set = new Set(data.map(regionOf));
+    return [...REGION_ORDER.filter((r) => set.has(r)), ...Array.from(set).filter((r) => !(REGION_ORDER as string[]).includes(r))];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, regionOfClinic]);
+  const totalRent = data.reduce((s, l) => s + l.monthly_rent, 0);
+  const totalLiability = data.reduce((s, l) => s + l.liability, 0);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <div className="eyebrow">Portfolio</div>
-        <h1 className="text-2xl font-semibold">Leases</h1>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
-        <CountChip label="All" count={data.length} active={!statusFilter} onClick={() => setFilter("status", "")} />
-        {STATUSES.map((s) => (
-          <CountChip key={s} label={STATUS_LABEL[s]} status={s} count={counts[s] ?? 0} active={statusFilter === s} onClick={() => setFilter("status", statusFilter === s ? "" : s)} />
-        ))}
-        <div className="ml-auto flex items-center gap-2">
-          <select
-            aria-label="Filter by clinic"
-            className="h-9 rounded-md border border-line-strong bg-surface px-2 text-sm"
-            value={clinicFilter}
-            onChange={(e) => setFilter("clinic_id", e.target.value)}
-          >
-            <option value="">All clinics</option>
-            {clinics.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <input
-            type="search"
-            placeholder="Search location, lessor…"
-            aria-label="Search leases"
-            className="h-9 w-64 rounded-md border border-line-strong bg-surface px-3 text-sm placeholder:text-ink-faint"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="eyebrow">Portfolio</div>
+          <h1 className="text-2xl font-semibold">
+            Leases
+            {q.data ? (
+              <span className="num ml-2 text-base font-normal text-ink-muted">
+                · {data.length} lease{data.length === 1 ? "" : "s"} · {money(totalRent)} a month · {money(totalLiability)} liability
+              </span>
+            ) : null}
+          </h1>
+        </div>
+        <div className="flex rounded-sm border border-line bg-surface p-0.5" role="group" aria-label="View">
+          {(
+            [
+              ["runway", "Runway", Rows3],
+              ["table", "Table", List],
+            ] as const
+          ).map(([v, l, Icon]) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              data-testid={`view-${v}`}
+              onClick={() => setView(v)}
+              className={cn("flex h-8 items-center gap-1.5 rounded-[4px] px-3 text-sm font-medium transition-colors", view === v ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-sunken")}
+            >
+              <Icon aria-hidden className="h-3.5 w-3.5" />
+              {l}
+            </button>
+          ))}
         </div>
       </div>
 
-      <Card>
-        {q.isLoading ? (
-          <div className="p-5">
-            <LoadingBlock rows={5} label="Loading leases" />
-          </div>
-        ) : q.isError ? (
-          <div className="p-5">
-            <ErrorState title="Could not load leases" error={q.error} onRetry={() => q.refetch()} />
-          </div>
-        ) : !data.length ? (
-          <div className="p-5">
-            <EmptyState title="No leases yet.">Ingest a lease PDF to start a schedule.</EmptyState>
-          </div>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
+        <CountChip label="All" count={data.length} active={!status} onClick={() => setStatus("")} />
+        {STATUSES.map((s) => (
+          <CountChip key={s} label={STATUS_LABEL[s]} status={s} count={counts[s] ?? 0} active={status === s} onClick={() => setStatus(status === s ? "" : s)} />
+        ))}
+        <span className="mx-1 h-5 w-px bg-line" aria-hidden />
+        {regions.length > 1 ? (
+          <select aria-label="Filter by region" className="h-9 rounded-sm border border-line-strong bg-surface px-2 text-sm" value={region} onChange={(e) => setRegion(e.target.value)}>
+            <option value="">All regions</option>
+            {regions.map((r) => (
+              <option key={r} value={r}>
+                {regionLabel(r)}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <input
+          type="search"
+          placeholder="Search location, lessor…"
+          aria-label="Search leases"
+          className="ml-auto h-9 w-64 rounded-sm border border-line-strong bg-surface px-3 text-sm placeholder:text-ink-faint"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {q.isLoading ? (
+        <Card className="p-5">
+          <LoadingBlock rows={5} label="Loading leases" />
+        </Card>
+      ) : q.isError ? (
+        <Card className="p-5">
+          <ErrorState title="Could not load leases" error={q.error} onRetry={() => q.refetch()} />
+        </Card>
+      ) : !data.length ? (
+        <Card className="p-5">
+          <EmptyState title="No leases yet.">Ingest a lease PDF to start a schedule.</EmptyState>
+        </Card>
+      ) : !rows.length ? (
+        <Card className="p-5">
+          <EmptyState title="Nothing matches these filters.">Clear a filter to see the rest.</EmptyState>
+        </Card>
+      ) : view === "runway" ? (
+        summary.data ? (
+          <Runway leases={rows} today={summary.data.as_of} obligations={obligations.data?.obligations ?? []} regionOf={regionOf} />
+        ) : summary.isError ? (
+          <ErrorState title="The business clock is unavailable" error={summary.error} onRetry={() => summary.refetch()} />
         ) : (
-          <table className="w-full table-fixed border-collapse text-[0.95rem]">
-            <colgroup>
-              <col className="w-40" />
-              <col className="w-28" />
-              <col className="w-28" />
-              <col />
-              <col className="w-36" />
-              <col className="w-40" />
-              <col className="w-32" />
-            </colgroup>
-            <thead className="sticky top-0 z-10">
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="table-head [&>th]:bg-sunken [&>th]:backdrop-blur-sm">
-                  {hg.headers.map((h, i) => {
-                    const num = (h.column.columnDef.meta as { num?: boolean } | undefined)?.num;
-                    const sorted = h.column.getIsSorted();
-                    return (
-                      <th key={h.id} className={cn("px-3 py-2 font-semibold", i === 0 && "pl-5", num && "text-right")} aria-sort={sorted ? (sorted === "asc" ? "ascending" : "descending") : "none"}>
-                        <button type="button" className={cn("inline-flex items-center gap-1 uppercase", num && "flex-row-reverse")} onClick={h.column.getToggleSortingHandler()}>
-                          {flexRender(h.column.columnDef.header, h.getContext())}
-                          <span aria-hidden className="text-ink-faint">{sorted === "asc" ? "▲" : sorted === "desc" ? "▼" : ""}</span>
-                        </button>
-                      </th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {rows.length ? (
-                rows.map((r) => (
-                  <tr key={r.id} className="cursor-pointer border-b border-line/70 hover:bg-sunken/60" onClick={() => router.push(`/leases/${encodeURIComponent(r.original.lease_id)}`)}>
-                    {r.getVisibleCells().map((c, i) => {
-                      const num = (c.column.columnDef.meta as { num?: boolean } | undefined)?.num;
-                      return (
-                        <td key={c.id} className={cn("px-3 py-3 align-middle", i === 0 && "pl-5", num && "num text-right")}>
-                          {flexRender(c.column.columnDef.cell, c.getContext())}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={columns.length} className="p-5">
-                    <EmptyState title="No leases match these filters." />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </Card>
-      {data.length ? (
-        <p className="text-xs text-ink-muted">
-          Showing {rows.length} of {data.length} leases.
-        </p>
-      ) : null}
+          <LoadingBlock rows={4} label="Loading the business clock" />
+        )
+      ) : (
+        <LeaseTable rows={rows} regionOf={regionOf} onOpen={(id) => router.push(`/leases/${encodeURIComponent(id)}`)} />
+      )}
+      <p className="text-xs text-ink-muted">
+        Showing {rows.length} of {data.length} leases{view === "runway" ? ", by region, soonest end first" : ""}.
+      </p>
     </div>
+  );
+}
+
+/** The accessible fallback: the same leases as a table. */
+function LeaseTable({ rows, regionOf, onOpen }: { rows: LeaseSummary[]; regionOf: (l: LeaseSummary) => string; onOpen: (id: string) => void }) {
+  return (
+    <Card className="overflow-hidden">
+      <table className="w-full border-collapse text-[0.95rem]" data-testid="lease-table">
+        <thead>
+          <tr className="table-head">
+            <th className="py-2 pl-5 pr-2 font-semibold">Status</th>
+            <th className="px-2 py-2 font-semibold">Clinic</th>
+            <th className="px-2 py-2 font-semibold">Region</th>
+            <th className="px-2 py-2 text-right font-semibold">Monthly rent</th>
+            <th className="px-2 py-2 text-right font-semibold">Liability</th>
+            <th className="px-2 py-2 pr-5 font-semibold">Ends</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((l) => (
+            <tr key={l.lease_id} className="cursor-pointer border-b border-line/70 hover:bg-sunken/60" onClick={() => onOpen(l.lease_id)}>
+              <td className="py-3 pl-5 pr-2">
+                <StatusBadge status={l.status} />
+              </td>
+              <td className="px-2 py-3">
+                <Link href={`/leases/${encodeURIComponent(l.lease_id)}`} className="font-medium hover:text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
+                  {placeLabel(l.location) ?? l.location}
+                </Link>
+                <div className="truncate text-xs text-ink-muted">
+                  {l.lessor} <span className="font-mono">· {l.lease_id} · {l.clinic_id}</span>
+                </div>
+              </td>
+              <td className="px-2 py-3 text-ink-soft">{regionLabel(regionOf(l))}</td>
+              <td className="num px-2 py-3 text-right">{money(l.monthly_rent)}</td>
+              <td className="num px-2 py-3 text-right">{money(l.liability)}</td>
+              <td className="px-2 py-3 pr-5 whitespace-nowrap">{day(l.end)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
@@ -206,14 +203,15 @@ function CountChip({ label, count, active, onClick, status }: { label: string; c
       type="button"
       aria-pressed={active}
       onClick={onClick}
+      data-status={status}
       className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors",
-        active ? "border-accent bg-accent text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-sunken",
+        "flex h-9 items-center gap-2 rounded-full border px-3 text-sm transition-colors duration-fast",
+        active ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink",
         !active && count === 0 && "opacity-60",
       )}
     >
       {label}
-      <span className={cn("num rounded px-1.5 text-xs font-semibold", active ? "bg-white/20" : status === "exception" && count ? "bg-bad-soft text-bad" : "bg-sunken")}>{count}</span>
+      <span className={cn("num rounded-full px-1.5 text-xs font-semibold", active ? "bg-accent text-accent-ink" : "bg-sunken text-ink-muted")}>{count}</span>
     </button>
   );
 }

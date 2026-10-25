@@ -129,3 +129,55 @@ export function actorKind(actorId: string): ActorKind {
   if (actorId.startsWith("system") || actorId === "engine" || actorId === "gateway") return "system";
   return "person";
 }
+
+const TERM_LABEL: Record<string, string> = {
+  commencement: "Commencement",
+  expiration: "Expiration",
+  rentable_sf: "Rentable area",
+  proportionate_share_pct: "Proportionate share",
+  base_rent_monthly: "Base rent, monthly",
+  escalation_kind: "Escalation",
+  escalation_amount: "Escalation amount",
+  cam_estimate_psf_annual: "CAM estimate, per sf a year",
+  cam_cap: "CAM cap",
+  security_deposit: "Security deposit",
+  renewal_count: "Renewal options",
+  renewal_years: "Renewal term",
+  renewal_notice_days: "Renewal notice",
+  authorized_representative: "Authorized representative",
+  cam_audit_window: "CAM audit window",
+  late_fee: "Late fee",
+};
+
+/** base_rent_monthly → "Base rent, monthly" */
+export function termLabel(field: string | null | undefined): string {
+  if (!field) return "—";
+  return TERM_LABEL[field] ?? chargeLabel(field);
+}
+
+const REGION_LABEL: Record<string, string> = { "REG-BAY": "Bay Area", "REG-SOCAL": "SoCal", "REG-DESERT": "Desert" };
+
+/** REG-BAY → "Bay Area"; an unknown region reads as its id. */
+export function regionLabel(regionId: string | null | undefined): string {
+  if (!regionId) return "Unassigned";
+  return REGION_LABEL[regionId] ?? regionId.replace(/^REG-/, "");
+}
+
+const OBLIGATION_LABEL: Record<string, string> = {
+  renewal_notice: "Renewal notice",
+  cam_audit_window: "CAM audit window",
+  deposit_return: "Deposit return",
+  expiration: "Expiration",
+};
+
+export function obligationLabel(kind: string | null | undefined): string {
+  if (!kind) return "—";
+  return OBLIGATION_LABEL[kind] ?? chargeLabel(kind);
+}
+
+/** "abstraction:llm" → read by Claude; "abstraction:generator" → the generator's terms. */
+export function extractorLabel(agent: string | null | undefined): { short: string; long: string; kind: "llm" | "generator" | "unknown" } {
+  if (agent === "abstraction:llm") return { short: "Read by Claude", long: "Read by Claude from the lease PDF (abstraction:llm), each term with its quote and page", kind: "llm" };
+  if (agent === "abstraction:generator") return { short: "Generator", long: "Taken from the generated lease terms (abstraction:generator), not read from the PDF", kind: "generator" };
+  return { short: "Source unknown", long: "No extraction path recorded for these terms", kind: "unknown" };
+}

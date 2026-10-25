@@ -96,8 +96,9 @@ export function Strip2D({ events, selectedSeq, onSelect, crackSeq, visible }: St
   useEffect(() => {
     const el = ref.current;
     if (!el || selIdx < 0) return;
-    el.scrollTo?.({ left: Math.max(0, selIdx * SLOT - el.clientWidth / 2), behavior: "auto" });
-  }, [selIdx]);
+    // nothing selected: the newest at the right edge; a selection sits in the middle
+    el.scrollTo?.({ left: selectedSeq == null ? el.scrollWidth : Math.max(0, selIdx * SLOT - el.clientWidth / 2), behavior: "auto" });
+  }, [selIdx, selectedSeq]);
   const sel = events[selIdx];
   const prev = selIdx > 0 ? events[selIdx - 1] : undefined;
 

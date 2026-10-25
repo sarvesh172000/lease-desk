@@ -6,7 +6,7 @@
  * redesign can replace any screen without touching how data is fetched.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   approveDisputeLetter,
@@ -117,6 +117,13 @@ export function useSchedule(leaseId: string, version?: number, enabled = true) {
 /** A lease's versions with their cited terms and confirmation state. */
 export function useLeaseVersions(leaseId: string) {
   return useQuery({ queryKey: ["lease-versions", leaseId], queryFn: () => getLeaseVersions(leaseId), retry: false });
+}
+
+/** The versions of several leases at once (the runway's ghost extensions), each under its own key. */
+export function useLeaseVersionsMany(leaseIds: string[]) {
+  return useQueries({
+    queries: leaseIds.map((id) => ({ queryKey: ["lease-versions", id], queryFn: () => getLeaseVersions(id), retry: false, staleTime: 60_000 })),
+  });
 }
 
 /** Confirm a lease version by approving its LEASE_ABSTRACTION item; refetches what it changes. */
