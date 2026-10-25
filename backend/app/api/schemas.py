@@ -99,6 +99,15 @@ class LeaseCitation(BaseModel):
     match_score: Optional[float] = None   # docs.citations' score for the located quote
 
 
+class ModificationLink(BaseModel):
+    """The lease change an investigation proposed (work/modifications.py): the
+    controller-only LEASE_MODIFICATION item and the lease version it confirms."""
+    item_id: int
+    state: str                        # PROPOSED until the controller approves; POSTED once the gateway posted
+    lease_version_id: int
+    version: Optional[int] = None     # the version number on the lease, e.g. 2
+
+
 class ExceptionDetail(BaseModel):
     exception_id: str
     lease_id: Optional[str]
@@ -130,6 +139,7 @@ class ExceptionDetail(BaseModel):
     resolution: Optional[str] = None       # upheld | pay_as_billed, once decided
     resolved_by: Optional[str] = None
     override_reason: Optional[str] = None  # the controller's reason for paying as billed
+    modification: Optional[ModificationLink] = None  # the lease change an investigation proposed
 
 
 # --- POST /api/exceptions/{id}/approve ----------------------------------------

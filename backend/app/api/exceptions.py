@@ -77,6 +77,7 @@ from .schemas import (
     Investigation,
     InvoiceLine,
     LeaseCitation,
+    ModificationLink,
 )
 
 log = logging.getLogger(__name__)
@@ -149,6 +150,7 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
         ev = flat["evidence"]
         charge = where.document_for_charge(conn, _str(ev.get("charge_id")) or row["charge_id"])
         lease_sha = _lease_sha(conn, data_dir, flat["lease_id"])
+        modification = _modification(conn, ev.get("modification"))
     billed = row["charge_amount"] if row["charge_amount"] is not None else row["amount"]
     pay = None if billed is None else charges.payable(
         {"kind": "CHARGE_CHECK", "proposal": row["proposal"], "evidence": ev}, billed)
@@ -167,7 +169,29 @@ def get_exception(exc_id: str, eng: Engine = Depends(get_engine),
         disputed=float(pay.disputed) if pay else None,
         invoice_line=InvoiceLine(**line) if line else None,
         lease_citation=LeaseCitation(**cited) if cited else None,
+        modification=modification,
     )
+
+
+def _modification(conn: Connection, link: Any) -> Optional[ModificationLink]:
+    """The lease change on record for this charge, with its item's state now.
+
+    The evidence links the item and the version when the investigation was
+    recorded; the state is read fresh, so the page shows POSTED once the
+    controller has approved and the gateway has posted.
+    """
+    if not isinstance(link, Mapping) or link.get("work_item_id") is None:
+        return None
+    row = conn.execute(text("""
+        SELECT w.id, w.state, v.id AS lease_version_id, v.version
+          FROM work_item w
+          LEFT JOIN lease_version v ON v.id::text = w.subject_id
+         WHERE w.id = :id AND w.kind = :kind
+    """), {"id": link["work_item_id"], "kind": modifications.MODIFICATION_KIND}).mappings().first()
+    if row is None or row["lease_version_id"] is None:
+        return None
+    return ModificationLink(item_id=row["id"], state=row["state"],
+                            lease_version_id=row["lease_version_id"], version=row["version"])
 
 
 class ApproveBody(BaseModel):

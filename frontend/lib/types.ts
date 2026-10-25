@@ -126,6 +126,16 @@ export interface ExceptionDetail {
   resolution?: "upheld" | "pay_as_billed" | string | null;
   resolved_by?: string | null;
   override_reason?: string | null;
+  /** EXTENSION: the lease change an investigation proposed: the controller-only LEASE_MODIFICATION item, its state read fresh. */
+  modification?: ModificationLink | null;
+}
+
+export interface ModificationLink {
+  item_id: number;
+  /** PROPOSED until the controller approves; POSTED once the gateway has posted the remeasurement. */
+  state: string;
+  lease_version_id: number;
+  version?: number | null;
 }
 
 /** EXTENSION: what the gateway did after an approval. */
