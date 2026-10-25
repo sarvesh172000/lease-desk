@@ -14,8 +14,8 @@ import pytest
 from agents_fetch.grammar import Command, parse
 from agents_fetch.understand import ASI_URL, from_env, read
 
-ITEMS = [{"id": 42, "state": "PROPOSED", "clinic_id": "CLINIC-01", "amount": 19626.65, "title": "Base rent"},
-         {"id": 43, "state": "NEEDS_INFO", "clinic_id": "CLINIC-03", "amount": 2100.0, "title": "CAM estimate"}]
+ITEMS = [{"id": 42, "state": "PROPOSED", "clinic_id": "STORE-01", "amount": 19626.65, "title": "Base rent"},
+         {"id": 43, "state": "NEEDS_INFO", "clinic_id": "STORE-03", "amount": 2100.0, "title": "CAM estimate"}]
 
 
 @pytest.mark.parametrize("form,line", [
@@ -24,7 +24,7 @@ ITEMS = [{"id": 42, "state": "PROPOSED", "clinic_id": "CLINIC-01", "amount": 196
     ({"intent": "review", "item": "#43"}, "review 43"),
     ({"intent": "investigate", "item": 43}, "investigate 43"),
     ({"intent": "why", "item": 42}, "why 42"),
-    ({"intent": "lease", "lease": "clinic-03", "topic": "cam"}, "lease CLINIC-03 cam"),
+    ({"intent": "lease", "lease": "store-03", "topic": "cam"}, "lease STORE-03 cam"),
     ({"intent": "lease", "lease": "LEASE-01", "topic": "made up"}, "lease LEASE-01"),
 ])
 def test_reads_become_grammar_commands(form, line):
@@ -98,7 +98,7 @@ def test_the_model_is_asked_with_the_visible_items_and_answers_through_the_gramm
     assert str(request.url) == ASI_URL and request.headers["authorization"] == "Bearer test-key"
     body = json.loads(request.content)
     assert body["model"] == "asi1"
-    assert "#43 NEEDS_INFO CLINIC-03" in body["messages"][0]["content"]
+    assert "#43 NEEDS_INFO STORE-03" in body["messages"][0]["content"]
 
 
 @pytest.mark.parametrize("content,status", [("no json here", 200), ('{"intent": "approve"', 200),

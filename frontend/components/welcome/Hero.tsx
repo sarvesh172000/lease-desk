@@ -45,7 +45,7 @@ export function Hero() {
           </Reveal>
           <Reveal delay={0.15}>
             <p className="mt-6 max-w-xl leading-relaxed text-ink-soft">
-              Lease Desk reads every lease a clinic group holds, checks each landlord bill against what the lease says, and
+              Lease Desk reads every lease a coffee chain holds, checks each landlord bill against what the lease says, and
               holds only what is wrong. It proposes the entries. A controller approves them. A gateway posts them. Every step is
               sealed to a hash chain anyone can verify.
             </p>

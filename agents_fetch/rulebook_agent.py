@@ -1,6 +1,6 @@
 """rulebook_agent: answers lease questions with citations.
 
-    "what is Clinic 03's escalation and where does it say so?"
+    "what is Store 03's escalation and where does it say so?"
 
 The answer comes from GET /api/leases/{id}/versions: each term carries the
 page and the sentence it was read from, so every value in the reply is
@@ -24,7 +24,7 @@ from .protocol import ERROR, INVALID, NOT_FOUND, REFUSED, UNPAIRED, Reply
 
 FEED_NAME = "rulebook"
 AGENT_NAME = "lease_desk_rulebook"
-DESCRIPTION = ("Answers questions about Northbay PT's leases (rent, escalation, CAM, term) with the "
+DESCRIPTION = ("Answers questions about Northbay Coffee's leases (rent, escalation, CAM, term) with the "
                "page and quote each answer comes from. Reached through the Northbay Lease Desk agent.")
 
 
@@ -34,7 +34,7 @@ def _digits(value: str) -> Optional[int]:
 
 
 def resolve_lease(client: PairedClient, ref: str) -> Tuple[Optional[str], List[Dict[str, Any]]]:
-    """(lease_id, the clinic's leases) for LEASE-xx or CLINIC-nn."""
+    """(lease_id, the clinic's leases) for LEASE-xx or STORE-nn."""
     if ref.upper().startswith("LEASE-"):
         return ref.upper(), []
     want = _digits(ref)

@@ -110,7 +110,7 @@ def test_each_transaction_carries_its_memo_and_metadata(posted):
     assert {p.account: p.units.number for p in rent.postings} == {
         "Expenses:LeaseCost:ENT-CA": Decimal("19626.65"),
         "Liabilities:AccountsPayable:ENT-CA": Decimal("-19626.65")}
-    assert rent.postings[0].meta["clinic"] == "CLINIC-01"
+    assert rent.postings[0].meta["clinic"] == "STORE-01"
     payment = next(t for t in txns if t.date == date(2026, 2, 5))
     assert payment.narration == 'Paid "Harbor Point" \\ January'       # escaped and back
 

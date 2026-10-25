@@ -42,7 +42,7 @@ def test_authorized_rep_differs_from_property_manager():
 def test_every_clinic_has_exactly_one_lease():
     leases = build_leases()
     assert sorted(l.clinic_id for l in leases) == [
-        "CLINIC-0%d" % i for i in range(1, 6)
+        "STORE-0%d" % i for i in range(1, 6)
     ]
 
 

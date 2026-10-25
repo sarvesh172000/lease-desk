@@ -65,11 +65,11 @@ def test_a_negative_number_is_still_a_number():
 
 
 def test_the_ap_export_cannot_carry_a_formula(tmp_path):
-    invoice = Invoice("INV-1", "LL-SERRA", "CLINIC-01", JANUARY,
+    invoice = Invoice("INV-1", "LL-SERRA", "STORE-01", JANUARY,
                       date(2025, 12, 20), JANUARY)
     for payload in ATTACKS:
         invoice.charges.append(Charge(
-            "C", "INV-1", "CLINIC-01", "LEASE-01", "LL-SERRA", JANUARY,
+            "C", "INV-1", "STORE-01", "LEASE-01", "LL-SERRA", JANUARY,
             "base_rent", payload, "Suite 210", 100.0))
 
     path = tmp_path / "ap.csv"
@@ -82,7 +82,7 @@ def test_the_ap_export_cannot_carry_a_formula(tmp_path):
 def test_the_bank_export_cannot_carry_a_formula(tmp_path):
     from datagen.month import Payment
 
-    payments = [Payment("P1", JANUARY, JANUARY, "CLINIC-01", "LEASE-01",
+    payments = [Payment("P1", JANUARY, JANUARY, "STORE-01", "LEASE-01",
                         "base_rent", 100.0, "ACH-1",
                         "=1+1", "INV-1")]
     path = tmp_path / "bank.csv"

@@ -52,7 +52,7 @@ Starting conditions:
 - Docker, Python 3.12, Node 20+, a shared GitHub repo with branch protection on `main`.
 
 Fixed decisions for the whole project:
-- **Company:** Northbay Physical Therapy, a fictional group of 30 clinics across California, Nevada and Arizona, organized as three legal entities (one per state) and three regions (Bay Area, Southern California, Desert). Phase 1 uses 5 California clinics.
+- **Company:** Northbay Coffee, a fictional group of 30 clinics across California, Nevada and Arizona, organized as three legal entities (one per state) and three regions (Bay Area, Southern California, Desert). Phase 1 uses 5 California clinics.
 - **Seat filled:** lease accountant. The system drafts the monthly rent and CAM run and the lease journal entries. It never pays and never signs off.
 - **People it works with:** AP clerk (releases payment batches), three regional managers (own landlord relationships in their region), controller (owns the books, approves accounting judgments and policies), external auditor (read-only).
 - **Accounting scope:** operating leases under ASC 842 only.

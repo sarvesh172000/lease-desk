@@ -45,7 +45,7 @@ def test_a_tampered_answer_key_makes_the_eval_fail(key):
     """If the checker stopped catching something, the eval must notice."""
     broken = json.loads(json.dumps(key))
     broken["errors"].append({
-        "error_id": "E99", "kind": "invented", "clinic_id": "CLINIC-03",
+        "error_id": "E99", "kind": "invented", "clinic_id": "STORE-03",
         "period": "2026-01-01", "charge_type": "cam_estimate",
         "billed": 1.0, "correct": 0.0, "variance": 1.0, "is_error": True,
         "lease_section": "0", "proof_quote": "", "expected_route": "auto",
@@ -68,19 +68,19 @@ def _checker_that(flip):
 
 
 def test_a_false_hold_fails_the_eval(key, monkeypatch):
-    """Make the checker hold CLINIC-04's $400 step, which is correct."""
+    """Make the checker hold STORE-04's $400 step, which is correct."""
     monkeypatch.setattr(eval_run, "check_month", _checker_that(
-        lambda c: c.clinic_id == "CLINIC-04" and c.charge_type == "base_rent"))
+        lambda c: c.clinic_id == "STORE-04" and c.charge_type == "base_rent"))
     section = score_checking(key)
     assert not section.ok
     assert section.detail["false_holds"] == ["E6"]
 
 
 def test_holding_the_right_clinic_on_the_wrong_line_is_not_a_catch(key, monkeypatch):
-    """CLINIC-01 has two rent lines. Holding the genuine one and paying the
+    """STORE-01 has two rent lines. Holding the genuine one and paying the
     duplicate must score E2 as missed, not caught."""
     monkeypatch.setattr(eval_run, "check_month", _checker_that(
-        lambda c: c.clinic_id == "CLINIC-01" and c.charge_type == "base_rent"))
+        lambda c: c.clinic_id == "STORE-01" and c.charge_type == "base_rent"))
     section = score_checking(key)
     assert not section.ok
     assert section.detail["missed"] == ["E2"]
@@ -88,7 +88,7 @@ def test_holding_the_right_clinic_on_the_wrong_line_is_not_a_catch(key, monkeypa
 
 def test_charge_ids_are_unique():
     """E3's stray Suite 118 line shares an invoice and charge type with
-    CLINIC-02's real rent. Ingestion and per-charge scoring key on the id."""
+    STORE-02's real rent. Ingestion and per-charge scoring key on the id."""
     ids = [c.charge_id for i in build_month(date(2026, 1, 1)) for c in i.charges]
     assert len(ids) == len(set(ids))
 

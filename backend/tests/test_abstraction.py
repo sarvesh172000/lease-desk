@@ -254,7 +254,7 @@ def test_abstracted_terms_rebuild_the_true_rent_schedule(doc, tmp_path):
     result = abstract_lease(doc, build_llm(tmp_path, good_model()), "LEASE-01")
 
     payload = result.to_engine_json(
-        location="Northbay PT — Daly City — Suite 210",
+        location="Northbay Coffee — Daly City — Suite 210",
         lessor="Serramonte Retail Partners LLC",
         discount_rate=truth.discount_rate,
     )

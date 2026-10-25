@@ -96,7 +96,7 @@ ops/
 
 ### 2. Guided demo, run summaries and snapshots (12 h, Person B, script by A)
 - [ ] Snapshot after onboarding and January to March. `make demo-reset` and a controller-only button restore it in under 30 seconds, locally and in the cloud
-- [ ] Run summary for any month: "April, Northbay PT California: 12 clinics, 148 charges checked, 139 approved, 6 held for $9,840, 3 disputes drafted, 2 questions out, batch ready for AP by 9:00 AM", every number clickable
+- [ ] Run summary for any month: "April, Northbay Coffee California: 12 clinics, 148 charges checked, 139 approved, 6 held for $9,840, 3 disputes drafted, 2 questions out, batch ready for AP by 9:00 AM", every number clickable
 - [ ] Guided stepper, each step one click away:
   1. **The moment:** parking lot repaving billed in full to three clinics in one center, the statements side by side with the share clause boxed, the undisputed portion paid, only the disputed amount held
   2. **Learns:** onboarding policy with precedents and the 2025 decisions behind it

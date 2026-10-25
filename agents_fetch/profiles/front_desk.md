@@ -3,7 +3,7 @@
 ![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
 ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
 
-Lease accounting for Northbay PT, a multi-clinic physical therapy group, inside ASI:One.
+Lease accounting for Northbay Coffee, a coffee chain with stores across the Bay Area, inside ASI:One.
 
 Every month Lease Desk checks each landlord charge (base rent, CAM, tax,
 insurance) against what the lease supports. When they disagree it holds the
@@ -22,7 +22,7 @@ own Lease Desk role and region.
 - `what needs me this week?`
 - `review 42` — the held charge as a card: billed, what the lease supports, sources, why
 - `investigate 42` or `why is 42 off?` — the investigation agent searches the mailbox
-- `what is Clinic 03's escalation and where does it say so?` — the rulebook agent, with page and quote
+- `what is Store 03's escalation and where does it say so?` — the rulebook agent, with page and quote
 - `answer 42 yes, suite 110 is ours` · `uphold 42 the lease caps CAM at 5%` · `hold 42 waiting on the landlord`
 
 Plain language works too: ASI:One's model reads what the fixed commands don't

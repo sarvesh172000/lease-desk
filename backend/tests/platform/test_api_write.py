@@ -39,12 +39,12 @@ def world(books):
         execute_raw(conn, """
             INSERT INTO region VALUES ('REG-DESERT', 'Desert', 'PER-RM-DESERT');
             INSERT INTO center VALUES ('CTR-02', 'Desert Ridge', NULL, 'LL-01', 18000);
-            INSERT INTO clinic VALUES ('CLINIC-21', 'Northbay PT Scottsdale', 'ENT-NV',
+            INSERT INTO clinic VALUES ('STORE-21', 'Northbay Coffee Scottsdale', 'ENT-NV',
                                        'REG-DESERT', 'CTR-02', '4', 2100);
-            INSERT INTO lease (id, clinic_id, landlord_id) VALUES ('LEASE-21', 'CLINIC-21', 'LL-01');
+            INSERT INTO lease (id, clinic_id, landlord_id) VALUES ('LEASE-21', 'STORE-21', 'LL-01');
             INSERT INTO landlord_charge (id, lease_id, clinic_id, invoice_id, suite, period,
                                          charge_type, amount, raw_ref) VALUES
-              ('CHG-DESERT-01', 'LEASE-21', 'CLINIC-21', 'INV-21', '4', '2026-01-01',
+              ('CHG-DESERT-01', 'LEASE-21', 'STORE-21', 'INV-21', '4', '2026-01-01',
                'base_rent', 15200.00, 'RAW-1');
             INSERT INTO actor (id, name, role, region_id, entity_id, active) VALUES
               ('PER-RM-DESERT', 'Desi RM', 'regional_manager', 'REG-DESERT', 'ENT-NV', true),
@@ -55,10 +55,10 @@ def world(books):
     return books
 
 
-CLINIC = {"CLINIC-01": ("ENT-CA", "REG-BAY"), "CLINIC-21": ("ENT-NV", "REG-DESERT")}
+CLINIC = {"STORE-01": ("ENT-CA", "REG-BAY"), "STORE-21": ("ENT-NV", "REG-DESERT")}
 
 
-def open_item(engines, charge_id, clinic="CLINIC-01", period="2026-01-01", proposal="approve",
+def open_item(engines, charge_id, clinic="STORE-01", period="2026-01-01", proposal="approve",
               state="PROPOSED", amount="19626.65"):
     """Create and (by default) propose a charge check as the checker would."""
     entity, region = CLINIC[clinic]
@@ -146,7 +146,7 @@ def test_any_signed_in_person_may_read(client):
 def test_the_queue_is_scoped_like_can(client, world):
     bay = open_item(world, w.RENT)
     cam = open_item(world, w.CAM, state="NEW", amount="2100.00")
-    desert = open_item(world, "CHG-DESERT-01", clinic="CLINIC-21", amount="15200.00")
+    desert = open_item(world, "CHG-DESERT-01", clinic="STORE-21", amount="15200.00")
 
     def ids(who):
         return {i["id"] for i in as_(client, who).get("/api/items").json()["items"]}
@@ -170,21 +170,21 @@ def test_the_queue_rows_and_counts(client, world):
                         "period", "amount", "proposal", "reason", "updated_at"}
     assert (row["kind"], row["state"], row["clinic_id"], row["region_id"], row["period"],
             row["amount"], row["proposal"], row["reason"]) == (
-        "CHARGE_CHECK", "PROPOSED", "CLINIC-01", "REG-BAY", "2026-01-01", 19626.65,
+        "CHARGE_CHECK", "PROPOSED", "STORE-01", "REG-BAY", "2026-01-01", 19626.65,
         "approve", "matches the lease")
 
 
 def test_the_queue_filters_and_counts_ignore_the_state_filter(client, world):
     bay = open_item(world, w.RENT)
     open_item(world, w.CAM, state="NEW", amount="2100.00")
-    desert = open_item(world, "CHG-DESERT-01", clinic="CLINIC-21", amount="15200.00")
+    desert = open_item(world, "CHG-DESERT-01", clinic="STORE-21", amount="15200.00")
     c = as_(client, "PER-CTRL")
     proposed = c.get("/api/items", params={"state": "PROPOSED"}).json()
     assert {i["id"] for i in proposed["items"]} == {bay, desert}
     assert proposed["counts"]["NEW"] == 1, "counts are for every state, so tabs can show them"
     assert [i["id"] for i in c.get("/api/items", params={"region_id": "REG-DESERT"}).json()["items"]] \
         == [desert]
-    assert {i["id"] for i in c.get("/api/items", params={"clinic_id": "CLINIC-01",
+    assert {i["id"] for i in c.get("/api/items", params={"clinic_id": "STORE-01",
                                                           "state": "PROPOSED"}).json()["items"]} == {bay}
     assert c.get("/api/items", params={"period": "2025-12-01"}).json()["total"] == 0
 
@@ -226,7 +226,7 @@ def test_allowed_actions_come_from_can(client, world):
 
 
 def test_an_item_outside_your_scope_or_unknown_is_404(client, world):
-    desert = open_item(world, "CHG-DESERT-01", clinic="CLINIC-21", amount="15200.00")
+    desert = open_item(world, "CHG-DESERT-01", clinic="STORE-21", amount="15200.00")
     c = as_(client, "PER-RM-BAY")
     assert c.get("/api/items/%d" % desert).status_code == 404
     assert c.get("/api/items/%d/allowed-actions" % desert).status_code == 404
@@ -240,7 +240,7 @@ def test_an_item_outside_your_scope_or_unknown_is_404(client, world):
 
 def test_acceptance_bay_manager_approving_a_desert_item_is_403_and_on_record(client, world):
     """PHASE_1.md Acceptance Criteria: 403, and a denied event in the timeline."""
-    desert = open_item(world, "CHG-DESERT-01", clinic="CLINIC-21", amount="15200.00")
+    desert = open_item(world, "CHG-DESERT-01", clinic="STORE-21", amount="15200.00")
     response = as_(client, "PER-RM-BAY").post("/api/items/%d/actions/approve" % desert, json={})
     assert response.status_code == 403
     assert "PER-RM-BAY" in response.json()["detail"]
@@ -256,7 +256,7 @@ def test_acceptance_bay_manager_approving_a_desert_item_is_403_and_on_record(cli
 
 
 def test_the_desert_manager_may_approve_their_own_region(client, world):
-    desert = open_item(world, "CHG-DESERT-01", clinic="CLINIC-21", amount="15200.00")
+    desert = open_item(world, "CHG-DESERT-01", clinic="STORE-21", amount="15200.00")
     response = as_(client, "PER-RM-DESERT").post("/api/items/%d/actions/approve" % desert)
     assert response.status_code == 200
     # ENT-NV has no chart or open period in this world: the approval stands, posting waits.
@@ -401,7 +401,7 @@ def test_exception_approve_returns_the_new_status(client, world):
 
 
 def test_exception_approve_is_refused_out_of_region_and_on_record(client, world):
-    desert = open_item(world, "CHG-DESERT-01", clinic="CLINIC-21", proposal="hold",
+    desert = open_item(world, "CHG-DESERT-01", clinic="STORE-21", proposal="hold",
                        amount="15200.00")
     response = as_(client, "PER-RM-BAY").post("/api/exceptions/exc_%d/approve" % desert)
     assert response.status_code == 403

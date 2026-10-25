@@ -94,7 +94,7 @@ DEMO_MONTH ?= 2026-01
 # demo mode only) and the month runs again, so the demo opens on checked
 # charges. DEMO_CONFIRM=0 leaves them for you to confirm on screen.
 DEMO_CONFIRM ?= 1
-# Then the month the story is about: CLINIC-01's amendment (signed in June,
+# Then the month the story is about: STORE-01's amendment (signed in June,
 # never sent to accounting) takes effect in July 2026, so July's rent is billed
 # $2,226.65 under the schedule and held. Its investigation replays from the
 # committed answers in data/reference/llm_cache, with no key. July runs only

@@ -68,12 +68,12 @@ def test_every_charge_traces_to_its_raw_row_and_invoice_pdf(clean, generated):
 
 
 def test_the_stray_suite_line_survives_as_its_own_charge(clean, generated):
-    """E3: CLINIC-02 was billed for Suite 118 on the same invoice as its real
+    """E3: STORE-02 was billed for Suite 118 on the same invoice as its real
     rent. Two lines, two charges, not one overwriting the other."""
     run(clean, generated)
     suites = scalar(clean["lease_reader"], """
         SELECT string_agg(suite, ',' ORDER BY suite) FROM landlord_charge
-         WHERE clinic_id = 'CLINIC-02' AND period = '2026-01-01' AND charge_type = 'base_rent'""")
+         WHERE clinic_id = 'STORE-02' AND period = '2026-01-01' AND charge_type = 'base_rent'""")
     assert suites == "Suite 115,Suite 118"
 
 

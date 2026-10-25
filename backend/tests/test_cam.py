@@ -28,7 +28,7 @@ def serramonte():
     center = company.center("CTR-SERRA")
     rules = [
         CamRule(lease, clinic, "CTR-SERRA", company.clinic(clinic).rsf, center.total_rsf)
-        for lease, clinic in (("LEASE-01", "CLINIC-01"), ("LEASE-02", "CLINIC-02"))
+        for lease, clinic in (("LEASE-01", "STORE-01"), ("LEASE-02", "STORE-02"))
     ]
     return company, pool, rules
 
@@ -80,10 +80,10 @@ def test_each_share_is_pro_rata_of_the_recoverable_amount(serramonte):
 def test_the_lease_denominator_is_used_not_the_real_area(serramonte):
     """A lease can stipulate an area that is not the building's actual one."""
     company, pool, _ = serramonte
-    stipulated = CamRule("L", "CLINIC-01", "CTR-SERRA",
-                         company.clinic("CLINIC-01").rsf, 50_000)
-    actual = CamRule("L", "CLINIC-01", "CTR-SERRA",
-                     company.clinic("CLINIC-01").rsf,
+    stipulated = CamRule("L", "STORE-01", "CTR-SERRA",
+                         company.clinic("STORE-01").rsf, 50_000)
+    actual = CamRule("L", "STORE-01", "CTR-SERRA",
+                     company.clinic("STORE-01").rsf,
                      company.center("CTR-SERRA").total_rsf)
     assert allowed(stipulated, pool, GROSS).total() > allowed(actual, pool, GROSS).total()
 
@@ -156,7 +156,7 @@ def test_the_parking_lot_is_billed_in_full_to_both_suites(serramonte):
     _, pool, _ = serramonte
     doubled = pool.double_billed()
     assert len(doubled) == 1
-    assert set(doubled[0].billed_in_full_to) == {"CLINIC-01", "CLINIC-02"}
+    assert set(doubled[0].billed_in_full_to) == {"STORE-01", "STORE-02"}
 
 
 def test_the_shared_pool_check_catches_it(serramonte):
@@ -184,7 +184,7 @@ def test_an_excluded_double_billed_line_supports_nothing(serramonte):
 def test_the_finding_names_every_affected_clinic(serramonte):
     _, pool, rules = serramonte
     finding = check_shared_pool(rules, pool)[0]
-    assert set(finding.related_clinics) == {"CLINIC-01", "CLINIC-02"}
+    assert set(finding.related_clinics) == {"STORE-01", "STORE-02"}
 
 
 def test_it_cites_the_no_double_allocation_clause(serramonte):

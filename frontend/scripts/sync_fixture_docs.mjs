@@ -27,8 +27,8 @@ const EMAIL_ID = "eml_20260618";
 
 // the fixture exception ids, and how to find the same case on the live desk
 const CASES = {
-  exc_01_jul_amendment: (e) => e.clinic_id === "CLINIC-01" && e.charge_type === "base_rent" && e.period.startsWith("2026-07"),
-  exc_01_jan_cam: (e) => e.clinic_id === "CLINIC-01" && e.charge_type === "cam_estimate" && e.period.startsWith("2026-01"),
+  exc_01_jul_amendment: (e) => e.clinic_id === "STORE-01" && e.charge_type === "base_rent" && e.period.startsWith("2026-07"),
+  exc_01_jan_cam: (e) => e.clinic_id === "STORE-01" && e.charge_type === "cam_estimate" && e.period.startsWith("2026-01"),
 };
 
 let cookie = "";
