@@ -23,6 +23,7 @@
 <p align="center">
   <a href="#the-moment"><b>The moment</b></a> &nbsp;·&nbsp;
   <a href="#how-it-works"><b>How it works</b></a> &nbsp;·&nbsp;
+  <a href="#architecture"><b>Architecture</b></a> &nbsp;·&nbsp;
   <a href="#the-screens"><b>The screens</b></a> &nbsp;·&nbsp;
   <a href="#how-we-know-it-works"><b>How we know</b></a> &nbsp;·&nbsp;
   <a href="#who-can-do-what"><b>Who can do what</b></a> &nbsp;·&nbsp;
@@ -114,6 +115,26 @@ wrong extraction is a **reviewable error**, never a silently wrong balance sheet
 | **Approve** | a person | Controller or regional manager, in their own region, never on their own answer. |
 | **Post** | `lease_gateway` | The one database role that may write the journal, the outbox and the golden tables. |
 | **Seal** | `audit_event` | Every event hashed to the one before it. Anyone can verify; an edit shows as a break. |
+
+<p align="right"><a href="#readme-top">back to top ↑</a></p>
+
+## Architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture-light.svg">
+    <img alt="Lease Desk architecture: people use the Next.js web app on Vercel; the FastAPI API on Azure checks roles on every action and enqueues jobs; the worker reads documents with Claude and runs the ASC 842 engine; the gateway alone writes the books in Postgres 16, whose audit_event table is a SHA-256 chain nobody can rewrite; SpacetimeDB mirrors the desk live to open tabs." src="docs/assets/architecture-light.svg" width="100%">
+  </picture>
+</p>
+
+Five things the picture is drawn around:
+
+- **One door.** Everything, the web app and the Fetch.ai agents alike, goes through the API, which checks the person's role on every action and never writes the ledger itself.
+- **One writer.** The gateway is the only code that posts journal entries, writes the golden tables or sends a letter. It runs inside the API on its own database role, re-checks the approval first, and without one it has nothing to do.
+- **The model reads, the code counts.** Claude turns a lease PDF into 13 cited terms and finds the document that explains a variance. Every schedule, remeasurement and catch-up is plain Python with a test suite.
+- **A record that cannot be rewritten.** Postgres is the system of record. Its `audit_event` table is SHA-256 chained and append-only; triggers refuse every update, the owner's included. SpacetimeDB only mirrors it, so other screens update without a refresh.
+- **Honest inputs.** A generated company with an answer key, three real SEC lease exhibits and 184 BLS CPI observations, so every number on screen can be checked against something.
 
 <p align="right"><a href="#readme-top">back to top ↑</a></p>
 
