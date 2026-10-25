@@ -11,7 +11,8 @@ const [BASE, OUT, THEME = "dark", REDUCED = "0", SUFFIX = "", STEPS = "all"] = p
 const API = process.env.API_URL || "http://localhost:8000";
 const want = (n) => STEPS === "all" || STEPS.split(",").includes(n);
 mkdirSync(OUT, { recursive: true });
-const PORT = 9300 + Math.floor(Math.random() * 500);
+// A port per process, so two walks at once don't collide.
+const PORT = 9300 + (process.pid % 500);
 const chrome = spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", [
   "--headless=new", `--remote-debugging-port=${PORT}`, "--hide-scrollbars", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
   `--user-data-dir=${mkdtempSync(join(tmpdir(), "ldr8-"))}`, "--window-size=1280,800", "about:blank",
@@ -101,7 +102,7 @@ await evalJs(`localStorage.setItem("leasedesk-theme","${THEME}")`);
 await evalJs(`fetch("${API}/api/auth/logout",{method:"POST",credentials:"include"}).then(r=>r.status).catch(()=>0)`);
 
 const pathStart = performance.now();
-await step("welcome", async () => { const r = await send("Page.navigate", { url: BASE + "/welcome" }); if (r.result?.errorText) console.log("navigate:", r.result.errorText); await sleep(400); return !r.result?.errorText; }, `location.pathname === "/welcome" && ${q("main h1")} && document.body.innerText.includes("$")`, { settle: 3000 });
+await step("welcome", async () => { const r = await send("Page.navigate", { url: BASE + "/welcome" }); if (r.result?.errorText) { console.log("navigate:", r.result.errorText); } await sleep(400); return !r.result?.errorText; }, `location.pathname === "/welcome" && ${q("main h1")} && document.body.innerText.includes("$")`, { settle: 3000 });
 await step("login", () => clickSel('header a[href="/login"]'), q('[data-testid="personas"]'));
 await step("today", () => clickText('[data-testid="personas"] button', process.env.PERSONA || "Priya"), `${q('[data-testid="tiles"]')} && (${q('[data-testid="hero-card"], [data-testid="ap-hero"], [data-testid="auditor-hero"]')} || document.body.innerText.includes("Nothing waits"))`, { settle: 2500 });
 await step("money", () => clickSel('[data-testid="hero-card"] a[href^="/exceptions/"]'), `document.body.innerText.includes("LEASE SUPPORTS") && ${q("main img")}`, { settle: 2500 });
