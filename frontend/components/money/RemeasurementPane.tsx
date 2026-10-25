@@ -18,6 +18,7 @@ export function RemeasurementPane({
   rouDelta,
   animate,
   entries,
+  posted = false,
 }: {
   inv: Investigation;
   /** The engine's deltas (from the stream or the record); shown only when sent. */
@@ -27,6 +28,8 @@ export function RemeasurementPane({
   animate: boolean;
   /** Show the entries yet (the "complete" beat has arrived or is on record). */
   entries: boolean;
+  /** The controller approved the lease change and the gateway posted these entries. */
+  posted?: boolean;
 }) {
   const reduce = useReducedMotion();
   const play = animate && !reduce;
@@ -62,7 +65,7 @@ export function RemeasurementPane({
           transition={{ duration: 0.3, delay: play ? 0.2 : 0 }}
           className="rounded-sm border border-line bg-surface px-3.5 py-3"
         >
-          <div className="eyebrow mb-1.5">Proposed entries · not posted</div>
+          <div className="eyebrow mb-1.5">{posted ? "Entries · posted through the gateway" : "Proposed entries · not posted"}</div>
           <JournalEntryTable entries={inv.entries} balanced={inv.balanced} reveal={animate} dense />
         </motion.div>
       ) : null}

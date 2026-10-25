@@ -145,6 +145,21 @@ def test_the_stages_carry_what_the_screen_draws(client, july_variance, fake_mode
     assert complete["entries"] >= 2 and complete["balanced"] is True
 
 
+def test_the_detail_links_the_lease_change_it_proposed(
+        client, july_variance, seeded, generated, fake_model):
+    """The page needs the controller's approval item and its state, read fresh."""
+    lw.draft_and_confirm(seeded, generated)
+    fake_model(THE_AMENDMENT)
+    stages(client.post("/api/exceptions/exc_%d/investigate" % july_variance))
+    link = client.get("/api/exceptions/exc_%d" % july_variance).json()["modification"]
+    assert link is not None and link["state"] == "PROPOSED"
+    assert link["version"] >= 2 and link["item_id"] != july_variance
+    with seeded["lease_reader"].connect() as conn:
+        kind = conn.execute(text("SELECT kind FROM work_item WHERE id = :id"),
+                            {"id": link["item_id"]}).scalar_one()
+    assert kind == "LEASE_MODIFICATION"
+
+
 def test_nothing_found_is_a_short_stream_not_an_error(client, july_variance, fake_model):
     """Unexplained is a valid outcome: searched, found nothing, proposed nothing."""
     fake_model(NOTHING_FOUND)
@@ -155,6 +170,7 @@ def test_nothing_found_is_a_short_stream_not_an_error(client, july_variance, fak
     assert body["investigation"]["explains_variance"] is False
     assert body["investigation"]["entries"] == []
     assert body["investigation"]["root_cause"] == "unexplained"
+    assert body["modification"] is None
 
 
 def test_nothing_found_can_open_the_resolvers_question(

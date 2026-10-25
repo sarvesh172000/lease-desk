@@ -11,6 +11,7 @@ import { DocumentStack, totalFromMessage } from "@/components/money/DocumentStac
 import { EmailEvidence } from "@/components/money/EmailEvidence";
 import { EvidencePackButton } from "@/components/money/EvidencePackButton";
 import { InvestigationVerdict } from "@/components/money/InvestigationVerdict";
+import { LeaseChangeApproval } from "@/components/money/LeaseChangeApproval";
 import { RemeasurementPane } from "@/components/money/RemeasurementPane";
 import { ResolutionBadge, resolutionOf } from "@/components/money/ResolutionBadge";
 import { SourcesPanel } from "@/components/money/SourcesPanel";
@@ -254,7 +255,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                     onLanded={onLanded}
                   />
                 ) : source?.key === "remeasurement" && inv ? (
-                  <RemeasurementPane inv={inv} liabilityDelta={liabilityDelta} rouDelta={rouDelta} animate={live} entries={reached(phase, "complete")} />
+                  <RemeasurementPane inv={inv} liabilityDelta={liabilityDelta} rouDelta={rouDelta} animate={live} entries={reached(phase, "complete")} posted={ex.modification?.state === "POSTED"} />
                 ) : source?.email ? (
                   <EmailEvidence evidence={source.email} highlight={live} />
                 ) : undefined
@@ -342,7 +343,9 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
         <Card>
           <CardHeader eyebrow="On approval" title="What posts, and what stays held" />
           <CardBody className="text-sm leading-relaxed text-ink-soft">
-            {inv && reached(phase, "complete") ? (
+            {inv && reached(phase, "complete") && ex.modification ? (
+              <LeaseChangeApproval leaseId={ex.lease_id} modification={ex.modification} entries={inv.entries.length} balanced={inv.balanced} />
+            ) : inv && reached(phase, "complete") ? (
               <>
                 {inv.entries.length} proposed entries, {inv.balanced ? "balanced" : "not balanced"}. Nothing posts until a person approves; the decision is
                 recorded in the audit trail.
