@@ -10,6 +10,7 @@ import { DecisionActions } from "@/components/money/DecisionActions";
 import { DocumentStack, totalFromMessage } from "@/components/money/DocumentStack";
 import { EmailEvidence } from "@/components/money/EmailEvidence";
 import { EvidencePackButton } from "@/components/money/EvidencePackButton";
+import { InvestigationVerdict } from "@/components/money/InvestigationVerdict";
 import { RemeasurementPane } from "@/components/money/RemeasurementPane";
 import { ResolutionBadge, resolutionOf } from "@/components/money/ResolutionBadge";
 import { SourcesPanel } from "@/components/money/SourcesPanel";
@@ -23,7 +24,7 @@ import { WorkStateBadge } from "@/components/WorkStateBadge";
 import { ApiError, itemIdFor } from "@/lib/api";
 import { day, money, signedMoney } from "@/lib/format";
 import { useException, useLeases, useLeaseVersions, useSchedule } from "@/lib/hooks";
-import { chargeLabel, clinicLabel, monthLong, rootCauseLabel } from "@/lib/labels";
+import { chargeLabel, clinicLabel, monthLong } from "@/lib/labels";
 import type { Box, Evidence, ExceptionDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -199,12 +200,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
           <div className="min-w-0">
             <div className="eyebrow">Explanation</div>
             {inv && reached(phase, "found") ? (
-              <>
-                <div className="font-semibold">{rootCauseLabel(inv.root_cause)}</div>
-                <div className={cn("text-sm", inv.explains_variance ? "text-ok" : "text-bad")}>
-                  {inv.explains_variance ? "Explains the variance" : "Does not explain the variance"}
-                </div>
-              </>
+              <InvestigationVerdict investigation={inv} />
             ) : ex.reason ? (
               <>
                 <div className="font-semibold">
@@ -218,7 +214,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               <div className="mt-0.5 text-sm text-ink-muted">No investigation on record yet.</div>
             )}
           </div>
-          <ConfidenceRing value={inv && reached(phase, "found") ? inv.confidence : run.get("found")?.confidence ?? ex.confidence ?? null} />
+          {/* the hold's confidence throughout; the investigation's own score is in the verdict */}
+          <ConfidenceRing value={ex.confidence ?? null} />
         </div>
       </div>
 
