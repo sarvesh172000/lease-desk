@@ -215,6 +215,10 @@ export interface AuditEvent {
   human_approved?: boolean;
   hash?: string;
   prev_hash?: string | null;
+  /** EXTENSION: the policy a decision cited (`policy:<id>@v<version>`), when one did. */
+  policy_ref?: string | null;
+  /** EXTENSION: the model that phrased or read for this event, when one did. */
+  model_ref?: string | null;
 }
 
 export interface AuditResponse {

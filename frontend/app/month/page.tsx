@@ -57,7 +57,7 @@ function MonthRun() {
     return Array.from(set).sort().reverse();
   }, [asOf, exceptions.data]);
 
-  const month = useMonthSummary(period || "none");
+  const month = useMonthSummary(period);
   const notLive = month.error instanceof ApiError && month.error.status === 501;
   const [metric, setMetric] = useState<MonthMetricName | null>(null);
   const items = useMonthSummaryItems(period, metric);

@@ -82,3 +82,50 @@ export const TRUST_RANKS: { rank: number; short: string; long: string }[] = [
   { rank: 5, short: "Invoice", long: "Landlord invoice or statement" },
   { rank: 6, short: "Payment history", long: "Payment history" },
 ];
+
+const ACTION_LABEL: Record<string, string> = {
+  create: "Created",
+  propose: "Proposed",
+  propose_hold: "Proposed hold",
+  propose_schedule: "Proposed schedule",
+  approve: "Approved",
+  hold: "Held",
+  reject: "Rejected",
+  close: "Closed",
+  resume: "Resumed",
+  post: "Posted to ledger",
+  ask: "Asked",
+  answer: "Answered",
+  confirm: "Confirmed",
+  attach_evidence: "Attached evidence",
+  create_exception: "Created exception",
+  investigate: "Investigated",
+  release_batch: "Released batch",
+  pay_as_billed: "Paid as billed",
+  record_reply: "Recorded reply",
+  demo_reset: "Reset the demo",
+};
+
+/** approve → "Approved"; release_batch → "Released batch". An unknown action reads as words. */
+export function actionLabel(action: string | null | undefined): string {
+  if (!action) return "—";
+  if (ACTION_LABEL[action]) return ACTION_LABEL[action];
+  const words = action.replace(/[_-]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** A refused attempt reads as what was tried: "tried to approve". */
+export function attemptLabel(action: string | null | undefined): string {
+  const l = actionLabel(action);
+  const verb: Record<string, string> = { Approved: "approve", Held: "hold", Rejected: "reject", Closed: "close", "Posted to ledger": "post to the ledger", "Released batch": "release the batch", Created: "create", Proposed: "propose" };
+  return `tried to ${verb[l] ?? l.toLowerCase()}`;
+}
+
+export type ActorKind = "person" | "agent" | "system";
+
+/** Who an actor id is: PER-… people, agent:… agents, system:… the gateway and the engine. */
+export function actorKind(actorId: string): ActorKind {
+  if (actorId.startsWith("agent:")) return "agent";
+  if (actorId.startsWith("system") || actorId === "engine" || actorId === "gateway") return "system";
+  return "person";
+}

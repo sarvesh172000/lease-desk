@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chargeLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
+import { actionLabel, actorKind, attemptLabel, chargeLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
 
 describe("labels", () => {
   it("names charge types in words", () => {
@@ -38,5 +38,28 @@ describe("labels", () => {
   it("has the six trust ranks in order, 1 the executed amendment", () => {
     expect(TRUST_RANKS.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(TRUST_RANKS[0].short).toBe("Executed amendment");
+  });
+
+  it("names audit actions in the past tense, in words", () => {
+    expect(actionLabel("create")).toBe("Created");
+    expect(actionLabel("propose")).toBe("Proposed");
+    expect(actionLabel("approve")).toBe("Approved");
+    expect(actionLabel("close")).toBe("Closed");
+    expect(actionLabel("release_batch")).toBe("Released batch");
+    expect(actionLabel("post")).toBe("Posted to ledger");
+    expect(actionLabel("some_new_action")).toBe("Some new action");
+    expect(actionLabel(null)).toBe("—");
+  });
+
+  it("phrases a refused attempt as what was tried", () => {
+    expect(attemptLabel("approve")).toBe("tried to approve");
+    expect(attemptLabel("post")).toBe("tried to post to the ledger");
+  });
+
+  it("tells people, agents and the system apart by id", () => {
+    expect(actorKind("PER-RM-BAY")).toBe("person");
+    expect(actorKind("agent:checker")).toBe("agent");
+    expect(actorKind("system:gateway")).toBe("system");
+    expect(actorKind("engine")).toBe("system");
   });
 });

@@ -97,7 +97,12 @@ export function useException(exceptionId: string) {
 
 /** What this person may press on this exception, from can() on the server. */
 export function useAllowedActions(exceptionId: string) {
-  return useQuery({ queryKey: ["allowed-actions", exceptionId], queryFn: () => getAllowedActions(exceptionId) });
+  return useQuery({
+    queryKey: ["allowed-actions", exceptionId],
+    queryFn: () => getAllowedActions(exceptionId),
+    // no item, no question: never GET /api/items//allowed-actions
+    enabled: exceptionId !== "",
+  });
 }
 
 export function useSchedule(leaseId: string, version?: number, enabled = true) {
@@ -176,8 +181,15 @@ export function usePayAsBilled(exceptionId: string) {
 }
 
 /** The month's run summary for the guided stepper; every number has a drill-down. */
+const isPeriod = (p: string) => /^\d{4}-\d{2}(-01)?$/.test(p);
+
 export function useMonthSummary(period: string, entity?: string) {
-  return useQuery({ queryKey: ["month-summary", period, entity ?? ""], queryFn: () => getMonthSummary(period, entity) });
+  return useQuery({
+    queryKey: ["month-summary", period, entity ?? ""],
+    queryFn: () => getMonthSummary(period, entity),
+    // the business clock arrives from /api/summary first; until then there is nothing to ask for
+    enabled: isPeriod(period),
+  });
 }
 
 /** The rows behind one number of the month summary (enabled once a metric is picked). */
@@ -185,7 +197,7 @@ export function useMonthSummaryItems(period: string, metric: MonthMetricName | n
   return useQuery({
     queryKey: ["month-summary-items", period, metric, entity ?? ""],
     queryFn: () => getMonthSummaryItems(period, metric!, entity),
-    enabled: !!metric,
+    enabled: !!metric && isPeriod(period),
   });
 }
 
