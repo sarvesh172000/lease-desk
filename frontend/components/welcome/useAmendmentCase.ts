@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { getException } from "@/lib/api";
-import { FIXTURE_DOCUMENTS, SECTION_16_EXCEPTION_DETAIL, fixturePageUrl } from "@/lib/fixtures";
+import { FIXTURE_DOCUMENTS, FIXTURE_EXCEPTION_DETAILS, SECTION_16_EXCEPTION_DETAIL, fixturePageUrl } from "@/lib/fixtures";
 import { useApiHealth, useDataSource, useExceptionsWhen, useSignedIn } from "@/lib/hooks";
 import type { DocumentPages, ExceptionDetail, JournalLine } from "@/lib/types";
 import { amendmentCaseId, figureSource, type FigureSource } from "@/lib/welcome";
@@ -48,7 +48,8 @@ export function useAmendmentCase(): AmendmentCase {
   if (refused) {
     return {
       id: SECTION_16_EXCEPTION_DETAIL.exception_id,
-      detail: SECTION_16_EXCEPTION_DETAIL,
+      // the full fixture record: the §16 constant alone has the email but not the invoice line or lease clause, and the fan needs all three
+      detail: FIXTURE_EXCEPTION_DETAILS[SECTION_16_EXCEPTION_DETAIL.exception_id] ?? SECTION_16_EXCEPTION_DETAIL,
       isLoading: false,
       source: { kind: "fixtures" },
       pages: FIXTURE_PAGES,

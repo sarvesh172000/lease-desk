@@ -76,3 +76,13 @@ describe("the document fan", () => {
     expect(fanState(0, true)).toBe("figure");
   });
 });
+
+describe("the fixture copy of the case", () => {
+  it("carries all three documents the fan needs", async () => {
+    const { FIXTURE_EXCEPTION_DETAILS, SECTION_16_EXCEPTION_DETAIL } = await import("./fixtures");
+    const d = FIXTURE_EXCEPTION_DETAILS[SECTION_16_EXCEPTION_DETAIL.exception_id];
+    expect(d.invoice_line?.doc_id).toBeTruthy();
+    expect(d.lease_citation?.doc_id).toBeTruthy();
+    expect(d.investigation?.evidence[0]?.doc_id).toBeTruthy();
+  });
+});
