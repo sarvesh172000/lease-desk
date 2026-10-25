@@ -14,7 +14,8 @@ cd /app/backend
 WORK="$HOME/demo-setup"
 
 run_month() {
-  python -m app.jobs.monthly --period "$1"
+  local period="$1"
+  python -m app.jobs.monthly --period "$period"
   python -m app.jobs.worker --once
 }
 

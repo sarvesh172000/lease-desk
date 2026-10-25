@@ -11,8 +11,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
-COPY agents_fetch/requirements.txt agents_fetch/requirements.txt
-RUN pip install --no-cache-dir -r agents_fetch/requirements.txt
+# Exact versions with hashes (deploy/agents-requirements.lock, generated from
+# agents_fetch/requirements.txt), wheels only, so no package's setup script
+# ever runs at build time.
+COPY deploy/agents-requirements.lock deploy/agents-requirements.lock
+RUN pip install --no-cache-dir --only-binary :all: --require-hashes -r deploy/agents-requirements.lock
 COPY agents_fetch agents_fetch
 
 RUN useradd --create-home --uid 10001 app
