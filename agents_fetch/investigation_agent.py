@@ -32,7 +32,7 @@ from .live import Feed
 from .protocol import ERROR, INVALID, NOT_FOUND, REFUSED, UNPAIRED, Reply
 
 AGENT_NAME = "lease_desk_investigation"
-DESCRIPTION = ("Finds out why a Northbay Coffee landlord charge disagrees with its lease: searches the mailbox "
+DESCRIPTION = ("Finds out why a Northbay PT landlord charge disagrees with its lease: searches the mailbox "
                "for an amendment or side letter, and has the engine remeasure the lease if it changed. "
                "Proposes, never posts. Reached through the Northbay Lease Desk agent.")
 FEED_NAME = "investigation"

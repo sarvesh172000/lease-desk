@@ -63,7 +63,7 @@ JANUARY_2026: List[PlantedError] = [
     PlantedError(
         error_id="E1",
         kind="cam_estimate_above_lease",
-        clinic_id="STORE-01",
+        clinic_id="CLINIC-01",
         period=date(2026, 1, 1),
         charge_type="cam_estimate",
         billed=6_458.33,          # $12.50 psf
@@ -77,7 +77,7 @@ JANUARY_2026: List[PlantedError] = [
     PlantedError(
         error_id="E2",
         kind="duplicate_rent_invoice",
-        clinic_id="STORE-01",
+        clinic_id="CLINIC-01",
         period=date(2026, 1, 1),
         charge_type="base_rent",
         billed=19_626.65,         # a second invoice for the same month
@@ -91,7 +91,7 @@ JANUARY_2026: List[PlantedError] = [
     PlantedError(
         error_id="E3",
         kind="charge_for_unleased_suite",
-        clinic_id="STORE-02",
+        clinic_id="CLINIC-02",
         period=date(2026, 1, 1),
         charge_type="base_rent",
         billed=4_820.00,
@@ -105,7 +105,7 @@ JANUARY_2026: List[PlantedError] = [
     PlantedError(
         error_id="E4",
         kind="escalation_applied_early",
-        clinic_id="STORE-03",
+        clinic_id="CLINIC-03",
         period=date(2026, 1, 1),
         charge_type="base_rent",
         billed=17_270.11,         # the April 2026 rate
@@ -119,7 +119,7 @@ JANUARY_2026: List[PlantedError] = [
     PlantedError(
         error_id="E5",
         kind="escalation_compounded_too_often",
-        clinic_id="STORE-05",
+        clinic_id="CLINIC-05",
         period=date(2026, 1, 1),
         billed=8_572.74,          # escalated again on 1 January
         correct=8_343.30,         # the October 2025 rate, good until September 2026
@@ -133,7 +133,7 @@ JANUARY_2026: List[PlantedError] = [
     PlantedError(
         error_id="E6",
         kind="correct_but_odd",
-        clinic_id="STORE-04",
+        clinic_id="CLINIC-04",
         period=date(2026, 1, 1),
         charge_type="base_rent",
         billed=13_680.00,

@@ -170,7 +170,7 @@ def build_emails(company: Optional[Company] = None) -> List[Email]:
             message_id="eml-20260609-parking", sender=serra.property_manager_email,
             sender_name=serra.property_manager, to=FACILITIES, cc=None,
             sent=date(2026, 6, 9), subject="Parking lot restriping",
-            body=("The north lot will be restriped June 20-21. Please advise customers\n"
+            body=("The north lot will be restriped June 20-21. Please advise patients\n"
                   "to use the Junipero Serra entrance that weekend.\n"),
         ),
         Email(

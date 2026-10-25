@@ -3,7 +3,7 @@ import { countByUrgency, groupByMonth, urgencyOf } from "./obligations";
 import type { Obligation } from "./types";
 
 const ob = (id: number, due_date: string, days_left: number, kind: Obligation["kind"] = "renewal_notice"): Obligation =>
-  ({ id, lease_id: "LEASE-01", clinic_id: "STORE-01", region_id: "REG-BAY", entity_id: "ENT-CA", kind, key: `k${id}`, due_date, days_left, action: "Act", citation: { section: null, page: null, quote: null, document_id: null, field: null, lease_version_id: null }, source: "lease_term", lease_version_id: 1, details: {}, alert_dates: { "90": due_date, "60": due_date, "30": due_date }, alerts: [] });
+  ({ id, lease_id: "LEASE-01", clinic_id: "CLINIC-01", region_id: "REG-BAY", entity_id: "ENT-CA", kind, key: `k${id}`, due_date, days_left, action: "Act", citation: { section: null, page: null, quote: null, document_id: null, field: null, lease_version_id: null }, source: "lease_term", lease_version_id: 1, details: {}, alert_dates: { "90": due_date, "60": due_date, "30": due_date }, alerts: [] });
 
 describe("obligation urgency", () => {
   it("bands by days left against the business clock", () => {

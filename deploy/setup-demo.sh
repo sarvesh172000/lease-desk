@@ -3,7 +3,7 @@
 # demo-data` does on a laptop: create the database, migrate (schema, triggers
 # and the four roles, as the owner), seed January, set the dev passwords, run
 # January, confirm the five leases as the Bay Area manager and run it again,
-# then July (STORE-01's amendment takes effect), and set the business clock.
+# then July (CLINIC-01's amendment takes effect), and set the business clock.
 #
 # Every step is idempotent, so running it again changes nothing. The generator
 # is deterministic, so what it seeds matches the documents baked into the image

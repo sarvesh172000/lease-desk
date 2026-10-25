@@ -38,7 +38,7 @@ export function Closing() {
           ) : null}
           {ev ? (
             <span>
-              <span className="num text-ink">{ev.held_out_clinics}</span> locations in a held-out company, never seen in development
+              <span className="num text-ink">{ev.held_out_clinics}</span> clinics in a held-out company, never seen in development
               <SourceTag className="ml-2">
                 measured {shortDate(ev.measured_at)} by {ev.by}
               </SourceTag>

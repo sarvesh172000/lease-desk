@@ -108,7 +108,7 @@ def _cover(story, terms, company, clinic, landlord, center):
         ["Estimated Operating Expenses", "$%.2f per rentable square foot per annum"
             % terms.cam_estimate_psf_annual],
         ["Security Deposit", "$%s" % _money(terms.security_deposit)],
-        ["Permitted Use", "Retail coffee shop and café, with the sale of food and beverages"],
+        ["Permitted Use", "Outpatient physical therapy and related medical office use"],
     ]
     story += [_kv_table(rows), PageBreak()]
 
@@ -327,9 +327,8 @@ def _use_and_maintenance(story, clinic):
     story += [
         Paragraph("ARTICLE 6. USE AND COMPLIANCE", H2),
         Paragraph(
-            "6.1 <b>Permitted Use.</b> Tenant shall use the Premises solely for the operation "
-            "of a retail coffee shop (%s), the sale of food and beverages for consumption on "
-            "and off the Premises, and related retail use, and for no other purpose "
+            "6.1 <b>Permitted Use.</b> Tenant shall use the Premises solely for outpatient "
+            "physical therapy, %s and related medical office use, and for no other purpose "
             "without Landlord&rsquo;s prior written consent." % clinic.service_line,
             BODY,
         ),
@@ -364,7 +363,7 @@ def _insurance_and_default(story, landlord):
             "8.1 <b>Tenant Insurance.</b> Tenant shall maintain commercial general liability "
             "insurance with limits of not less than $2,000,000 per occurrence and $4,000,000 in "
             "the aggregate, naming Landlord as an additional insured, together with professional "
-            "liability coverage customary for retail food and beverage operations.",
+            "liability coverage customary for outpatient medical practices.",
             BODY,
         ),
         Paragraph(
@@ -425,7 +424,7 @@ def _options(story, terms, landlord):
             "11.3 <b>Extension Rent.</b> Monthly Base Rent for the first year of each extension "
             "period shall equal the greater of (a) the Monthly Base Rent in effect during the "
             "final month of the preceding period, and (b) ninety-five percent (95%) of the fair "
-            "market rental rate for comparable retail space in the submarket, as "
+            "market rental rate for comparable medical office space in the submarket, as "
             "reasonably determined by Landlord and Tenant. Thereafter the escalation provisions "
             "of Section 3.3 shall continue to apply.",
             BODY,

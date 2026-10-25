@@ -8,8 +8,8 @@ without touching the data layer.
 
 ## 1. What this is, in one breath
 
-Lease Desk fills the **lease accountant's seat** at a 30-store coffee
-chain. Every month it reads every landlord bill, checks it against what the
+Lease Desk fills the **lease accountant's seat** at a 30-clinic physical therapy
+group. Every month it reads every landlord bill, checks it against what the
 lease actually says, drafts the payments and the accounting entries, and
 **holds only the money that is wrong** — showing the exact line in the invoice
 and the exact clause in the lease side by side. It never pays and never signs
@@ -48,7 +48,7 @@ Hold the line on (non-negotiable — judges include finance people):
 
 ## 3. The demo moment (design around this)
 
-> **The hidden amendment.** STORE-01's July rent stops matching the schedule
+> **The hidden amendment.** CLINIC-01's July rent stops matching the schedule
 > by **−$2,226.65**. The agent searches the mailbox, finds an executed
 > amendment (trust rank 1, confidence 94%) that cut the rent to $17,400 and
 > extended the lease three years, remeasures the lease under ASC 842 —

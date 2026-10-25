@@ -106,7 +106,7 @@ def world(books):
     with books["lease_agent"].begin() as conn:
         item = create_item(conn, CHECKER, kind="CHARGE_CHECK", subject_type="landlord_charge",
                            subject_id=w.RENT, title="January rent", entity_id="ENT-CA",
-                           region_id="REG-BAY", clinic_id="STORE-01", period="2026-01-01",
+                           region_id="REG-BAY", clinic_id="CLINIC-01", period="2026-01-01",
                            amount="19626.65", evidence={"lease_id": "LEASE-01", "billed": 19626.65,
                                                         "supported": 15000.00})
         transition(conn, CHECKER, item["id"], "propose", reason="billed above the lease",

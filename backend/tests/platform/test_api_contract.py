@@ -97,7 +97,7 @@ def as_in_the_fixtures(seeded):
                                "billed": cam["actual"], "supported": cam["expected"],
                                "confidence": cam["confidence"]})
     detail = FIXTURES["GET /api/exceptions/{id}"]
-    july = insert_work_item(owner, state="PROPOSED", subject_id="jul", clinic_id="STORE-01",
+    july = insert_work_item(owner, state="PROPOSED", subject_id="jul", clinic_id="CLINIC-01",
                             period=detail["period"],
                             evidence={"lease_id": detail["lease_id"], "charge_type": "base_rent",
                                       "billed": detail["actual"], "supported": detail["expected"],

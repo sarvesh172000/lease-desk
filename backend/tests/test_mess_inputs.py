@@ -87,7 +87,7 @@ def tracker(world):
 def test_notes_are_read_past_the_title_and_the_blank_row(tracker):
     notes = read_tracker(tracker)
     assert len(notes) >= 5
-    assert all(n.clinic_id.startswith("STORE-") for n in notes)
+    assert all(n.clinic_id.startswith("CLINIC-") for n in notes)
 
 
 def test_the_header_is_not_the_first_row(tracker):
@@ -111,7 +111,7 @@ def test_a_note_is_always_a_claim_never_a_rule(tracker):
 
 def test_the_tracker_corroborates_the_suite_118_charge(tracker):
     """An independent low-trust source pointing at the same thing E3 found."""
-    note = next(n for n in read_tracker(tracker) if n.clinic_id == "STORE-02")
+    note = next(n for n in read_tracker(tracker) if n.clinic_id == "CLINIC-02")
     assert "118" in note.note
 
 

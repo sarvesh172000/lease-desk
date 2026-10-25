@@ -113,7 +113,7 @@ def books(clean):
 
     with clean["owner"].begin() as conn:
         execute_raw(conn, """
-            INSERT INTO entity VALUES ('ENT-CA', 'Northbay Coffee of California', 'CA');
+            INSERT INTO entity VALUES ('ENT-CA', 'Northbay PT of California', 'CA');
             INSERT INTO period (entity_id, period, status) VALUES
                 ('ENT-CA', '2026-01-01', 'open'), ('ENT-CA', '2025-12-01', 'closed');
         """)

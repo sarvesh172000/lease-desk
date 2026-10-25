@@ -57,7 +57,7 @@ from .protocol import ERROR, INVALID, UNPAIRED, Reply
 from .understand import Reading, Understand
 
 AGENT_NAME = "Northbay Lease Desk"
-DESCRIPTION = ("Lease accounting for Northbay Coffee inside ASI:One: what needs you this week, review a "
+DESCRIPTION = ("Lease accounting for Northbay PT inside ASI:One: what needs you this week, review a "
                "held charge with its sources and trust explanation, answer it, and ask why — under "
                "your own Lease Desk permissions. Pair first with a one-time code from the web app.")
 

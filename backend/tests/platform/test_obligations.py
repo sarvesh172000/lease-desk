@@ -246,7 +246,7 @@ def test_alerts_fire_at_90_60_and_30_business_days_once_each(confirmed):
     assert (item["state"], item["proposed_by"], item["proposal"]) == (
         "PROPOSED", "agent:obligations", "act")
     assert (item["region_id"], item["entity_id"], item["clinic_id"]) == (
-        "REG-BAY", ENTITY, "STORE-05")
+        "REG-BAY", ENTITY, "CLINIC-05")
     ev = item["evidence"]
     assert ev["routed_to"] == RM and ev["due_date"] == "2027-06-02"
     assert ev["threshold_business_days"] == 90 and ev["alert_date"] == marks[90].isoformat()
@@ -371,7 +371,7 @@ def test_get_obligations_within_days_from_the_business_date(confirmed, client):
     assert renewal["days_left"] == (date(2027, 6, 2) - today).days
     assert renewal["citation"]["page"] == 7
     assert set(renewal["alert_dates"]) == {"90", "60", "30"}
-    assert [a["title"] for a in renewal["alerts"]][0].startswith("STORE-05: renewal notice")
+    assert [a["title"] for a in renewal["alerts"]][0].startswith("CLINIC-05: renewal notice")
 
     assert as_(client, RM_DESERT).get("/api/obligations").json()["total"] == 0
     filtered = as_(client, CTRL).get("/api/obligations", params={

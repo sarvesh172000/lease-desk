@@ -232,7 +232,7 @@ def abstract_lease(
     document: Document,
     llm: LLM,
     lease_id: str,
-    company: str = "Northbay Coffee",
+    company: str = "Northbay Physical Therapy",
     source: str = "lease.pdf",
 ) -> Abstraction:
     extracted, meta = llm.structured(

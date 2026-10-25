@@ -35,7 +35,7 @@ PAST_MISTAKES: List[PlantedError] = [
     PlantedError(
         error_id="H1",
         kind="cam_estimate_above_lease",
-        clinic_id="STORE-03",
+        clinic_id="CLINIC-03",
         period=date(2025, 4, 1),
         charge_type="cam_estimate",
         billed=4_612.50,          # $10.25 psf
@@ -49,7 +49,7 @@ PAST_MISTAKES: List[PlantedError] = [
     PlantedError(
         error_id="H2",
         kind="escalation_applied_early",
-        clinic_id="STORE-02",
+        clinic_id="CLINIC-02",
         period=date(2025, 6, 1),
         charge_type="base_rent",
         billed=9_700.00,          # the July rate, billed in June

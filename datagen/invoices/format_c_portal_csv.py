@@ -36,7 +36,7 @@ def render(invoice, company) -> str:
 
     for charge in invoice.charges:
         writer.writerow([
-            clinic.clinic_id.replace("STORE-", "T"),
+            clinic.clinic_id.replace("CLINIC-", "T"),
             center.center_id.replace("CTR-", ""),
             CHARGE_TYPE_TO_CODE.get(charge.charge_type, "OTH"),
             charge.description,
@@ -48,7 +48,7 @@ def render(invoice, company) -> str:
         ])
 
     # A total row that looks like a line item but is not one.
-    writer.writerow([clinic.clinic_id.replace("STORE-", "T"),
+    writer.writerow([clinic.clinic_id.replace("CLINIC-", "T"),
                      center.center_id.replace("CTR-", ""), "TOT",
                      "STATEMENT TOTAL", "", "", "",
                      "%.2f" % invoice.total(), invoice.invoice_id])

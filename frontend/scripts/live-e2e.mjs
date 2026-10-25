@@ -87,7 +87,7 @@ await moneyScreen("suite-118", "billed $4,820.00");
 await moneyScreen("duplicate-rent", "billed $19,626.65, lease supports $0.00");
 
 // 3. approve a correct charge: the gateway posts it
-const goodId = await openCharge("STORE-02 Jan 2026 base_rent: $9,700.00 matches the lease");
+const goodId = await openCharge("CLINIC-02 Jan 2026 base_rent: $9,700.00 matches the lease");
 await page.waitForSelector("[data-testid=citation-box] >> nth=1", { timeout: 20000 });
 await page.getByTestId("actions").getByRole("button", { name: "Approve", exact: true }).click();
 // a financial action confirms first, restating the amount
@@ -109,7 +109,7 @@ check(/Held · HELD/.test(await page.locator("[data-testid=action-result]").inne
 // 5. the auditor: nothing to press, and the server refuses a forced approve
 await page.selectOption('select[aria-label="Act as (demo)"]', "PER-AUD");
 await page.locator("header div.font-medium", { hasText: /^External Auditor$/ }).waitFor();
-const pendingId = await openCharge("STORE-03 Jan 2026 cam_estimate: $4,387.50 matches the lease");
+const pendingId = await openCharge("CLINIC-03 Jan 2026 cam_estimate: $4,387.50 matches the lease");
 await page.waitForSelector("[data-testid=no-actions]", { timeout: 20000 });
 check((await page.getByTestId("actions").getByRole("button", { name: "Approve", exact: true }).count()) === 0, `auditor is not offered Approve on ${pendingId}`);
 await shot("auditor-no-approve", false);

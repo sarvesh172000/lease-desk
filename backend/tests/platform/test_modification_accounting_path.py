@@ -83,7 +83,7 @@ def _record(engines, payload, amendment, source_id, subject_id):
         engines["owner"],
         state="PROPOSED",
         subject_id=subject_id,
-        clinic_id="STORE-01",
+        clinic_id="CLINIC-01",
         period=amendment.effective.isoformat(),
         evidence={
             "lease_id": LEASE,

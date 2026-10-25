@@ -3,7 +3,7 @@
 ![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
 ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
 
-Lease accounting for Northbay Coffee, driven from **ASI:One**. Four uAgents work
+Lease accounting for Northbay PT, driven from **ASI:One**. Four uAgents work
 together on real lease work: ASI:One talks to the front desk, and the front
 desk hands each request to the right specialist over agent messaging. Each
 person acts as **themselves**, paired to their own Lease Desk account.
@@ -39,7 +39,7 @@ why was this held?                   (right after a review) or: why 42
 investigate 42                       or: why is 42 off? — the mailbox search, the remeasurement, the entries
 answer 42 yes, suite 110 is ours     answer the open question
 uphold 42 lease caps CAM at 5%       approve / uphold / hold / reject / resume <item> [reason]
-what is Store 03's escalation and where does it say so?
+what is Clinic 03's escalation and where does it say so?
 whoami · unpair · help
 ```
 

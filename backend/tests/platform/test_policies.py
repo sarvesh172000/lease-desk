@@ -48,7 +48,7 @@ def stored(pid, **over):
 
 def facts(**over):
     base = dict(charge_id="c1", period=JAN, charge_type="cam_estimate",
-                amount=Decimal("6458.33"), lease_id="LEASE-01", clinic_id="STORE-01",
+                amount=Decimal("6458.33"), lease_id="LEASE-01", clinic_id="CLINIC-01",
                 landlord_id="LL-SERRA", entity_id="ENT-CA", prior_paid=Decimal("5941.67"),
                 supported=Decimal("5941.67"), checker_rule="operating_expense",
                 checker_proposal="hold")
@@ -169,8 +169,8 @@ def test_the_most_specific_scope_wins_then_conditions_then_date_then_id():
 
 def test_evaluation_is_deterministic_whatever_the_order():
     ps = [stored(i, scope=s) for i, s in enumerate(
-        [{"lease_id": "LEASE-01"}, {"clinic_id": "STORE-01"}, {"landlord_id": "LL-SERRA"},
-         {"entity_id": "ENT-CA"}, {"lease_id": "LEASE-01", "clinic_id": "STORE-01"}], start=1)]
+        [{"lease_id": "LEASE-01"}, {"clinic_id": "CLINIC-01"}, {"landlord_id": "LL-SERRA"},
+         {"entity_id": "ENT-CA"}, {"lease_id": "LEASE-01", "clinic_id": "CLINIC-01"}], start=1)]
     import itertools
     winners = {evaluate(list(order), facts()).policy.id for order in itertools.permutations(ps)}
     assert winners == {5}
