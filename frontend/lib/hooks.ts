@@ -15,6 +15,7 @@ import {
   getDisputes,
   getObligations,
   recordDisputeReply,
+  releaseBatch,
   approveException,
   askWhy,
   backtestPolicy,
@@ -53,7 +54,7 @@ import {
 } from "./api";
 import type {
   DisputeDetail,
-  DisputeReply, ActionResult, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, WhyAnswer } from "./types";
+  DisputeReply, ActionResult, BatchRelease, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, WhyAnswer } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -185,6 +186,17 @@ export function useMonthSummaryItems(period: string, metric: MonthMetricName | n
     queryKey: ["month-summary-items", period, metric, entity ?? ""],
     queryFn: () => getMonthSummaryItems(period, metric!, entity),
     enabled: !!metric,
+  });
+}
+
+/** The AP clerk releases the month's batch; the month, the queue and the audit trail refetch. */
+export function useReleaseBatch(period: string, entityId?: string | null) {
+  const qc = useQueryClient();
+  return useMutation<BatchRelease, Error, void>({
+    mutationFn: () => releaseBatch(period, entityId),
+    onSettled: () => {
+      for (const k of ["month-summary", "month-summary-items", "charge-checks", "exceptions", "summary", "audit"]) void qc.invalidateQueries({ queryKey: [k] });
+    },
   });
 }
 

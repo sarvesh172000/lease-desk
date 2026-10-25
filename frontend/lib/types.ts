@@ -279,6 +279,8 @@ export interface ChargeCheck {
   amount: number | null;
   proposal: string | null;
   reason: string | null;
+  /** EXTENSION: the clinic's region, so a regional manager's Today can keep to their own. */
+  region_id?: string | null;
 }
 
 /** EXTENSION: one abstracted term of a lease version (GET /api/leases/{id}/versions). */
@@ -357,6 +359,17 @@ export type MonthSummaryRow =
   | { type: "dispute"; item_id: number; state: string; clinic_id: string | null; title: string; amount: number | null }
   | { type: "question"; question_id: number; item_id: number; exception_id: string | null; kind: string; asked_to: string; asked_by: string; body: string; asked_at: string; due_at: string | null }
   | { type: "payable"; item_id: number; exception_id: string; clinic_id: string; charge_type: string; landlord_name: string; billed: number; amount: number };
+
+/** EXTENSION: POST /api/batches/{period}/release — the AP clerk releases the month's payment batch. */
+export interface BatchRelease {
+  outbox_id: number;
+  idempotency_key: string;
+  /** false when this period's batch was already released: the same batch, never a second one. */
+  created: boolean;
+  period: string;
+  item_count: number;
+  total: number;
+}
 
 /** EXTENSION: POST /api/demo/reset — controller only, demo mode only (404 otherwise). */
 export interface DemoResetResult {

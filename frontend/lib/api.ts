@@ -41,6 +41,7 @@ import type {
   Summary,
   WhyAnswer,
   BacktestRun,
+  BatchRelease,
   PolicyDetail,
   PolicyList,
 } from "./types";
@@ -313,7 +314,7 @@ export function getSummary(): Promise<Summary> {
 interface QueueResponse {
   counts: Record<string, number>;
   total: number;
-  items: Array<{ id: number; kind: string; state: string; title: string; clinic_id: string | null; period: string | null; amount: number | null; proposal: string | null; reason: string | null }>;
+  items: Array<{ id: number; kind: string; state: string; title: string; clinic_id: string | null; region_id?: string | null; period: string | null; amount: number | null; proposal: string | null; reason: string | null }>;
 }
 
 /** EXTENSION: every charge check of a month (GET /api/items?kind=CHARGE_CHECK), holds and correct charges alike. */
@@ -330,6 +331,7 @@ export function getChargeChecks(period?: string): Promise<ChargeCheck[]> {
           state: i.state,
           title: i.title,
           clinic_id: i.clinic_id,
+          region_id: i.region_id ?? null,
           period: i.period,
           amount: i.amount,
           proposal: i.proposal,
@@ -827,6 +829,24 @@ export function revokePairing(pairingId: number): Promise<void> {
     () => http<void>(`/api/pairing/${encodeURIComponent(String(pairingId))}/revoke`, { method: "POST" }),
     () => {
       throw new ApiError(501, "501 pairing needs the live API");
+    },
+  );
+}
+
+/**
+ * EXTENSION: POST /api/batches/{period}/release — the AP clerk releases the
+ * month's batch. The gateway decides who may (a 403 leaves a refused
+ * release_batch event in the audit trail); 409 when nothing is approved.
+ */
+export function releaseBatch(period: string, entityId?: string | null): Promise<BatchRelease> {
+  return call(
+    () =>
+      http<BatchRelease>(`/api/batches/${encodeURIComponent(period.slice(0, 7))}/release`, {
+        method: "POST",
+        body: JSON.stringify(entityId ? { entity_id: entityId } : {}),
+      }),
+    () => {
+      throw new ApiError(501, "501 releasing a batch needs the live API");
     },
   );
 }

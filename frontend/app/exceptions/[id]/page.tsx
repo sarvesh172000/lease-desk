@@ -4,14 +4,14 @@ import { CheckerFindingCard } from "@/components/CheckerFindingCard";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { EvidenceCard } from "@/components/EvidenceCard";
 import { InvestigationTimeline } from "@/components/InvestigationTimeline";
-import { JournalEntryTable } from "@/components/JournalEntryTable";
 import { BoxConnector } from "@/components/money/BoxConnector";
 import { ConfidenceRing } from "@/components/money/ConfidenceRing";
 import { DecisionActions } from "@/components/money/DecisionActions";
 import { DocumentStack, totalFromMessage } from "@/components/money/DocumentStack";
 import { EmailEvidence } from "@/components/money/EmailEvidence";
 import { EvidencePackButton } from "@/components/money/EvidencePackButton";
-import { LiabilityBar } from "@/components/money/LiabilityBar";
+import { RemeasurementPane } from "@/components/money/RemeasurementPane";
+import { ResolutionBadge, resolutionOf } from "@/components/money/ResolutionBadge";
 import { SourcesPanel } from "@/components/money/SourcesPanel";
 import { phaseOf, reached, useInvestigationRun, type InvestigationRun, type Phase } from "@/components/money/useInvestigationRun";
 import { WhyDrawer } from "@/components/money/WhyDrawer";
@@ -22,7 +22,7 @@ import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { WorkStateBadge } from "@/components/WorkStateBadge";
 import { ApiError, itemIdFor } from "@/lib/api";
 import { day, money, signedMoney } from "@/lib/format";
-import { useException, useLeases, useSchedule } from "@/lib/hooks";
+import { useException, useLeases, useLeaseVersions, useSchedule } from "@/lib/hooks";
 import { chargeLabel, clinicLabel, monthLong, rootCauseLabel } from "@/lib/labels";
 import type { Box, Evidence, ExceptionDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const DOC_HEIGHT = 470;
 const EASE = [0.2, 0.8, 0.2, 1] as const;
@@ -82,14 +82,19 @@ function evidenceOf(ex: ExceptionDetail, run: InvestigationRun): Evidence | null
   };
 }
 
+/** What the centre pane can show. */
+type PaneKey = "evidence" | "lease" | "remeasurement";
+
 function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   const reduce = useReducedMotion();
   const run = useInvestigationRun(ex.exception_id);
   const inv = ex.investigation;
   const phase = phaseOf(run, !!inv);
+  const live = run.state !== "idle";
   const leases = useLeases();
   const lease = leases.data?.find((l) => l.lease_id === ex.lease_id);
   const itemId = ex.item_id ?? (/^\d+$/.test(itemIdFor(ex.exception_id)) ? Number(itemIdFor(ex.exception_id)) : null);
+  const resolved = resolutionOf(ex);
 
   // The found document lands in the viewer once its card has flown out of the stack.
   const [landed, setLanded] = useState(false);
@@ -105,26 +110,30 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
     if (run.state === "running") setTab("investigation");
   }, [run.state]);
 
-  // right-hand document: the evidence once there is some, else the lease clause
-  type Source = { key: string; tab: string; eyebrow: string; title: string; docId: string; page: number; box: Box | null; text: string; email?: Evidence };
+  // the centre pane: the evidence once there is some, the lease clause, and the remeasurement once there is one
+  const liabilityDelta = run.get("remeasured")?.liability_delta ?? inv?.liability_delta ?? null;
+  const rouDelta = run.get("remeasured")?.rou_delta ?? inv?.rou_delta ?? null;
+  const hasRemeasurement = !!inv && inv.liability_before != null && inv.liability_after != null && reached(phase, "remeasured");
+  const hasEvidence = !!evidence && reached(phase, "found") && (phase !== "found" || landed);
+  type Source = { key: PaneKey; tab: string; eyebrow: string; title: string; docId?: string; page?: number | null; box?: Box | null; text?: string; email?: Evidence };
   const sources: Source[] = [
-    ...(evidence && reached(phase, "found") && (phase !== "found" || landed)
+    ...(hasEvidence
       ? [{
-          key: "evidence",
+          key: "evidence" as const,
           tab: "Evidence",
-          eyebrow: `Evidence · trust rank ${evidence.trust_rank || "—"}`,
-          title: evidence.date ? `${evidence.source} · ${day(evidence.date)}` : evidence.source,
-          docId: evidence.doc_id,
-          page: evidence.page,
-          box: evidence.box,
-          text: evidence.quote,
+          eyebrow: `Evidence · trust rank ${evidence!.trust_rank || "—"}`,
+          title: evidence!.date ? `${evidence!.source} · ${day(evidence!.date)}` : evidence!.source,
+          docId: evidence!.doc_id,
+          page: evidence!.page,
+          box: evidence!.box,
+          text: evidence!.quote,
           // a message kept as text has no page to render
-          email: evidence.page == null ? evidence : undefined,
+          email: evidence!.page == null ? evidence! : undefined,
         }]
       : []),
     ...(ex.lease_citation
       ? [{
-          key: "lease",
+          key: "lease" as const,
           tab: "Lease clause",
           eyebrow: "Lease · what it supports",
           title: ex.lease_citation.label,
@@ -134,9 +143,23 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
           text: ex.lease_citation.quote,
         }]
       : []),
+    ...(hasRemeasurement
+      ? [{
+          key: "remeasurement" as const,
+          tab: "Remeasurement",
+          eyebrow: "Remeasurement · ASC 842",
+          title: "Before and after",
+        }]
+      : []),
   ];
-  const [sourceKey, setSourceKey] = useState<string | null>(null);
-  const source = sources.find((s) => s.key === sourceKey) ?? sources[0];
+  // The remeasurement takes the stage when it arrives, and is where a decided
+  // story opens; the reader can still flip back to the documents.
+  const [paneKey, setPaneKey] = useState<PaneKey | null>(null);
+  useEffect(() => {
+    if (live && reached(phase, "remeasured") && hasRemeasurement) setPaneKey("remeasurement");
+    else if (live && reached(phase, "found") && landed) setPaneKey("evidence");
+  }, [live, phase, landed, hasRemeasurement]);
+  const source = sources.find((s) => s.key === paneKey) ?? (!live && hasRemeasurement ? sources.find((s) => s.key === "remeasurement") : undefined) ?? sources[0];
   const docsRef = useRef<HTMLDivElement>(null);
 
   const title = `${chargeLabel(ex.charge_type)} · ${monthLong(ex.period)}`;
@@ -153,8 +176,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
             {place ? <span className="font-normal text-ink-soft"> · {place}</span> : null}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <StatusBadge status={ex.status} />
-            {ex.state ? <WorkStateBadge state={ex.state} /> : null}
+            {resolved ? <ResolutionBadge ex={ex} /> : <StatusBadge status={ex.status} />}
+            {ex.state && !resolved ? <WorkStateBadge state={ex.state} /> : null}
             <Link
               href={`/leases/${encodeURIComponent(ex.lease_id)}`}
               className="rounded-xs border border-line px-1.5 py-0.5 font-mono text-2xs text-ink-muted transition-colors hover:border-line-strong hover:text-accent"
@@ -218,35 +241,37 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               key={showStack ? "stack" : source?.key}
               eyebrow={showStack ? "Investigation · mailbox" : source!.eyebrow}
               title={showStack ? "Searching for what explains the variance" : source!.title}
-              docId={showStack ? null : source!.docId}
-              page={source?.page}
+              docId={showStack || source?.key === "remeasurement" ? null : source!.docId}
+              page={source?.page ?? undefined}
               box={source?.box}
               tone="cited"
               label={source?.key === "lease" ? "Lease says" : "Quoted"}
-              fallbackText={source ? `“${source.text}”` : undefined}
+              fallbackText={source?.text ? `“${source.text}”` : undefined}
               height={DOC_HEIGHT}
               overlay={
-                !showStack && source?.email ? (
-                  <EmailEvidence evidence={source.email} highlight={run.state !== "idle"} />
-                ) : showStack ? (
+                showStack ? (
                   <DocumentStack
                     mode={phase === "found" ? "found" : "searching"}
                     total={totalFromMessage(run.get("searching")?.message)}
                     foundLabel={run.get("found")?.source ?? run.get("found")?.doc_id}
                     onLanded={onLanded}
                   />
+                ) : source?.key === "remeasurement" && inv ? (
+                  <RemeasurementPane inv={inv} liabilityDelta={liabilityDelta} rouDelta={rouDelta} animate={live} entries={reached(phase, "complete")} />
+                ) : source?.email ? (
+                  <EmailEvidence evidence={source.email} highlight={live} />
                 ) : undefined
               }
               toolbar={
                 !showStack && sources.length > 1 ? (
-                  <div className="flex rounded-xs border border-line-strong p-0.5" role="tablist" aria-label="Cited document">
+                  <div className="flex rounded-xs border border-line-strong p-0.5" role="tablist" aria-label="Centre pane">
                     {sources.map((s) => (
                       <button
                         key={s.key}
                         role="tab"
                         type="button"
                         aria-selected={s.key === source!.key}
-                        onClick={() => setSourceKey(s.key)}
+                        onClick={() => setPaneKey(s.key)}
                         className={cn(
                           "rounded-[4px] px-2 py-0.5 text-xs font-medium transition-colors",
                           s.key === source!.key ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-sunken",
@@ -262,7 +287,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
           ) : (
             <DocumentViewer eyebrow="Cited source" title="Nothing cited yet" tone="cited" height={DOC_HEIGHT} />
           )}
-          {!showStack ? <BoxConnector root={docsRef} /> : null}
+          {!showStack && source?.key !== "remeasurement" ? <BoxConnector root={docsRef} /> : null}
         </div>
 
         {/* the story: investigation, evidence, sources */}
@@ -293,13 +318,13 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               <Story ex={ex} run={run} phase={phase} evidence={evidence} landed={landed || phase !== "found"} reduce={!!reduce} />
             </Tabs.Content>
             <Tabs.Content value="evidence" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 outline-none">
-              {inv?.evidence.length ? (
-                inv.evidence.map((e, i) => (
-                  <EvidenceCard key={i} evidence={e} confidence={inv.confidence} rootCause={inv.root_cause} selected={source?.key === "evidence"} onSelect={() => setSourceKey("evidence")} />
-                ))
-              ) : null}
+              {inv?.evidence.length
+                ? inv.evidence.map((e, i) => (
+                    <EvidenceCard key={i} evidence={e} confidence={inv.confidence} rootCause={inv.root_cause} selected={source?.key === "evidence"} onSelect={() => setPaneKey("evidence")} />
+                  ))
+                : null}
               {ex.reason || ex.lease_citation ? (
-                <CheckerFindingCard ex={ex} selected={source?.key === "lease"} onSelect={() => setSourceKey("lease")} />
+                <CheckerFindingCard ex={ex} selected={source?.key === "lease"} onSelect={() => setPaneKey("lease")} />
               ) : !inv?.evidence.length ? (
                 <EmptyState title="No evidence attached.">Run the investigation to search the mailbox.</EmptyState>
               ) : null}
@@ -314,7 +339,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
         </section>
       </div>
 
-      {/* below the fold: the remeasurement in full, and what approving does */}
+      {/* below the fold: the schedule in full, and what approving does */}
       <div className="grid grid-cols-2 gap-4 pt-2">
         <RemeasurementDetail ex={ex} show={reached(phase, "remeasured")} />
         <Card>
@@ -347,7 +372,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   );
 }
 
-/** The investigation as it unfolds: the steps, then each result where it lands. */
+/** The investigation as it unfolds: the steps, then the evidence as it lands. The remeasurement and entries take the centre pane. */
 function Story({
   ex,
   run,
@@ -371,65 +396,35 @@ function Story({
     if (live) endRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
   }, [live, phase, landed, inv, reduce]);
 
-  const delta = run.get("remeasured")?.liability_delta ?? inv?.liability_delta ?? null;
-  const enter = (k: string, children: ReactNode) => (
-    <motion.div
-      key={k}
-      initial={live ? (reduce ? { opacity: 0 } : { opacity: 0, y: 12 }) : false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: EASE }}
-    >
-      {children}
-    </motion.div>
-  );
-
   return (
     <div className="space-y-4">
       <InvestigationTimeline run={run} recorded={inv} />
       <AnimatePresence>
-        {evidence && reached(phase, "found") && landed
-          ? enter(
-              "evidence",
-              <EvidenceCard evidence={evidence} confidence={inv?.confidence ?? run.get("found")?.confidence ?? undefined} rootCause={inv?.root_cause} highlight={live} />,
-            )
-          : null}
-        {reached(phase, "remeasured") && (inv?.liability_before != null || delta != null)
-          ? enter(
-              "remeasured",
-              <div className="rounded-md border border-line p-3">
-                <div className="eyebrow mb-2">Remeasured under ASC 842</div>
-                {inv?.liability_before != null && inv.liability_after != null ? (
-                  <LiabilityBar before={inv.liability_before} after={inv.liability_after} delta={delta} animate={live} />
-                ) : (
-                  <div className="space-y-2" role="status" aria-label="Fetching the remeasured balances">
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-4/5" />
-                    <div className="num text-sm text-ink-soft">Liability {signedMoney(delta)}</div>
-                  </div>
-                )}
-              </div>,
-            )
-          : null}
-        {inv && reached(phase, "complete") && inv.entries.length
-          ? enter(
-              "entries",
-              <div className="rounded-md border border-line p-3">
-                <div className="eyebrow mb-2">Proposed entries · not posted</div>
-                <JournalEntryTable entries={inv.entries} balanced={inv.balanced} reveal={live} dense />
-              </div>,
-            )
-          : null}
+        {evidence && reached(phase, "found") && landed ? (
+          <motion.div key="evidence" initial={live ? (reduce ? { opacity: 0 } : { opacity: 0, y: 12 }) : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}>
+            <EvidenceCard evidence={evidence} confidence={inv?.confidence ?? run.get("found")?.confidence ?? undefined} rootCause={inv?.root_cause} highlight={live} />
+          </motion.div>
+        ) : null}
       </AnimatePresence>
       <div ref={endRef} />
     </div>
   );
 }
 
+/**
+ * The schedule before and after, from the versions the lease actually has:
+ * a version is requested only once useLeaseVersions lists it, so a lease
+ * whose remeasurement is not yet approved never asks for a v2 it has not got.
+ */
 function RemeasurementDetail({ ex, show }: { ex: ExceptionDetail; show: boolean }) {
   const inv = ex.investigation;
   const has = !!inv && inv.liability_before != null && show;
-  const before = useSchedule(ex.lease_id, 1, has);
-  const after = useSchedule(ex.lease_id, 2, has);
+  const versions = useLeaseVersions(ex.lease_id);
+  const nums = (versions.data ?? []).map((v) => v.version).sort((a, b) => a - b);
+  const v1 = nums[0];
+  const v2 = nums.length > 1 ? nums[nums.length - 1] : undefined;
+  const before = useSchedule(ex.lease_id, v1, has && v1 != null);
+  const after = useSchedule(ex.lease_id, v2, has && v2 != null);
   return (
     <Card>
       <CardHeader eyebrow="Remeasurement" title="Schedule before and after" />
@@ -437,7 +432,14 @@ function RemeasurementDetail({ ex, show }: { ex: ExceptionDetail; show: boolean 
         {has ? (
           <>
             <ScheduleDiff diff={inv!} before={before.data} after={after.data} fromPeriod={ex.period} />
-            {before.isError || after.isError ? <p className="mt-3 text-xs text-ink-muted">Schedule rows unavailable; balances shown from the investigation.</p> : null}
+            {versions.isSuccess && v2 == null ? (
+              <p className="mt-3 text-xs text-ink-muted">
+                {v1 != null ? `Schedule v${v1} is the only version on file; ` : "No schedule versions are on file; "}the remeasured schedule appears here once the
+                revised terms are approved.
+              </p>
+            ) : before.isError || after.isError ? (
+              <p className="mt-3 text-xs text-ink-muted">Schedule rows unavailable; balances shown from the investigation.</p>
+            ) : null}
           </>
         ) : (
           <EmptyState title="No remeasurement.">Balances change only when an investigation finds revised terms.</EmptyState>
