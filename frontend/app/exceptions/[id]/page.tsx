@@ -24,7 +24,7 @@ import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { WorkStateBadge } from "@/components/WorkStateBadge";
 import { ApiError, itemIdFor } from "@/lib/api";
 import { day, money, signedMoney } from "@/lib/format";
-import { useException, useLeases, useLeaseVersions, useSchedule } from "@/lib/hooks";
+import { useException, useLeases, useLeaseVersions, useMe, useSchedule } from "@/lib/hooks";
 import { chargeLabel, clinicLabel, monthLong } from "@/lib/labels";
 import type { Box, Evidence, ExceptionDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -92,6 +92,9 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   const run = useInvestigationRun(ex.exception_id);
   const inv = ex.investigation;
   const phase = phaseOf(run, !!inv);
+  // the API refuses the investigation for other roles (403); allowed-actions does not list it yet, so the role decides here
+  const me = useMe();
+  const canInvestigate = me.data?.role === "controller" || me.data?.role === "regional_manager";
   const live = run.state !== "idle";
   const leases = useLeases();
   const lease = leases.data?.find((l) => l.lease_id === ex.lease_id);
@@ -313,7 +316,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               <WhyDrawer itemId={itemId} />
             </div>
             <Tabs.Content value="investigation" className="min-h-0 flex-1 overflow-y-auto p-4 outline-none">
-              <Story ex={ex} run={run} phase={phase} evidence={evidence} landed={landed || phase !== "found"} reduce={!!reduce} />
+              <Story ex={ex} run={run} phase={phase} evidence={evidence} landed={landed || phase !== "found"} reduce={!!reduce} canInvestigate={canInvestigate} />
             </Tabs.Content>
             <Tabs.Content value="evidence" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 outline-none">
               {inv?.evidence.length
@@ -380,6 +383,7 @@ function Story({
   evidence,
   landed,
   reduce,
+  canInvestigate,
 }: {
   ex: ExceptionDetail;
   run: InvestigationRun;
@@ -387,6 +391,7 @@ function Story({
   evidence: Evidence | null;
   landed: boolean;
   reduce: boolean;
+  canInvestigate: boolean;
 }) {
   const inv = ex.investigation;
   const live = run.state !== "idle";
@@ -398,7 +403,7 @@ function Story({
 
   return (
     <div className="space-y-4">
-      <InvestigationTimeline run={run} recorded={inv} />
+      <InvestigationTimeline run={run} recorded={inv} canRun={canInvestigate} />
       <AnimatePresence>
         {evidence && reached(phase, "found") && landed ? (
           <motion.div key="evidence" initial={live ? (reduce ? { opacity: 0 } : { opacity: 0, y: 12 }) : false} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}>
