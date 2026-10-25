@@ -31,6 +31,7 @@
     --esc: 167 139 250; --esc-soft: 38 29 64;  --esc-line: 76 57 125;
 
     --rail: 14 16 19;
+    --stage: 14 16 19;
     --shadow: 0 0 0;
     color-scheme: dark;
   }
@@ -64,6 +65,7 @@
     --esc: 107 79 163;  --esc-soft: 239 235 248; --esc-line: 207 196 236;
 
     --rail: 230 242 235;
+    --stage: 9 46 33;
     --shadow: 11 59 42;
     color-scheme: light;
   }
