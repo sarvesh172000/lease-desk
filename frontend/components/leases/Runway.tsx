@@ -9,8 +9,8 @@ import { obligationLabel, placeLabel, regionLabel } from "@/lib/labels";
 import type { LeaseSummary, LeaseVersion, Obligation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { motion, useReducedMotion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useMemo } from "react";
 
 const DAY = 86_400_000;
 const LABEL_W = 300; // wide enough for "Serramonte Hand Therapy, Suite 115" at 14px
@@ -63,9 +63,7 @@ export function thickness(rent: number, min: number, max: number): number {
  * the old end against the new as a ghost. Hover for the lease, click to open.
  */
 export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
-  const router = useRouter();
   const reduce = useReducedMotion();
-  const [hover, setHover] = useState<string | null>(null);
   const versions = useLeaseVersionsMany(leases.map((l) => l.lease_id));
   const versionsById = useMemo(() => new Map(leases.map((l, i) => [l.lease_id, versions[i]?.data])), [leases, versions]);
 
@@ -144,22 +142,24 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
                 const ghost = newerEnd(versionsById.get(l.lease_id));
                 const ghostEnd = ghost?.newEnd ? Date.parse(`${ghost.newEnd}T00:00:00Z`) : null;
                 const obs = obsByLease.get(l.lease_id) ?? [];
-                const isHover = hover === l.lease_id;
                 return (
                   <li
                     key={l.lease_id}
-                    className={cn("relative grid cursor-pointer items-center border-b border-line/70 transition-colors duration-fast", isHover && "bg-sunken/60")}
+                    className="group relative grid cursor-pointer items-center border-b border-line/70 transition-colors duration-fast hover:bg-sunken/60 focus-within:bg-sunken/60"
                     style={{ gridTemplateColumns: `${LABEL_W}px minmax(0,1fr)`, height: 58 }}
                     data-testid="runway-row"
                     data-lease={l.lease_id}
-                    onMouseEnter={() => setHover(l.lease_id)}
-                    onMouseLeave={() => setHover((v) => (v === l.lease_id ? null : v))}
-                    onClick={() => router.push(`/leases/${encodeURIComponent(l.lease_id)}`)}
                   >
                     <div className="min-w-0 pl-4 pr-3">
                       <div className="flex items-center gap-2 truncate text-sm font-medium">
                         <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", STATUS_BAR[l.status] ?? "bg-ink-faint")} />
-                        {placeLabel(l.location) ?? l.location}
+                        {/* a stretched link: the whole row opens the lease, by mouse or keyboard */}
+                        <Link
+                          href={`/leases/${encodeURIComponent(l.lease_id)}`}
+                          className="truncate outline-none after:absolute after:inset-0 after:z-[1] after:content-[''] focus-visible:underline"
+                        >
+                          {placeLabel(l.location) ?? l.location}
+                        </Link>
                       </div>
                       <div className="num truncate font-mono text-2xs text-ink-muted">
                         {l.lease_id} · {money(l.monthly_rent)} / mo
@@ -168,7 +168,7 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
                     <div className="relative h-full">
                       {/* the term: from the clock to the end */}
                       <motion.div
-                        className={cn("absolute rounded-xs", STATUS_BAR[l.status] ?? "bg-ink-faint", isHover ? "opacity-100" : "opacity-85")}
+                        className={cn("absolute rounded-xs", STATUS_BAR[l.status] ?? "bg-ink-faint", "opacity-85 group-focus-within:opacity-100 group-hover:opacity-100")}
                         style={{ left: x(t0), top: `calc(50% - ${h / 2}px)`, height: h, width: `calc(${x(end)} - ${x(t0)})`, transformOrigin: "left" }}
                         initial={reduce ? false : { scaleX: 0 }}
                         animate={{ scaleX: 1 }}
@@ -189,9 +189,9 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
                       {/* a newer version: the old end against the new */}
                       {ghostEnd && ghostEnd !== end ? (
                         <Tooltip label={`v${ghost!.from}: ends ${day(ghost!.newEnd)} instead of ${day(l.end)}`} side="top">
-                          <span
-                            tabIndex={0}
-                            className="absolute rounded-xs border border-dashed border-accent bg-accent/10"
+                          <button
+                            type="button"
+                            className="absolute z-10 cursor-default rounded-xs border border-dashed border-accent bg-accent/10"
                             style={{ left: x(Math.min(end, ghostEnd)), width: `calc(${x(Math.max(end, ghostEnd))} - ${x(Math.min(end, ghostEnd))})`, top: `calc(50% - ${h / 2}px)`, height: h }}
                             data-testid="runway-ghost"
                             aria-label={`Version ${ghost!.from} ends ${day(ghost!.newEnd)} instead of ${day(l.end)}`}
@@ -201,17 +201,18 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
                       {/* obligations as ticks */}
                       {obs.map((o) => (
                         <Tooltip key={o.id} label={`${obligationLabel(o.kind)} · ${day(o.due_date)} · ${o.days_left} days · ${o.action}`} side="top">
-                          <span
-                            tabIndex={0}
+                          <button
+                            type="button"
                             aria-label={`${obligationLabel(o.kind)} due ${day(o.due_date)}`}
-                            className={cn("absolute w-0.5 rounded-full", OBLIGATION_TICK[o.kind] ?? "bg-ink-soft")}
+                            className={cn("absolute z-10 w-0.5 cursor-default rounded-full p-0", OBLIGATION_TICK[o.kind] ?? "bg-ink-soft")}
                             style={{ left: x(Date.parse(`${o.due_date}T00:00:00Z`)), top: `calc(50% - ${h / 2 + 6}px)`, height: h + 12 }}
                             data-testid="runway-tick"
                           />
                         </Tooltip>
                       ))}
                     </div>
-                    {isHover ? <HoverCard lease={l} obligations={obs} ghost={ghost} /> : null}
+                    {/* shown on hover or keyboard focus, by CSS: no handlers on the row */}
+                    <HoverCard lease={l} obligations={obs} ghost={ghost} />
                   </li>
                 );
               })}
@@ -238,7 +239,7 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
 function HoverCard({ lease, obligations, ghost }: { lease: LeaseSummary; obligations: Obligation[]; ghost: ReturnType<typeof newerEnd> }) {
   const next = [...obligations].sort((a, b) => a.days_left - b.days_left)[0];
   return (
-    <div className="pointer-events-none absolute right-4 top-1/2 z-10 w-72 -translate-y-1/2 rounded-sm border border-line bg-surface p-3 shadow-float" data-testid="lease-card">
+    <div className="pointer-events-none absolute right-4 top-1/2 z-20 hidden w-72 -translate-y-1/2 rounded-sm border border-line bg-surface p-3 shadow-float group-focus-within:block group-hover:block" data-testid="lease-card">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm font-semibold">{placeLabel(lease.location) ?? lease.location}</span>
         <StatusBadge status={lease.status} />

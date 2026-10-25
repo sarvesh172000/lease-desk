@@ -19,6 +19,8 @@ export interface StackProps {
 /** Cards drawn: enough to read as a mailbox, few enough to stay calm. */
 export const CARD_KINDS = ["Invoice", "Lease page", "Email", "Invoice", "Email", "Lease page", "Email", "Invoice", "Email", "Lease page", "Email"];
 export const FOUND_INDEX = 6;
+/** Each card with a stable id, for React keys (a kind repeats, so it can't be the key). */
+export const CARDS = CARD_KINDS.map((kind, n) => ({ kind, id: `card-${n}` }));
 
 const Stack3D = dynamic(() => import("./DocumentStack3D"), { ssr: false, loading: () => null });
 
@@ -89,7 +91,7 @@ function Stack2D({ mode, foundLabel, reduce }: StackProps & { reduce: boolean })
   const n = CARD_KINDS.length;
   return (
     <div className="absolute inset-0 flex items-center justify-center [perspective:1000px]">
-      {CARD_KINDS.map((kind, i) => {
+      {CARDS.map(({ kind, id }, i) => {
         const found = i === FOUND_INDEX;
         const spread = (i - (n - 1) / 2) * 26;
         const fanned = { x: spread, y: Math.abs(spread) * 0.18, rotate: spread / 6, opacity: 1, scale: 1 };
@@ -101,7 +103,7 @@ function Stack2D({ mode, foundLabel, reduce }: StackProps & { reduce: boolean })
             : fanned;
         return (
           <motion.div
-            key={i}
+            key={id}
             initial={reduce ? { opacity: 0 } : { x: 0, y: 0, rotate: 0, opacity: 0 }}
             animate={reduce ? { opacity: mode === "found" && !found ? 0.18 : 1 } : target}
             transition={{ duration: reduce ? 0.3 : 0.6, delay: reduce ? 0 : mode === "searching" ? i * 0.04 : 0, ease: [0.2, 0.8, 0.2, 1] }}

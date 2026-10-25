@@ -121,7 +121,7 @@ export function QueueTable({
       <thead>
         <tr className="table-head">
           {cols.map((c, i) => (
-            <th key={c.key} className={cn("whitespace-nowrap py-2 font-semibold", edgePad(i, cols.length), c.num && "text-right")} data-col={c.key}>
+            <th key={c.key} className={cn("py-2 font-semibold", edgePad(i, cols.length), c.num && "text-right")} data-col={c.key}>
               {c.header}
             </th>
           ))}

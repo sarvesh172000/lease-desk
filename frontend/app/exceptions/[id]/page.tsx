@@ -319,8 +319,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
             </Tabs.Content>
             <Tabs.Content value="evidence" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 outline-none">
               {inv?.evidence.length
-                ? inv.evidence.map((e, i) => (
-                    <EvidenceCard key={i} evidence={e} confidence={inv.confidence} rootCause={inv.root_cause} selected={source?.key === "evidence"} onSelect={() => setPaneKey("evidence")} />
+                ? inv.evidence.map((e) => (
+                    <EvidenceCard key={`${e.doc_id}:${e.date}:${e.quote}`} evidence={e} confidence={inv.confidence} rootCause={inv.root_cause} selected={source?.key === "evidence"} onSelect={() => setPaneKey("evidence")} />
                   ))
                 : null}
               {ex.reason || ex.lease_citation ? (

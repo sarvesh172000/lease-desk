@@ -43,6 +43,12 @@ function headline(row: WhyRow): { when: string | null; who: string | null; what:
   return { when: r.at ? timestamp(str(r.at)) : null, who, what: what || humanize(str(r.kind)), verdict, why: r.reason ? str(r.reason) : null };
 }
 
+/** A row's identity: its audit sequence or id when it has one, else its contents. */
+function rowKey(r: WhyRow): string {
+  const id = r.seq ?? r.id ?? r.hash;
+  return `${r.tool}:${id != null ? String(id) : JSON.stringify(r)}`;
+}
+
 function Row({ row }: { row: WhyRow }) {
   const [open, setOpen] = useState(false);
   const h = headline(row);
@@ -147,7 +153,7 @@ export function WhyDrawer({ itemId }: { itemId: number | string | null | undefin
                   <div key={tool}>
                     <div className="eyebrow mb-2">{TOOL_LABEL[tool] ?? humanize(tool)}</div>
                     <ul className="space-y-2">
-                      {rows.map((r, i) => (r.tool === tool ? <Row key={i} row={r} /> : null))}
+                      {rows.map((r) => (r.tool === tool ? <Row key={rowKey(r)} row={r} /> : null))}
                     </ul>
                   </div>
                 ))}
