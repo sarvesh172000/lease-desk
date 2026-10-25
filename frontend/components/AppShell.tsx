@@ -77,6 +77,11 @@ const NAV: { title: string; items: NavItem[] }[] = [
   },
 ];
 
+/** Where a signed-out visitor goes: the front door shows the welcome page, a deep link asks to sign in and comes back. */
+export function signedOutTarget(pathname: string): string {
+  return pathname === "/" ? "/welcome" : `/login?next=${encodeURIComponent(pathname)}`;
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/";
   const router = useRouter();
@@ -87,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isPublic = pathname.startsWith("/login") || pathname.startsWith("/welcome");
 
   useEffect(() => {
-    if (!isPublic && me.isSuccess && me.data === null) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    if (!isPublic && me.isSuccess && me.data === null) router.replace(signedOutTarget(pathname));
   }, [isPublic, me.isSuccess, me.data, pathname, router]);
 
   if (isPublic) return <>{children}</>;

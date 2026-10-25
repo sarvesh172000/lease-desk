@@ -189,6 +189,15 @@ describe("live API wiring", () => {
     expect(assign).toHaveBeenCalledWith("/login?next=%2Fexceptions%2Fexc_1");
   });
 
+  it("sends a signed-out visitor at the front door to the welcome page, not sign-in", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { pathname: "/", search: "", assign } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ detail: "not signed in" }, 401)));
+    const api = await freshApi();
+    await expect(api.getExceptions()).rejects.toMatchObject({ status: 401 });
+    expect(assign).toHaveBeenCalledWith("/welcome");
+  });
+
   it("does not redirect for auth calls (signed out is an answer there)", async () => {
     const assign = vi.fn();
     vi.stubGlobal("window", { location: { pathname: "/", search: "", assign } });

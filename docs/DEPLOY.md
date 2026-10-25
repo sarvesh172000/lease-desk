@@ -205,12 +205,21 @@ the same seeds give the same addresses and the same Agentverse mailboxes.
 
 ## Demo mode on a public URL
 
-`LEASEDESK_DEMO_MODE=1` gives judges the role switcher, and also lets anyone
-with the link switch identity and reset the database. `0` makes people sign
-in as themselves, but the seeded people's password (`demo`) is in the README,
-so it would need real per-role passwords. For a judged demo, `1` with the URL
-shared only on Devpost is the practical choice; re-run the setup job if the
-data is broken.
+`LEASEDESK_DEMO_MODE=1` gives the role switcher, and also lets anyone with the
+link switch identity and reset the database. The live deployment runs with
+`0` on the API and the worker: no switcher and no reset; people sign in as
+themselves (the seeded people keep the password `demo`, so this stops
+identity switching, not sign-in). To try another role, sign out and sign in
+as that person. If the data gets into a bad state, re-run
+`deploy/setup-demo.sh` (it needs `LEASEDESK_DEMO_MODE=1` in its own
+environment, not the API's).
+
+```bash
+az containerapp update -g $RG -n leasedesk-api --set-env-vars LEASEDESK_DEMO_MODE=0
+az containerapp update -g $RG -n leasedesk-worker --set-env-vars LEASEDESK_DEMO_MODE=0
+```
+
+On an express environment, roll the replicas afterwards (see step 4).
 
 ## Cost and teardown
 

@@ -38,7 +38,7 @@ vi.mock("@/lib/hooks", () => {
 
 vi.mock("@/lib/live", () => ({ useLiveConnection: () => h.live }));
 
-import { AppShell } from "./AppShell";
+import { AppShell, signedOutTarget } from "./AppShell";
 import { TooltipProvider } from "./ui/Tooltip";
 
 function renderShell(children: ReactNode = <p>page</p>) {
@@ -130,5 +130,12 @@ describe("AppShell", () => {
   it("shows the period from the API's business clock", () => {
     renderShell();
     expect(screen.getByRole("button", { name: /period Jul 2026/ })).toBeInTheDocument();
+  });
+});
+
+describe("signedOutTarget", () => {
+  it("shows the welcome page at the front door and asks to sign in on a deep link", () => {
+    expect(signedOutTarget("/")).toBe("/welcome");
+    expect(signedOutTarget("/exceptions/exc_18")).toBe("/login?next=%2Fexceptions%2Fexc_18");
   });
 });
