@@ -39,7 +39,6 @@ export function HeroCard({ ex, lease, eyebrow = "Needs you first" }: { ex: Excep
       data-testid="hero-card"
       className="relative overflow-hidden rounded-md border border-accent/30 bg-surface p-6 shadow-raised"
     >
-      <span aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
       <div className="relative flex items-start justify-between gap-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

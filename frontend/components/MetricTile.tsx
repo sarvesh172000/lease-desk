@@ -10,7 +10,7 @@ import { Skeleton } from "./ui/States";
  * portfolio reads from across a room before any of the words do.
  */
 export function MetricTile({
-  label, value, sub, tone = "neutral", loading, index = 0,
+  label, value, sub, tone = "neutral", loading, index = 0, emphasis = false,
 }: {
   label: string;
   value: ReactNode;
@@ -18,14 +18,18 @@ export function MetricTile({
   tone?: "neutral" | "bad" | "warn" | "ok";
   loading?: boolean;
   index?: number;
+  /** The one figure the room should read first: set solid in the accent, the others stay white. */
+  emphasis?: boolean;
 }) {
+  if (emphasis) tone = "neutral";
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.06, ease: [0.2, 0.8, 0.2, 1] }}
       className={cn(
-        "group relative overflow-hidden rounded-md border border-line bg-surface px-5 py-4",
+        "group relative overflow-hidden rounded-md border px-5 py-4",
+        emphasis ? "border-accent bg-accent text-accent-ink" : "border-line bg-surface",
         "shadow-raised transition-colors duration-base ease-out hover:border-line-strong",
       )}
     >
@@ -52,11 +56,11 @@ export function MetricTile({
           tone === "neutral" && "bg-accent/[0.04]",
         )}
       />
-      <div className="eyebrow relative">{label}</div>
+      <div className={cn("eyebrow relative", emphasis && "text-accent-ink/75")}>{label}</div>
       <div className="num relative mt-1.5 text-[2rem] font-semibold leading-none tracking-tight">
         {loading ? <Skeleton className="h-8 w-28" /> : value}
       </div>
-      {sub ? <div className="relative mt-2 text-sm text-ink-muted">{sub}</div> : null}
+      {sub ? <div className={cn("relative mt-2 text-sm", emphasis ? "text-accent-ink/80" : "text-ink-muted")}>{sub}</div> : null}
     </motion.div>
   );
 }

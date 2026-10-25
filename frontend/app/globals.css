@@ -7,7 +7,6 @@
  * Light stays available because finance people print.
  */
 @layer base {
-  :root,
   :root[data-theme="dark"] {
     --bg: 10 11 13;
     --surface: 18 20 24;
@@ -36,33 +35,36 @@
     color-scheme: dark;
   }
 
-  /* Light: the same cool neutrals as dark, inverted. Accent and semantic
-     colours are darker shades so text on white passes AA. */
+  /* Light, the default: a sage ground, white panels, a pale mint rail and
+     one green family for everything that is ink or action. Dark green is
+     the text colour; nothing on the page is black. Red is kept for money
+     that is wrong, amber for what waits. */
+  :root,
   :root[data-theme="light"] {
-    --bg: 245 246 248;
+    --bg: 238 242 238;
     --surface: 255 255 255;
-    --raised: 255 255 255;
-    --sunken: 238 240 243;
-    --line: 223 226 231;
-    --line-strong: 196 201 209;
+    --raised: 247 250 248;
+    --sunken: 237 244 239;
+    --line: 207 224 214;
+    --line-strong: 185 214 198;
 
-    --ink: 14 17 22;
-    --ink-soft: 61 69 80;
-    --ink-muted: 91 100 112;
-    --ink-faint: 100 108 120;
+    --ink: 11 59 42;
+    --ink-soft: 31 61 48;
+    --ink-muted: 78 107 92;
+    --ink-faint: 88 112 100;
 
-    --accent: 15 118 110;
-    --accent-soft: 220 243 240;
-    --accent-strong: 17 94 89;
+    --accent: 11 59 42;
+    --accent-soft: 230 242 235;
+    --accent-strong: 6 38 27;
     --accent-ink: 255 255 255;
 
-    --ok: 21 112 72;   --ok-soft: 225 244 234;  --ok-line: 160 214 186;
-    --bad: 185 28 28;  --bad-soft: 253 234 234; --bad-line: 240 176 176;
-    --warn: 146 84 6;  --warn-soft: 253 242 218;--warn-line: 233 196 128;
-    --esc: 91 58 154;  --esc-soft: 239 233 249; --esc-line: 201 184 234;
+    --ok: 30 122 78;    --ok-soft: 230 242 235;  --ok-line: 185 214 198;
+    --bad: 166 61 47;   --bad-soft: 248 233 230; --bad-line: 230 192 189;
+    --warn: 138 90 14;  --warn-soft: 251 243 225;--warn-line: 230 201 139;
+    --esc: 107 79 163;  --esc-soft: 239 235 248; --esc-line: 207 196 236;
 
-    --rail: 250 251 252;
-    --shadow: 14 17 22;
+    --rail: 230 242 235;
+    --shadow: 11 59 42;
     color-scheme: light;
   }
 

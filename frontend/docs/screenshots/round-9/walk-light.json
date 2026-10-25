@@ -1,0 +1,239 @@
+{
+  "base": "http://localhost:3002",
+  "theme": "light",
+  "reducedMotion": false,
+  "pathMs": 58222,
+  "console": [],
+  "network": [
+    {
+      "step": "setup",
+      "status": "failed",
+      "url": "net::ERR_UNSAFE_PORT"
+    }
+  ],
+  "steps": [
+    {
+      "name": "welcome",
+      "did": true,
+      "readyMs": 311,
+      "total": 723,
+      "cls": 0,
+      "url": "/welcome",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "login",
+      "did": true,
+      "readyMs": 107,
+      "total": 109,
+      "cls": 0.021,
+      "url": "/login",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.021,
+          "t": 15,
+          "who": [
+            "div.w-full.max-w-[420px]"
+          ],
+          "moved": [
+            -115
+          ]
+        }
+      ]
+    },
+    {
+      "name": "today",
+      "did": true,
+      "readyMs": 102,
+      "total": 104,
+      "cls": 0,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "money",
+      "did": true,
+      "readyMs": 408,
+      "total": 409,
+      "cls": 0.362,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.034,
+          "t": 34,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "button[data-source].cursor-default.rounded-xs.border"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.041,
+          "t": 52,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div[balance-assertion].mt-3.flex.items-center",
+            "span.flex.h-7.w-7"
+          ],
+          "moved": [
+            0,
+            776,
+            0
+          ]
+        },
+        {
+          "v": 0.135,
+          "t": 68,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "?",
+            "span.flex.h-7.w-7"
+          ],
+          "moved": [
+            0,
+            784,
+            0
+          ]
+        },
+        {
+          "v": 0.146,
+          "t": 251,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "button[data-source].cursor-default.rounded-xs.border"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "switch-dana",
+      "did": true,
+      "readyMs": 11,
+      "total": 560,
+      "cls": 0.001,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "dana-today",
+      "did": true,
+      "readyMs": 10,
+      "total": 11,
+      "cls": 0.112,
+      "url": "/",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.026,
+          "t": 24,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "?"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.033,
+          "t": 41,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span.relative.flex-1"
+          ],
+          "moved": [
+            0,
+            34,
+            9
+          ]
+        },
+        {
+          "v": 0.022,
+          "t": 71,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "nav[Main].flex.flex-col.gap-5",
+            "span.absolute.inset-0.rounded-sm"
+          ],
+          "moved": [
+            0,
+            -18,
+            -18
+          ]
+        },
+        {
+          "v": 0.028,
+          "t": 259,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span[2 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            17,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "audit",
+      "did": true,
+      "readyMs": 32,
+      "total": 33,
+      "cls": 0,
+      "url": "/audit",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "month",
+      "did": true,
+      "readyMs": null,
+      "total": 15013,
+      "cls": 0,
+      "url": "/month",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "leases",
+      "did": true,
+      "readyMs": 10,
+      "total": 11,
+      "cls": 0,
+      "url": "/leases",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "lease-detail",
+      "did": true,
+      "readyMs": null,
+      "total": 15016,
+      "cls": 0,
+      "url": "/leases",
+      "overflow": 0,
+      "shifts": []
+    }
+  ]
+}
