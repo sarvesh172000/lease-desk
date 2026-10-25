@@ -29,7 +29,7 @@ const ORDER: Stage[] = ["searching", "found", "remeasured", "complete"];
  * stream still reads as four steps. Pacing only delays what is shown; it never
  * invents an event.
  */
-const DWELL_MS: Record<Stage, number> = { searching: 1800, found: 2000, remeasured: 2200, complete: 0 };
+const DWELL_MS: Record<Stage, number> = { searching: 3200, found: 2400, remeasured: 2200, complete: 0 };
 const DWELL_REDUCED_MS = 350;
 
 function stageIndex(ev: InvestigationEvent): number {

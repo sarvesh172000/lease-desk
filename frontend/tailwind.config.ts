@@ -19,6 +19,8 @@ const config: Config = {
         raised: rgb("raised"),
         sunken: rgb("sunken"),
         rail: rgb("rail"),
+        // the dark ground the 3D document stack plays on: deep green in light, near-black in dark
+        stage: rgb("stage"),
         line: { DEFAULT: rgb("line"), strong: rgb("line-strong") },
         ink: {
           DEFAULT: rgb("ink"),
