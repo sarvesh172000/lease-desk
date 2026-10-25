@@ -87,8 +87,11 @@ await evalJs(`document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",b
 await step("evidence-pack", () => clickText("button", "Evidence pack"), `!document.body.innerText.includes("Building")`, { settle: 2500, timeout: 30000 });
 await step("switch-dana", async () => { await pointerDown('button[aria-label^="Signed in as"]'); await sleep(500); return clickText('[role="menuitem"]', "Dana"); }, q('button[aria-label^="Signed in as Dana"]'), { settle: 2000 });
 await step("dana-today", async () => { await clickSel('a[href="/"]'); return true; }, q('[data-testid="queue-table"] a[href^="/exceptions/"]'), { settle: 2000 });
-// the January $4,820 hold, from her queue
-const janHold = `[...document.querySelectorAll('[data-testid="queue-table"] a[href^="/exceptions/"]')].find((a) => a.closest("tr")?.textContent.includes("4,820.00"))`;
+// the January base-rent hold with a real gap, from her queue: LEASE-03 billed $17,270.11 against the
+// $16,726.50 its rent schedule provides (+$543.61). Upholding pays the supported amount and holds the rest,
+// which the header's three figures show; the earlier $4,820 premises hold supported nothing, so its
+// "Lease supports" read $0.00. Override with JAN_HOLD=<billed amount as shown in the queue>.
+const janHold = `[...document.querySelectorAll('[data-testid="queue-table"] a[href^="/exceptions/"]')].find((a) => a.closest("tr")?.textContent.includes(${JSON.stringify(process.env.JAN_HOLD || "17,270.11")}))`;
 await step("jan-hold", () => evalJs(`(() => { const a = ${janHold}; if (!a) return false; a.click(); return true; })()`), `document.body.innerText.includes("LEASE SUPPORTS") && ${q("main img")}`, { settle: 2500 });
 await step("uphold", async () => { await clickText('[data-testid="actions"] button', "Uphold hold"); await sleep(600); return clickSel('[data-testid="confirm-action"]'); }, q('[data-testid="action-result"]'), { settle: 2500, timeout: 20000 });
 // nothing on the backend sweeps for disputes after an uphold yet; the demo prep runs the sweep by hand

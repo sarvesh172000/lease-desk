@@ -1,5 +1,8 @@
 # Rehearsal — round 8
 
+Updated in round 13: the January beat is now the LEASE-03 base-rent hold (exc_12), see
+"The January beat" below. Rows 10–13 carry that walk's timings; the rest is round 8's.
+
 The judge's path, walked at 1280×800 against the live API on a fresh `make demo-data`,
 then again in light theme, with reduced motion, offline on fixtures, and as each role.
 Everything below was measured by `scripts/rehearsal-walk.mjs` (headless Chrome over the
@@ -23,10 +26,10 @@ click to the screen being usable (the thing you would talk about is on screen).
 | 7 | Evidence pack | — | PDF downloads; no screen change |
 | 8 | Switch to Dana | 106 ms | persona menu |
 | 9 | Dana's Today | 108 ms | her region's queue |
-| 10 | January $4,820 hold (exc_6) | 102 ms | Suite 118 vs Suite 115 |
-| 11 | Uphold hold → confirm | 103 ms | `Hold upheld · nothing paid; $4,820.00 stays held` |
-| 12 | Disputes | 108 ms | the drafted letter (see backend note 1) |
-| 13 | The letter (DSP-000006) | 104 ms | correspondence view |
+| 10 | January base-rent hold (exc_12) | 106 ms | Lease supports $16,726.50 · Billed $17,270.11 · Variance +$543.61; §3.3 and the invoice line boxed |
+| 11 | Uphold hold → confirm | 104 ms | `Hold upheld · $16,726.50 posted to the ledger (journal entry #2); $543.61 stays held · POSTED` |
+| 12 | Disputes | 109 ms | the drafted letter (see backend note 1) |
+| 13 | The letter (DSP-000012) | 103 ms | Billed $17,270.11 · Lease supports $16,726.50 · Disputed $543.61 |
 | 14 | Audit trail | 31 ms | chain verified · 3 refused blocks red |
 | 15 | Month run | 108 ms | seven stages, batch panel |
 | 16 | Leases runway | 7 ms | five bars, today line |
@@ -35,6 +38,24 @@ click to the screen being usable (the thing you would talk about is on screen).
 Machine time on the whole path: **9.5 s**, of which 7.5 s is the investigation's own
 replay. Walked by hand with the narration from the demo script it comes in under three
 minutes; the machine never makes you wait except where the replay is the point.
+
+### The January beat
+
+Round 8 walked the $4,820 premises hold (exc_6, Suite 118 billed against a lease for
+Suite 115). It is a clean refusal, but its header reads `Lease supports $0.00 · Billed
+$4,820.00 · Variance +$4,820.00`: no part of the charge is supported, so the three figures
+say nothing a judge can subtract. The same goes for the January duplicate (exc_7, the
+month's rent billed twice: $0.00 supported, $19,626.65 billed; it now says "Billed twice
+this month · one installment is due" under the zero).
+
+The beat is now the LEASE-03 base-rent hold (exc_12): the landlord billed $17,270.11 for
+January, the rent schedule (§3.3, the escalation clause) provides $16,726.50, the checker
+holds the $543.61. Both documents are boxed. Upholding posts the supported $16,726.50 to
+the ledger and keeps the $543.61 held, and the dispute letter carries the same three
+figures, so the money adds up on every screen Dana touches. Every number is the API's;
+the walk picks the row by its billed amount (`JAN_HOLD`, default `17,270.11`, in
+`scripts/rehearsal-walk.mjs`). Screenshots of the four beats:
+`docs/screenshots/round-13/`.
 
 Cold loads (cache disabled, full navigation): Today usable in **122 ms**, the money screen
 in **119 ms** (TTFB 39 ms, load 79 ms). Target was under 2 s.
@@ -154,7 +175,7 @@ session probe on /welcome and /login), which is the API saying "no session", not
 1. **Nothing drafts the dispute after an uphold.** The `disputes` job sweep exists
    (`app/work/disputes.draft_disputes`, registered as a job handler) but nothing enqueues
    it: not the approve action, not the worker's heartbeat, not `make run-month`. On a fresh
-   desk, Dana upholds the $4,820 hold and Disputes stays empty. For the rehearsal
+   desk, Dana upholds the $543.61 hold and Disputes stays empty. For the rehearsal
    `scripts/disputes-sweep.sh` enqueues the job and drains it (the walk calls it between
    steps 11 and 12). Fix on the backend: enqueue `disputes` when a hold is upheld (or sweep
    on the worker heartbeat).
