@@ -50,6 +50,23 @@ export function newerEnd(versions: LeaseVersion[] | undefined): { from: number; 
   return { from: last.version, oldEnd: exp(sorted[0]), newEnd: exp(last) };
 }
 
+/**
+ * The ghost: v1's end against the newest version's, as a span on the axis. It
+ * stays after the newer version is confirmed (the lease's end is then the new
+ * one), because what changed is the point. Null when the ends agree or are unknown.
+ */
+export function ghostSpan(
+  ghost: { from: number; oldEnd: string | null; newEnd: string | null } | null,
+  leaseEnd: string,
+): { from: number; oldEnd: string; newEnd: string; start: number; stop: number } | null {
+  if (!ghost?.newEnd) return null;
+  const oldEnd = ghost.oldEnd ?? leaseEnd;
+  if (oldEnd === ghost.newEnd) return null;
+  const a = Date.parse(`${oldEnd}T00:00:00Z`);
+  const b = Date.parse(`${ghost.newEnd}T00:00:00Z`);
+  return { from: ghost.from, oldEnd, newEnd: ghost.newEnd, start: Math.min(a, b), stop: Math.max(a, b) };
+}
+
 /** Bar thickness from monthly rent: 10px for the smallest, 24px for the largest. */
 export function thickness(rent: number, min: number, max: number): number {
   if (max <= min) return 16;
@@ -140,7 +157,7 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
                 const end = Date.parse(`${l.end}T00:00:00Z`);
                 const h = thickness(l.monthly_rent, minRent, maxRent);
                 const ghost = newerEnd(versionsById.get(l.lease_id));
-                const ghostEnd = ghost?.newEnd ? Date.parse(`${ghost.newEnd}T00:00:00Z`) : null;
+                const span = ghostSpan(ghost, l.end);
                 const obs = obsByLease.get(l.lease_id) ?? [];
                 return (
                   <li
@@ -187,14 +204,14 @@ export function Runway({ leases, today, obligations, regionOf }: RunwayProps) {
                         );
                       })()}
                       {/* a newer version: the old end against the new */}
-                      {ghostEnd && ghostEnd !== end ? (
-                        <Tooltip label={`v${ghost!.from}: ends ${day(ghost!.newEnd)} instead of ${day(l.end)}`} side="top">
+                      {span ? (
+                        <Tooltip label={`v${span.from}: ends ${day(span.newEnd)} instead of ${day(span.oldEnd)}`} side="top">
                           <button
                             type="button"
                             className="absolute z-10 cursor-default rounded-xs border border-dashed border-accent bg-accent/10"
-                            style={{ left: x(Math.min(end, ghostEnd)), width: `calc(${x(Math.max(end, ghostEnd))} - ${x(Math.min(end, ghostEnd))})`, top: `calc(50% - ${h / 2}px)`, height: h }}
+                            style={{ left: x(span.start), width: `calc(${x(span.stop)} - ${x(span.start)})`, top: `calc(50% - ${h / 2}px)`, height: h }}
                             data-testid="runway-ghost"
-                            aria-label={`Version ${ghost!.from} ends ${day(ghost!.newEnd)} instead of ${day(l.end)}`}
+                            aria-label={`Version ${span.from} ends ${day(span.newEnd)} instead of ${day(span.oldEnd)}`}
                           />
                         </Tooltip>
                       ) : null}
@@ -256,6 +273,9 @@ function HoverCard({ lease, obligations, ghost }: { lease: LeaseSummary; obligat
         <dd className="text-right">
           {day(lease.end)}
           {ghost?.newEnd && ghost.newEnd !== lease.end ? <span className="text-accent"> → {day(ghost.newEnd)} (v{ghost.from})</span> : null}
+          {ghost?.oldEnd && ghost.newEnd === lease.end && ghost.oldEnd !== lease.end ? (
+            <span className="text-ink-muted"> (v1 ended {day(ghost.oldEnd)})</span>
+          ) : null}
         </dd>
         {next ? (
           <>

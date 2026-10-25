@@ -117,44 +117,47 @@ export function QueueTable({
   }, [highlight]);
 
   return (
-    <table className={cn("w-full border-collapse", dense ? "text-sm" : "text-[0.95rem]")} data-testid="queue-table">
-      <thead>
-        <tr className="table-head">
-          {cols.map((c, i) => (
-            <th key={c.key} className={cn("py-2 font-semibold", edgePad(i, cols.length), c.num && "text-right")} data-col={c.key}>
-              {c.header}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, idx) => (
-          <tr
-            key={r.exception_id}
-            ref={(el) => {
-              rowRefs.current[idx] = el;
-            }}
-            data-testid={testId}
-            data-highlighted={highlight === idx ? "true" : undefined}
-            aria-selected={highlight === idx ? true : undefined}
-            className={cn(
-              "cursor-pointer border-b border-line/70 transition-colors duration-fast",
-              highlight === idx ? "bg-accent/10 shadow-[inset_2px_0_0_rgb(var(--accent))]" : "hover:bg-sunken/60",
-            )}
-            onClick={() => router.push(`/exceptions/${encodeURIComponent(r.exception_id)}`)}
-            onMouseEnter={() => onHighlight?.(idx)}
-          >
+    // on a phone the table scrolls inside its card, not the page
+    <div className="overflow-x-auto">
+      <table className={cn("w-full border-collapse", dense ? "text-sm" : "text-[0.95rem]")} data-testid="queue-table">
+        <thead>
+          <tr className="table-head">
             {cols.map((c, i) => (
-              <td
-                key={c.key}
-                className={cn(dense ? "py-2" : "py-3", edgePad(i, cols.length), c.num && "num whitespace-nowrap text-right")}
-              >
-                {c.cell(r)}
-              </td>
+              <th key={c.key} className={cn("py-2 font-semibold", edgePad(i, cols.length), c.num && "text-right")} data-col={c.key}>
+                {c.header}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r, idx) => (
+            <tr
+              key={r.exception_id}
+              ref={(el) => {
+                rowRefs.current[idx] = el;
+              }}
+              data-testid={testId}
+              data-highlighted={highlight === idx ? "true" : undefined}
+              aria-selected={highlight === idx ? true : undefined}
+              className={cn(
+                "cursor-pointer border-b border-line/70 transition-colors duration-fast",
+                highlight === idx ? "bg-accent/10 shadow-[inset_2px_0_0_rgb(var(--accent))]" : "hover:bg-sunken/60",
+              )}
+              onClick={() => router.push(`/exceptions/${encodeURIComponent(r.exception_id)}`)}
+              onMouseEnter={() => onHighlight?.(idx)}
+            >
+              {cols.map((c, i) => (
+                <td
+                  key={c.key}
+                  className={cn(dense ? "py-2" : "py-3", edgePad(i, cols.length), c.num && "num whitespace-nowrap text-right")}
+                >
+                  {c.cell(r)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

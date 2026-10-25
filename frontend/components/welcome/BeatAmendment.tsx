@@ -61,7 +61,7 @@ export function BeatAmendment() {
 
   return (
     <Section id="story" className="py-20 md:py-28">
-      <div ref={ref} className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
+      <div ref={ref} className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
         <div className="space-y-6">
           <Reveal>
             <div className="eyebrow mb-3 text-accent">1 · The hidden amendment</div>

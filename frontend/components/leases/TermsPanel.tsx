@@ -111,7 +111,7 @@ export function TermsPanel({ leaseId }: { leaseId: string }) {
       <CardHeader
         eyebrow="The lease, as read"
         title={
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             Version {v.version}
             <ExtractorBadge agent={agent} />
           </span>
@@ -169,52 +169,54 @@ export function TermsPanel({ leaseId }: { leaseId: string }) {
         ) : null}
       </ol>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 p-4">
-        <table className="w-full border-collapse self-start text-sm" data-testid="terms-table">
-          <thead>
-            <tr className="table-head">
-              <th className="py-2 pl-3 font-semibold">Term</th>
-              <th className="px-3 py-2 font-semibold">Value</th>
-              <th className="px-3 py-2 text-right font-semibold">Match</th>
-              <th className="px-3 py-2 pr-3 text-right font-semibold">Page</th>
-            </tr>
-          </thead>
-          <tbody>
-            {v.terms.map((t) => {
-              const locatable = !!(t.page && t.bbox && t.document_id);
-              const on = selected === t.field;
-              return (
-                <tr
-                  key={t.field}
-                  data-testid="term-row"
-                  data-field={t.field}
-                  aria-selected={on}
-                  onClick={() => locatable && setSelected(t.field)}
-                  className={cn("border-b border-line/60 transition-colors", locatable && "cursor-pointer hover:bg-sunken/60", on && "bg-accent/10 shadow-[inset_3px_0_0_rgb(var(--accent))]")}
-                >
-                  <td className="py-2 pl-3 font-medium">{termLabel(t.field)}</td>
-                  <td className="num px-3 py-2">{formatTermValue(t)}</td>
-                  <td className="px-3 py-2 text-right">
-                    <span className={cn("num font-semibold", (t.confidence ?? 0) >= 0.92 ? "text-ok" : (t.confidence ?? 0) >= 0.7 ? "text-warn" : "text-bad")} title="How exactly the quote was found on the page">
-                      {t.confidence == null ? "—" : pct(t.confidence)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 pr-3 text-right">
-                    {locatable ? (
-                      <button type="button" className="font-mono text-xs text-accent hover:underline" onClick={() => setSelected(t.field)}>
-                        p.{t.page}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-bad" title="The quote was not found on any page">
-                        not located
+      <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="self-start overflow-x-auto">
+          <table className="w-full border-collapse self-start text-sm" data-testid="terms-table">
+            <thead>
+              <tr className="table-head">
+                <th className="py-2 pl-3 font-semibold">Term</th>
+                <th className="px-3 py-2 font-semibold">Value</th>
+                <th className="px-3 py-2 text-right font-semibold">Match</th>
+                <th className="px-3 py-2 pr-3 text-right font-semibold">Page</th>
+              </tr>
+            </thead>
+            <tbody>
+              {v.terms.map((t) => {
+                const locatable = !!(t.page && t.bbox && t.document_id);
+                const on = selected === t.field;
+                return (
+                  <tr
+                    key={t.field}
+                    data-testid="term-row"
+                    data-field={t.field}
+                    aria-selected={on}
+                    onClick={() => locatable && setSelected(t.field)}
+                    className={cn("border-b border-line/60 transition-colors", locatable && "cursor-pointer hover:bg-sunken/60", on && "bg-accent/10 shadow-[inset_3px_0_0_rgb(var(--accent))]")}
+                  >
+                    <td className="py-2 pl-3 font-medium">{termLabel(t.field)}</td>
+                    <td className="num px-3 py-2">{formatTermValue(t)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <span className={cn("num font-semibold", (t.confidence ?? 0) >= 0.92 ? "text-ok" : (t.confidence ?? 0) >= 0.7 ? "text-warn" : "text-bad")} title="How exactly the quote was found on the page">
+                        {t.confidence == null ? "—" : pct(t.confidence)}
                       </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-3 py-2 pr-3 text-right">
+                      {locatable ? (
+                        <button type="button" className="font-mono text-xs text-accent hover:underline" onClick={() => setSelected(t.field)}>
+                          p.{t.page}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-bad" title="The quote was not found on any page">
+                          not located
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {term && term.document_id && term.page ? (
           <DocumentViewer
             key={`${v.version}-${term.field}`}

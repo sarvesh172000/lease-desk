@@ -49,7 +49,7 @@ export default function LeaseDetailPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Fact label="Monthly rent" value={money(lease.monthly_rent)} />
         <Fact label="Lease liability" value={money(lease.liability)} />
         <Fact label="Term ends" value={day(lease.end)} />
@@ -62,7 +62,7 @@ export default function LeaseDetailPage() {
 
       <TermsPanel leaseId={leaseId} />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <ScheduleCard leaseId={leaseId} />
         <div className="space-y-5">
           <Card>

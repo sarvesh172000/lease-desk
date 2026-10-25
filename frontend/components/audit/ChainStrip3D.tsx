@@ -233,7 +233,7 @@ export default function ChainStrip3D(props: Readonly<StripProps & { crackStarted
   const prev = selIdx > 0 ? props.events[selIdx - 1] : undefined;
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0 overflow-hidden">
       <Canvas className="!absolute inset-0" dpr={[1, 2]} camera={{ position: [0, 1.1, 5.2], fov: 32, near: 0.1, far: 60 }} gl={{ antialias: true, alpha: true }} aria-hidden>
         <Clear />
         <ambientLight intensity={1.5} /* NOSONAR */ />

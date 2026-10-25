@@ -27,7 +27,7 @@ export function CardHeader({
 }) {
   const trailing = actions ?? right;
   return (
-    <div className={cn("flex items-start justify-between gap-4 border-b border-line px-5 py-3", className)}>
+    <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-line px-5 py-3", className)}>
       <div className="min-w-0">
         {eyebrow ? <div className="eyebrow mb-0.5">{eyebrow}</div> : null}
         <h2 className="truncate text-[0.95rem] font-semibold tracking-tight">{title}</h2>
