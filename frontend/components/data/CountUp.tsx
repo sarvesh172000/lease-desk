@@ -12,9 +12,11 @@ import { cn } from "@/lib/utils";
  * entire argument.
  */
 export function CountUp({
-  value, prefix = "", suffix = "", decimals = 2, duration = 1100, className,
+  value, from = 0, prefix = "", suffix = "", decimals = 2, duration = 1100, className,
 }: {
   value: number;
+  /** Where the count starts (a before figure); it always ends on `value` exactly. */
+  from?: number;
   prefix?: string;
   suffix?: string;
   decimals?: number;
@@ -23,7 +25,7 @@ export function CountUp({
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
-  const [shown, setShown] = useState(0);
+  const [shown, setShown] = useState(from);
 
   useEffect(() => {
     if (!inView) return;
@@ -41,12 +43,13 @@ export function CountUp({
     const tick = (now: number) => {
       const t = Math.min(1, (now - started) / duration);
       // Ease out: fast at first, settling into the final figure.
-      setShown(value * (1 - Math.pow(1 - t, 3)));
+      // the last frame is the API's figure itself, never an interpolation of it
+      setShown(t < 1 ? from + (value - from) * (1 - Math.pow(1 - t, 3)) : value);
       if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [inView, value, duration]);
+  }, [inView, value, from, duration]);
 
   return (
     <span ref={ref} className={cn("num tabular-nums", className)}>

@@ -1,16 +1,12 @@
-import { day, humanize, pct } from "@/lib/format";
+"use client";
+
+import { day, pct } from "@/lib/format";
+import { rootCauseLabel, TRUST_RANKS } from "@/lib/labels";
 import type { Evidence } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-/** Trust ranks as defined in backend/app/agents/trust.py (1 = highest authority). */
-const TRUST_LABEL: Record<number, string> = {
-  1: "Executed amendment signed by both parties",
-  2: "Original executed lease",
-  3: "Authorized representative, in writing",
-  4: "Property management, no stated authority",
-  5: "Landlord invoice or statement",
-  6: "Payment history",
-};
+import { motion, useReducedMotion } from "framer-motion";
+import { cleanQuote } from "./money/EmailEvidence";
+import { TrustLadder } from "./money/TrustLadder";
 
 export function ConfidenceMeter({ value }: { value: number }) {
   const p = Math.max(0, Math.min(1, value));
@@ -25,71 +21,81 @@ export function ConfidenceMeter({ value }: { value: number }) {
   );
 }
 
+/**
+ * One piece of evidence: the quoted sentence first, then who said it and how
+ * much that counts (the trust ladder, rank 1 at the top).
+ */
 export function EvidenceCard({
   evidence,
   confidence,
   rootCause,
   selected,
   onSelect,
+  highlight,
 }: {
   evidence: Evidence;
   confidence?: number;
   rootCause?: string;
   selected?: boolean;
   onSelect?: () => void;
+  /** Just arrived from the investigation: the quote's highlight sweeps in. */
+  highlight?: boolean;
 }) {
+  const reduce = useReducedMotion();
   const Wrapper = onSelect ? "button" : "div";
+  const rank = TRUST_RANKS.find((r) => r.rank === evidence.trust_rank);
   return (
     <Wrapper
       type={onSelect ? "button" : undefined}
       onClick={onSelect}
+      data-testid="evidence-card"
       className={cn(
-        "block w-full rounded-md border bg-surface p-4 text-left",
+        "block w-full rounded-md border bg-surface p-4 text-left transition-colors duration-base",
         selected ? "border-accent ring-1 ring-accent" : "border-line",
         onSelect && "hover:border-line-strong",
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="eyebrow">Evidence{rootCause ? ` · ${humanize(rootCause)}` : ""}</div>
-          <div className="mt-0.5 truncate font-mono text-sm text-ink-soft" title={evidence.doc_id}>
-            {evidence.doc_id} · p.{evidence.page}
+          <div className="eyebrow">Evidence{rootCause ? ` · ${rootCauseLabel(rootCause)}` : ""}</div>
+          <div className="mt-0.5 truncate text-sm font-medium text-ink" title={evidence.source}>
+            {evidence.source}
+          </div>
+          <div className="text-xs text-ink-muted">
+            {[evidence.date ? day(evidence.date) : null, evidence.page != null ? `p.${evidence.page}` : "email"].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <span
-          className="shrink-0 rounded border border-accent/30 bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent"
-          title="Source trust rank, 1 = most authoritative"
-        >
-          Trust rank {evidence.trust_rank}
-        </span>
+        {confidence != null ? (
+          <span className="num shrink-0 rounded-xs border border-ok-line bg-ok-soft px-2 py-0.5 text-xs font-semibold text-ok" title="Confidence the document explains the variance">
+            {pct(confidence)}
+          </span>
+        ) : null}
       </div>
 
-      <blockquote className="mt-3 border-l-[3px] border-mark bg-[#fff8e1] px-3 py-2 text-[1.02rem] leading-snug text-ink">
-        “{evidence.quote}”
+      <blockquote className="relative mt-3 overflow-hidden rounded-xs border-l-[3px] border-warn px-3 py-2 text-[0.98rem] leading-snug text-ink">
+        <motion.span
+          aria-hidden
+          className="absolute inset-0 origin-left bg-warn-soft"
+          initial={highlight && !reduce ? { scaleX: 0 } : false}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1], delay: 0.2 }}
+        />
+        <span className="relative">“{cleanQuote(evidence.quote)}”</span>
       </blockquote>
 
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-ink-muted">Source</dt>
-        <dd className="truncate" title={evidence.source}>
-          {evidence.source}
-        </dd>
-        {TRUST_LABEL[evidence.trust_rank] ? (
-          <>
-            <dt className="text-ink-muted">Ranked as</dt>
-            <dd>{TRUST_LABEL[evidence.trust_rank]}</dd>
-          </>
-        ) : null}
-        <dt className="text-ink-muted">Dated</dt>
-        <dd>{day(evidence.date)}</dd>
-        {confidence != null ? (
-          <>
-            <dt className="self-center text-ink-muted">Confidence</dt>
-            <dd>
-              <ConfidenceMeter value={confidence} />
-            </dd>
-          </>
-        ) : null}
-      </dl>
+      {rank ? (
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <div className="min-w-0">
+            <div className="eyebrow">Trust rank {evidence.trust_rank}</div>
+            <p className="mt-0.5 text-sm text-ink-soft">{rank.long}</p>
+          </div>
+          <div className="w-40">
+            <TrustLadder rank={evidence.trust_rank} compact />
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-ink-muted">The checker&apos;s own citation; not ranked against other sources.</p>
+      )}
     </Wrapper>
   );
 }

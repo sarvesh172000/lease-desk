@@ -36,6 +36,7 @@ export function DocumentViewer({
   fallbackText,
   height = 560,
   toolbar,
+  overlay,
 }: {
   title: ReactNode;
   eyebrow: ReactNode;
@@ -47,6 +48,8 @@ export function DocumentViewer({
   fallbackText?: ReactNode;
   height?: number;
   toolbar?: ReactNode;
+  /** Shown in place of the page while something else holds the stage (the investigation's document stack). */
+  overlay?: ReactNode;
 }) {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const pages = useDocumentPages(docId);
@@ -76,7 +79,7 @@ export function DocumentViewer({
   }
 
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-md border border-line bg-surface shadow-card">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-md border border-line bg-surface shadow-raised">
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
         <div className="min-w-0">
           <div className="eyebrow">{eyebrow}</div>
@@ -89,8 +92,8 @@ export function DocumentViewer({
           {docId ? <span className="rounded bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-muted">p.{pageNo}</span> : null}
         </div>
       </header>
-      <div style={{ height }} className="min-h-0">
-        {body}
+      <div style={{ height }} className="relative min-h-0" data-viewer>
+        {overlay ?? body}
       </div>
     </section>
   );
@@ -100,7 +103,7 @@ function Fallback({ reason, text }: { reason: string; text?: ReactNode }) {
   return (
     <div className="flex h-full flex-col justify-center gap-3 bg-sunken/50 p-6">
       <p className="text-sm text-ink-muted">{reason}</p>
-      {text ? <blockquote className="border-l-[3px] border-mark bg-[#fff8e1] px-3 py-2 text-ink">{text}</blockquote> : null}
+      {text ? <blockquote className="border-l-[3px] border-warn bg-warn-soft px-3 py-2 text-ink">{text}</blockquote> : null}
     </div>
   );
 }

@@ -33,7 +33,7 @@ export function CheckerFindingCard({ ex, selected, onSelect }: { ex: ExceptionDe
       {ex.reason ? <p className="mt-3 text-[0.98rem] leading-snug text-ink">{ex.reason}</p> : null}
       {cited ? (
         <>
-          <blockquote className="mt-3 border-l-[3px] border-mark bg-[#fff8e1] px-3 py-2 text-[0.98rem] leading-snug text-ink">“{cited.quote}”</blockquote>
+          <blockquote className="mt-3 border-l-[3px] border-warn bg-warn-soft px-3 py-2 text-[0.98rem] leading-snug text-ink">“{cited.quote}”</blockquote>
           <div className="mt-2 text-sm text-ink-muted">
             {cited.label} · page {cited.page}
           </div>

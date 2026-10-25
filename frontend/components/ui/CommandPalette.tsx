@@ -63,9 +63,11 @@ export function CommandPalette() {
       open={open}
       onOpenChange={setOpen}
       label="Command palette"
-      className="fixed inset-0 z-50 grid place-items-start justify-center pt-[12vh]"
-      overlayClassName="fixed inset-0 bg-black/60 backdrop-blur-sm"
-      contentClassName="w-[min(36rem,92vw)] overflow-hidden rounded-md border border-line bg-surface shadow-float"
+      // One panel: the input on top, the list directly under it. The content
+      // (not the cmdk root) is what is positioned, so nothing stretches.
+      className="flex flex-col"
+      overlayClassName="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+      contentClassName="fixed left-1/2 top-[12vh] z-50 w-[min(36rem,92vw)] -translate-x-1/2 overflow-hidden rounded-md border border-line bg-surface shadow-float"
     >
       <Command.Input
         placeholder="Jump to a lease, an exception, or a screen…"
