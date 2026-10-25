@@ -11,6 +11,7 @@ vi.mock("@/lib/hooks", () => ({
   useConfirmLeaseVersion: () => ({ mutate, isPending: false, isError: false }),
   useMe: () => ({ data: { id: "PER-RM-BAY", name: "Dana Whitfield", role, region_id: "REG-BAY", entity_id: null } }),
 }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/DocumentViewer", () => ({
   DocumentViewer: ({ page, box, docId }: { page: number; box: number[]; docId: string }) => (
     <div data-testid="viewer" data-doc={docId}>
@@ -65,9 +66,9 @@ describe("TermsPanel", () => {
   it("clicking a term opens the page with that term's bbox in the viewer", () => {
     data = [version()];
     render(<TermsPanel leaseId="LEASE-01" />);
-    expect(screen.queryByTestId("viewer")).toBeNull();
-    fireEvent.click(screen.getAllByTestId("term-row")[0]);
+    // base rent opens on load, boxed on its page
     expect(screen.getByTestId("viewer")).toHaveTextContent("p3 72,100,300,112");
+    expect(screen.getAllByTestId("term-row")[0]).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("term-quote")).toHaveTextContent("The initial Monthly Base Rent is $18,500.00 per month");
     // another term: another page and box
     fireEvent.click(screen.getByRole("button", { name: "p.2" }));

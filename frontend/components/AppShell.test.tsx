@@ -19,14 +19,22 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 
-vi.mock("@/lib/hooks", () => ({
+vi.mock("@/lib/hooks", () => {
+  // the dialogs behind the persona menu mount with the shell; their mutations stay inert here
+  const inert = () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isError: false, isSuccess: false, error: null, data: undefined, variables: undefined });
+  return {
   useMe: () => ({ data: h.me, isLoading: false, isError: false, isSuccess: true }),
+  usePairingCode: inert,
+  useRevokePairing: inert,
+  useDemoReset: inert,
+  usePairings: () => ({ data: { pairings: [] }, isLoading: false, isError: false }),
   useDemoActors: () => ({ data: h.actors }),
   useDataSource: () => h.source,
   useApiHealth: () => h.health,
   useExceptions: () => ({ data: [{ status: "pending_review" }, { status: "balanced" }] }),
   useSummary: () => ({ data: { as_of: "2026-07-01" }, isLoading: false }),
-}));
+  };
+});
 
 vi.mock("@/lib/live", () => ({ useLiveConnection: () => h.live }));
 

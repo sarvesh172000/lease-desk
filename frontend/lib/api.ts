@@ -834,6 +834,19 @@ export function revokePairing(pairingId: number): Promise<void> {
 }
 
 /**
+ * EXTENSION: POST /api/items/{id}/actions/answer — a person answers the
+ * question the agents asked on an item; the answer travels in the patch.
+ */
+export function answerQuestion(itemId: number | string, answer: string): Promise<ActionResult> {
+  return call(
+    () => http<ActionResult>(`/api/items/${encodeURIComponent(String(itemId))}/actions/answer`, { method: "POST", body: JSON.stringify({ patch: { answer } }) }),
+    () => {
+      throw new ApiError(501, "501 answering needs the live API");
+    },
+  );
+}
+
+/**
  * EXTENSION: POST /api/batches/{period}/release — the AP clerk releases the
  * month's batch. The gateway decides who may (a 403 leaves a refused
  * release_batch event in the audit trail); 409 when nothing is approved.

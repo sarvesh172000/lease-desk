@@ -181,3 +181,47 @@ export function extractorLabel(agent: string | null | undefined): { short: strin
   if (agent === "abstraction:generator") return { short: "Generator", long: "Taken from the generated lease terms (abstraction:generator), not read from the PDF", kind: "generator" };
   return { short: "Source unknown", long: "No extraction path recorded for these terms", kind: "unknown" };
 }
+
+const DISPUTE_STATUS_LABEL: Record<string, string> = {
+  drafted: "Drafted",
+  sent: "Sent",
+  acknowledged: "Acknowledged",
+  credited: "Credited",
+  partially_credited: "Partly credited",
+  refused: "Refused",
+};
+
+export function disputeStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  return DISPUTE_STATUS_LABEL[status] ?? chargeLabel(status);
+}
+
+const POLICY_STATUS_LABEL: Record<string, string> = { proposed: "Proposed", approved: "Approved", rejected: "Rejected", retired: "Retired" };
+
+export function policyStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  return POLICY_STATUS_LABEL[status] ?? chargeLabel(status);
+}
+
+/**
+ * A policy's title: its description when it has one; otherwise its name
+ * read as words ("onboarding:LL-PACIFIC:base_rent:unchanged" → "Base rent ·
+ * unchanged · LL-PACIFIC"), never the raw key.
+ */
+export function policyTitle(p: { name: string; description?: string | null }): string {
+  const d = p.description?.trim();
+  if (d) return d;
+  const parts = p.name.split(":").filter(Boolean);
+  if (parts.length >= 4 && parts[0] === "onboarding") {
+    const [, landlord, charge, ...rest] = parts;
+    return `${chargeLabel(charge)} · ${rest.join(" ").replace(/_/g, " ")} · ${landlord}`;
+  }
+  return parts.map((x) => x.replace(/[_-]+/g, " ")).join(" · ").replace(/^./, (c) => c.toUpperCase());
+}
+
+const POLICY_ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: "Hold", dispute: "Dispute" };
+
+export function policyActionLabel(action: string | null | undefined): string {
+  if (!action) return "No action";
+  return POLICY_ACTION_LABEL[action] ?? chargeLabel(action);
+}
