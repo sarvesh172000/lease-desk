@@ -18,7 +18,7 @@ import { Suspense, useMemo, useState } from "react";
 
 /** The run as a pipeline: every stage is one of the API's own metrics, in the order the month happens. */
 const STAGES: { metric: MonthMetricName; title: string; what: string }[] = [
-  { metric: "clinics", title: "Ingest", what: "clinics billed" },
+  { metric: "clinics", title: "Ingest", what: "stores billed" },
   { metric: "checked", title: "Check", what: "charges checked" },
   { metric: "approved", title: "Approve", what: "approved by a person" },
   { metric: "held", title: "Hold", what: "held for review" },
@@ -69,7 +69,7 @@ function MonthRun() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="eyebrow">Work · {s?.entity_name ?? "Northbay Physical Therapy"}</div>
+          <div className="eyebrow">Work · {s?.entity_name ?? "Northbay Coffee"}</div>
           <h1 className="text-2xl font-semibold">Month run{period ? ` · ${monthLong(period)}` : ""}</h1>
         </div>
         {months.length > 1 ? (
@@ -152,7 +152,7 @@ function MonthRun() {
                   <motion.div key={metric ?? "none"} initial={reduce ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
                     {!metric ? (
                       <div className="p-5">
-                        <EmptyState title="Every number has rows behind it.">Click a stage to see the charges, clinics, questions or payables it counts.</EmptyState>
+                        <EmptyState title="Every number has rows behind it.">Click a stage to see the charges, stores, questions or payables it counts.</EmptyState>
                       </div>
                     ) : items.isLoading ? (
                       <div className="p-5">
@@ -198,7 +198,7 @@ function DrillRows({ rows }: { rows: MonthSummaryRow[] }) {
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="table-head">
-            <th className="py-2 pl-5 pr-2 font-semibold">Clinic</th>
+            <th className="py-2 pl-5 pr-2 font-semibold">Store</th>
             <th className="px-2 py-2 pr-5 text-right font-semibold">Charges</th>
           </tr>
         </thead>

@@ -12,8 +12,8 @@
         }
       ]
     },
-    "952262454a574eeb7bfd54f65c6b2babc659ab97df2853eabb644efa7c5802b7": {
-      "doc_id": "952262454a574eeb7bfd54f65c6b2babc659ab97df2853eabb644efa7c5802b7",
+    "5b9d7030d76d7dac46fcbc7bbdb25dcc21d918fddd7aadb93ef14a3dd25c2fb3": {
+      "doc_id": "5b9d7030d76d7dac46fcbc7bbdb25dcc21d918fddd7aadb93ef14a3dd25c2fb3",
       "kind": "invoice",
       "title": "Invoice 2026-07",
       "pages": [
@@ -24,10 +24,10 @@
         }
       ]
     },
-    "37ad6c52c33b6a2ffd96312fb9bf5a587369f9a29f1af9416e59041ccdff1e14": {
-      "doc_id": "37ad6c52c33b6a2ffd96312fb9bf5a587369f9a29f1af9416e59041ccdff1e14",
+    "73f22eb4e90c61a5276e69b3f6c31a23504aa910154c2cfdc1d54e7a88e4cffa": {
+      "doc_id": "73f22eb4e90c61a5276e69b3f6c31a23504aa910154c2cfdc1d54e7a88e4cffa",
       "kind": "lease",
-      "title": "Office Lease Agreement — LEASE-01",
+      "title": "Lease LEASE-01",
       "pages": [
         {
           "page": 1,
@@ -71,10 +71,10 @@
         }
       ]
     },
-    "982c4af26b5b91a29c49c65132084b7f8986809efc1cf78156c706e8e10b6c2e": {
-      "doc_id": "982c4af26b5b91a29c49c65132084b7f8986809efc1cf78156c706e8e10b6c2e",
+    "d1158e600b8e5f5a41a813fd919143f41b9256c0b5b378a90d255ba2d931ff97": {
+      "doc_id": "d1158e600b8e5f5a41a813fd919143f41b9256c0b5b378a90d255ba2d931ff97",
       "kind": "invoice",
-      "title": "Invoice SERRA-202601-0001",
+      "title": "Invoice 2026-01",
       "pages": [
         {
           "page": 1,
@@ -87,7 +87,7 @@
   "citations": {
     "exc_01_jul_amendment": {
       "invoice_line": {
-        "doc_id": "952262454a574eeb7bfd54f65c6b2babc659ab97df2853eabb644efa7c5802b7",
+        "doc_id": "5b9d7030d76d7dac46fcbc7bbdb25dcc21d918fddd7aadb93ef14a3dd25c2fb3",
         "page": 1,
         "box": [
           67.2,
@@ -99,7 +99,7 @@
         "amount": 17400
       },
       "lease_citation": {
-        "doc_id": "37ad6c52c33b6a2ffd96312fb9bf5a587369f9a29f1af9416e59041ccdff1e14",
+        "doc_id": "73f22eb4e90c61a5276e69b3f6c31a23504aa910154c2cfdc1d54e7a88e4cffa",
         "page": 3,
         "box": [
           85.2,
@@ -114,7 +114,7 @@
     },
     "exc_01_jan_cam": {
       "invoice_line": {
-        "doc_id": "982c4af26b5b91a29c49c65132084b7f8986809efc1cf78156c706e8e10b6c2e",
+        "doc_id": "d1158e600b8e5f5a41a813fd919143f41b9256c0b5b378a90d255ba2d931ff97",
         "page": 1,
         "box": [
           67.2,
@@ -126,7 +126,7 @@
         "amount": 6458.33
       },
       "lease_citation": {
-        "doc_id": "37ad6c52c33b6a2ffd96312fb9bf5a587369f9a29f1af9416e59041ccdff1e14",
+        "doc_id": "73f22eb4e90c61a5276e69b3f6c31a23504aa910154c2cfdc1d54e7a88e4cffa",
         "page": 4,
         "box": [
           85.2,

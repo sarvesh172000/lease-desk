@@ -87,8 +87,8 @@ PERSONAS: Dict[str, Persona] = {
     "PER-RM-SOCAL": Persona(
         "PER-RM-SOCAL", "Imani Okonkwo", "regional_manager", "REG-SOCAL", "ENT-CA",
         facts=[
-            "No escalation was renegotiated at any Southern California clinic in 2026.",
-            "Wilshire Medical Court changed property managers in March; the landlord entity did not change.",
+            "No escalation was renegotiated at any Southern California store in 2026.",
+            "Wilshire Court changed property managers in March; the landlord entity did not change.",
         ],
         refuses=["an escalation applied before the lease anniversary"],
         response_days=3,

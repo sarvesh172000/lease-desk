@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 const DAY = 86_400_000;
-const LABEL_W = 300; // wide enough for "Serramonte Hand Therapy, Suite 115" at 14px
+const LABEL_W = 300; // wide enough for "Bayview Drive-Thru, Suite 240" at 14px
 
 export interface RunwayProps {
   leases: LeaseSummary[];

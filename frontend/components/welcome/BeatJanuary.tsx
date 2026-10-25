@@ -44,7 +44,7 @@ export function BeatJanuary() {
             <p className="mt-5 leading-relaxed text-ink-soft">
               The checker reads every charge of the month against the schedule its lease implies, and holds only what it can
               prove wrong, citing the clause. Among January&rsquo;s holds: a rent invoice billed twice, and rent for a suite the
-              clinic does not lease. The rest goes to the AP clerk to pay.
+              store does not lease. The rest goes to the AP clerk to pay.
             </p>
             {ev ? (
               <p className="mt-4 text-sm text-ink-muted">

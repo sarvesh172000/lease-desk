@@ -7,7 +7,7 @@ all, so this module asks three different questions, in an order that matters:
   1. **Is this charge even for our premises?** A line for a suite we do not
      lease is not a rent variance; it is an unsupported charge. Asking this
      first is what stops the stray Suite 118 line from being reported as
-     CLINIC-02 *underpaying* its rent, which is what happens when every
+     STORE-02 *underpaying* its rent, which is what happens when every
      payment is naively compared to the month's expected rent.
 
   2. **Has this already been billed?** A duplicate carries the *correct*

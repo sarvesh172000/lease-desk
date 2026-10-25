@@ -77,8 +77,8 @@ def render_email(path: Path):
     y = 40
     for line in [
         "From:    dana.reyes@serramonteretail.example",
-        "To:      ap@northbay-clinics.example",
-        "Cc:      facilities@northbay-clinics.example",
+        "To:      ap@northbaypt.example",
+        "Cc:      facilities@northbaypt.example",
         "Date:    Thu, 18 Jun 2026 16:41:02 -0700",
         "Subject: RE: RE: Store 14 renewal - executed copy attached",
     ]:
@@ -108,7 +108,7 @@ def render_email(path: Path):
         "Dana Reyes",
         "Serramonte Retail Partners LLC",
         "",
-        "> On Jun 11, 2026, at 9:02 AM, facilities@northbay-clinics.example wrote:",
+        "> On Jun 11, 2026, at 9:02 AM, facilities@northbaypt.example wrote:",
         "> Dana - confirming we want the extension. Sending to legal today.",
     ]:
         page.insert_text((60, y), line, fontname="helv", fontsize=10)

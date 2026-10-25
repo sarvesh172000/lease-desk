@@ -123,8 +123,8 @@ export default function ExceptionsPage() {
                   ))}
                 </select>
               ) : null}
-              <select aria-label="Filter by clinic" className="h-9 rounded-sm border border-line-strong bg-surface px-2 text-sm" value={clinic} onChange={(e) => setClinic(e.target.value)}>
-                <option value="">All clinics</option>
+              <select aria-label="Filter by store" className="h-9 rounded-sm border border-line-strong bg-surface px-2 text-sm" value={clinic} onChange={(e) => setClinic(e.target.value)}>
+                <option value="">All stores</option>
                 {clinics.map((c) => (
                   <option key={c} value={c}>
                     {all.find((r) => r.clinic_id === c)?.place ?? c}

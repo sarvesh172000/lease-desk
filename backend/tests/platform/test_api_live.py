@@ -365,7 +365,7 @@ def test_held_total_counts_open_over_bills_only(client, january):
         conn.execute(text("""
             INSERT INTO work_item (kind, state, subject_type, subject_id, clinic_id, region_id,
                                    entity_id, period, title, amount, proposal, evidence, proposed_by)
-            VALUES ('CHARGE_CHECK', 'PROPOSED', 'landlord_charge', 'under', 'CLINIC-01', 'REG-BAY',
+            VALUES ('CHARGE_CHECK', 'PROPOSED', 'landlord_charge', 'under', 'STORE-01', 'REG-BAY',
                     'ENT-CA', '2026-01-01', 'under-bill', 300, 'hold', CAST(:e AS jsonb), 'agent:checker')
         """), {"e": json.dumps({"lease_id": "LEASE-01", "billed": 19326.65, "supported": 19626.65})})
     body = c.get("/api/summary").json()

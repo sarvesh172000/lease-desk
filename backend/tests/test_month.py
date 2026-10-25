@@ -104,14 +104,14 @@ def test_every_planted_error_reaches_the_invoices(world):
 
 
 def test_the_correct_but_odd_charge_is_exactly_what_the_lease_says(world):
-    """CLINIC-04's rent rose $400 on 1 January. A checker that holds this is wrong."""
+    """STORE-04's rent rose $400 on 1 January. A checker that holds this is wrong."""
     company, leases, invoices, _ = world
     expected = expected_charges(PERIOD, company, leases)
     charge = next(
         c for i in invoices for c in i.charges
-        if c.clinic_id == "CLINIC-04" and c.charge_type == "base_rent"
+        if c.clinic_id == "STORE-04" and c.charge_type == "base_rent"
     )
-    assert charge.amount == expected["CLINIC-04"]["base_rent"] == 13_680.00
+    assert charge.amount == expected["STORE-04"]["base_rent"] == 13_680.00
     assert charge.error_id is None
 
 
@@ -152,11 +152,11 @@ def test_kind_2_a_duplicate_is_a_counting_question_not_an_amount_one(world):
     expected = expected_charges(PERIOD, company, leases)
     rent_charges = [
         c for i in invoices for c in i.charges
-        if c.clinic_id == "CLINIC-01" and c.charge_type == "base_rent"
+        if c.clinic_id == "STORE-01" and c.charge_type == "base_rent"
     ]
     assert len(rent_charges) == 2
     for charge in rent_charges:
-        assert charge.amount == expected["CLINIC-01"]["base_rent"], \
+        assert charge.amount == expected["STORE-01"]["base_rent"], \
             "both duplicates carry the correct amount, which is what hides them"
 
     counts = Counter(
@@ -174,7 +174,7 @@ def test_kind_3_a_charge_for_premises_the_lease_does_not_cover(world):
     )
     assert stray.suite == "Suite 118"
     assert stray.suite != company.clinic(stray.clinic_id).suite
-    assert company.clinic("CLINIC-02").suite == "Suite 115"
+    assert company.clinic("STORE-02").suite == "Suite 115"
 
 
 def test_cam_errors_are_invisible_to_a_rent_only_check(world):
@@ -232,7 +232,7 @@ def test_invoice_pdf_states_the_billed_amount(world):
     from app.docs.pipeline import extract
 
     company, _, invoices, _ = world
-    invoice = next(i for i in invoices if i.clinic_id == "CLINIC-03")
+    invoice = next(i for i in invoices if i.clinic_id == "STORE-03")
     doc = extract(render_invoice(invoice, company))
     assert doc.find("17,270.11"), "the wrong rent must be quotable on the invoice"
     assert doc.find(invoice.invoice_id)
@@ -261,7 +261,7 @@ def test_charge_ids_are_unique_within_a_month(world):
 
 def test_the_stray_suite_line_has_its_own_id(world):
     _, _, invoices, _ = world
-    clinic_02 = [c for i in invoices for c in i.charges if c.clinic_id == "CLINIC-02"]
+    clinic_02 = [c for i in invoices for c in i.charges if c.clinic_id == "STORE-02"]
     rent = [c for c in clinic_02 if c.charge_type == "base_rent"]
     assert len(rent) == 2
     assert rent[0].charge_id != rent[1].charge_id

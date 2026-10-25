@@ -6,7 +6,7 @@ compares what it recovered against this file. Nothing downstream may import
 this module except `eval/` and the renderer — that is what keeps the benchmark
 honest.
 
-CLINIC-01 deliberately reproduces the Store 14 figures the demo was rehearsed
+STORE-01 deliberately reproduces the Store 14 figures the demo was rehearsed
 on: $18,500 commencing 2024-01-01 with 3% annual escalation, which steps to
 $19,055, $19,626.65, $20,215.45 and $20,821.91. The amendment that cuts it to
 $17,400 and extends the term three years is the moment.
@@ -167,20 +167,20 @@ _RENEWALS = (
 def build_leases(company: Optional[Company] = None) -> List[LeaseTerms]:
     company = company or build_company()
     specs = [
-        # CLINIC-01 reproduces the rehearsed Store 14 numbers exactly.
-        ("LEASE-01", "CLINIC-01", date(2024, 1, 1), date(2028, 12, 31),
+        # STORE-01 reproduces the rehearsed Store 14 numbers exactly.
+        ("LEASE-01", "STORE-01", date(2024, 1, 1), date(2028, 12, 31),
          18_500.00, Escalation("fixed_percent", 0.03, 1), 11.50, 37_000.00,
          RenewalOption(1, 3, 270)),
-        ("LEASE-02", "CLINIC-02", date(2023, 7, 1), date(2028, 6, 30),
+        ("LEASE-02", "STORE-02", date(2023, 7, 1), date(2028, 6, 30),
          9_150.00, Escalation("fixed_step", 275.00, 7), 11.50, 18_300.00,
          RenewalOption(2, 3, 180)),
-        ("LEASE-03", "CLINIC-03", date(2024, 4, 1), date(2029, 3, 31),
+        ("LEASE-03", "STORE-03", date(2024, 4, 1), date(2029, 3, 31),
          16_200.00, Escalation("fixed_percent", 0.0325, 4), 9.75, 32_400.00,
          RenewalOption(1, 5, 270)),
-        ("LEASE-04", "CLINIC-04", date(2025, 1, 1), date(2029, 12, 31),
+        ("LEASE-04", "STORE-04", date(2025, 1, 1), date(2029, 12, 31),
          13_280.00, Escalation("fixed_step", 400.00, 1), 9.75, 26_560.00,
          RenewalOption(2, 3, 180)),
-        ("LEASE-05", "CLINIC-05", date(2024, 10, 1), date(2027, 9, 30),
+        ("LEASE-05", "STORE-05", date(2024, 10, 1), date(2027, 9, 30),
          8_120.00, Escalation("fixed_percent", 0.0275, 10), 9.75, 16_240.00,
          RenewalOption(1, 3, 120)),
     ]
@@ -286,7 +286,7 @@ class Amendment:
         return period >= self.effective
 
 
-# CLINIC-01's second amendment: three more years in exchange for lower rent.
+# STORE-01's second amendment: three more years in exchange for lower rent.
 # Effective 1 July 2026, which is where the books start disagreeing with cash.
 SECOND_AMENDMENT = Amendment(
     amendment_id="LEASE-01-A2",

@@ -81,7 +81,7 @@ session probe on /welcome and /login), which is the API saying "no session", not
    and every Today placeholder now reserves the loaded height. Today's shift went from
    0.20 to 0.09 (what remains is the queue's column widths settling when rows arrive).
 
-7. **Truncated labels**: the runway's lease column cut "Serramonte Hand Therapy, Suite 115"
+7. **Truncated labels**: the runway's lease column cut "Serramonte Express, Suite 115"
    (column 250 → 300 px); the centre pane's title ("Before and after") vanished behind the
    three pane tabs (tabs have their own row now); the dispute letter's "Attn … · email"
    line (email and address moved beside it); the audit table's time and actor columns

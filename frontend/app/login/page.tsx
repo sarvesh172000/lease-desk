@@ -120,7 +120,7 @@ function LoginForm() {
             <ArrowLeft aria-hidden className="h-3.5 w-3.5" /> Read the whole story
           </Link>
         </div>
-        <p className="relative text-xs text-ink-faint">Cal Hacks 13.0 · Northbay Physical Therapy, the demo company</p>
+        <p className="relative text-xs text-ink-faint">Cal Hacks 13.0 · Northbay Coffee, the demo company</p>
       </aside>
 
       <main className="relative flex items-center justify-center px-6 py-10">

@@ -105,7 +105,7 @@ def fake_model(monkeypatch, tmp_path):
 def july_variance(seeded):
     """The July amendment variance, as the checker would have left it."""
     return insert_work_item(
-        seeded["owner"], state="PROPOSED", subject_id="jul", clinic_id="CLINIC-01",
+        seeded["owner"], state="PROPOSED", subject_id="jul", clinic_id="STORE-01",
         period="2026-07-01",
         evidence={"lease_id": "LEASE-01", "charge_type": "base_rent",
                   "billed": 17_400.00, "supported": 19_626.65})
@@ -177,7 +177,7 @@ def test_nothing_found_can_open_the_resolvers_question(
         client, seeded, fake_model):
     item_id = insert_work_item(
         seeded["owner"], state="PROPOSED", subject_id="ask-only",
-        clinic_id="CLINIC-01", period="2026-07-01",
+        clinic_id="STORE-01", period="2026-07-01",
         evidence={"lease_id": "LEASE-01", "charge_type": "base_rent", "billed": 100.0},
     )
     with seeded["owner"].begin() as conn:

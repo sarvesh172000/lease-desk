@@ -47,7 +47,7 @@ def test_catches_every_planted_error(january):
 
 
 def test_no_false_holds(january):
-    """CLINIC-04's $400 step looks like an unexplained 3% jump and is correct."""
+    """STORE-04's $400 step looks like an unexplained 3% jump and is correct."""
     _, _, findings = january
     odd = next(e for e in JANUARY_2026 if not e.is_error)
     held = {(f.charge.clinic_id, f.charge.charge_type) for f in holds(findings)}
@@ -73,7 +73,7 @@ def test_five_of_twelve_charges_are_held(january):
 # --- rule order: the three regressions -------------------------------------
 
 def test_a_stray_suite_is_a_premises_finding_not_a_rent_variance(january):
-    """The old reconciler reported CLINIC-02 as UNDERpaying $4,880 when it had
+    """The old reconciler reported STORE-02 as UNDERpaying $4,880 when it had
     been overbilled $4,820. Asking about premises first is what fixes it."""
     _, _, findings = january
     stray = next(f for f in findings if f.charge.suite == "Suite 118")
@@ -84,11 +84,11 @@ def test_a_stray_suite_is_a_premises_finding_not_a_rent_variance(january):
 
 
 def test_the_correct_rent_alongside_a_stray_line_is_still_approved(january):
-    """CLINIC-02's real rent is right. One bad line must not condemn it."""
+    """STORE-02's real rent is right. One bad line must not condemn it."""
     _, _, findings = january
     real_rent = next(
         f for f in findings
-        if f.charge.clinic_id == "CLINIC-02"
+        if f.charge.clinic_id == "STORE-02"
         and f.charge.charge_type == "base_rent"
         and f.charge.suite == "Suite 115"
     )
@@ -109,7 +109,7 @@ def test_the_first_of_a_duplicate_pair_is_approved(january):
     _, _, findings = january
     first = next(
         f for f in findings
-        if f.charge.clinic_id == "CLINIC-01"
+        if f.charge.clinic_id == "STORE-01"
         and f.charge.charge_type == "base_rent"
         and f.rule == RULE_AMOUNT
     )
@@ -150,7 +150,7 @@ def test_describe_states_the_direction(january):
 
 def test_a_charge_with_no_confirmed_lease_is_held(january):
     rules, _, _ = january
-    orphan = Charge("C1", "INV-1", "LEASE-99", "CLINIC-99", PERIOD,
+    orphan = Charge("C1", "INV-1", "LEASE-99", "STORE-99", PERIOD,
                     "base_rent", "Suite 1", 5_000.00)
     findings = check_month([orphan], rules, PERIOD)
     assert findings[0].rule == RULE_PREMISES
@@ -161,7 +161,7 @@ def test_a_charge_with_no_confirmed_lease_is_held(january):
 def test_rounding_is_not_a_variance(january):
     rules, _, _ = january
     due = expected(rules["LEASE-03"], PERIOD).base_rent
-    charge = Charge("C1", "INV-1", "LEASE-03", "CLINIC-03", PERIOD,
+    charge = Charge("C1", "INV-1", "LEASE-03", "STORE-03", PERIOD,
                     "base_rent", "Suite 100", due + TOLERANCE / 2)
     assert check_month([charge], rules, PERIOD)[0].proposal == APPROVE
 
@@ -169,7 +169,7 @@ def test_rounding_is_not_a_variance(january):
 def test_a_difference_above_tolerance_is_a_variance(january):
     rules, _, _ = january
     due = expected(rules["LEASE-03"], PERIOD).base_rent
-    charge = Charge("C1", "INV-1", "LEASE-03", "CLINIC-03", PERIOD,
+    charge = Charge("C1", "INV-1", "LEASE-03", "STORE-03", PERIOD,
                     "base_rent", "Suite 100", due + TOLERANCE + 0.01)
     assert check_month([charge], rules, PERIOD)[0].proposal == HOLD
 
@@ -181,7 +181,7 @@ def test_charges_from_another_month_are_ignored(january):
 
 def test_suite_matching_ignores_formatting(january):
     rules, _, _ = january
-    charge = Charge("C1", "INV-1", "LEASE-03", "CLINIC-03", PERIOD,
+    charge = Charge("C1", "INV-1", "LEASE-03", "STORE-03", PERIOD,
                     "base_rent", "suite  100", expected(rules["LEASE-03"], PERIOD).base_rent)
     assert check_month([charge], rules, PERIOD)[0].proposal == APPROVE
 
