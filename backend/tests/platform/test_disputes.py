@@ -280,14 +280,28 @@ def test_drafting_is_idempotent_and_only_for_upheld_holds(jan, upheld, client):
     assert draft(jan)["drafted"] == []
 
 
-def test_the_disputes_job_drafts_through_the_worker(jan, client):
+def test_upholding_a_hold_queues_the_draft_and_the_worker_writes_it(jan, client):
     dup = held(jan, DUP_BILLED)
     uphold(client, dup["id"])
-    with jan["lease_agent"].begin() as conn:
-        enqueue(conn, "disputes", {"entity_id": ENTITY})
+    # The uphold queued the sweep itself, once: nobody runs a job by hand.
+    assert q(jan, "SELECT count(*) FROM job WHERE kind = 'disputes' AND idempotency_key = :k",
+             k="disputes:upheld:%d" % dup["id"]) == 1
     (outcome,) = drain(jan["lease_agent"], "disputes")
     assert outcome.status == "done"
     assert outcome.result["drafted"] == [disputes.dispute_id_for(dup["id"])]
+    # A sweep queued by anything else finds nothing left to draft.
+    with jan["lease_agent"].begin() as conn:
+        enqueue(conn, "disputes", {"entity_id": ENTITY})
+    (again,) = drain(jan["lease_agent"], "disputes")
+    assert again.result["drafted"] == []
+
+
+def test_a_hold_paid_as_billed_queues_no_draft(jan, client):
+    other = held(jan, DUP_BILLED)
+    res = as_(client, CTRL).post("/api/items/%d/actions/approve" % other["id"], json={
+        "reason": "agreed by phone", "patch": {"resolution": "pay_as_billed"}})
+    assert res.status_code == 200, res.text
+    assert q(jan, "SELECT count(*) FROM job WHERE idempotency_key LIKE 'disputes:upheld:%'") == 0
 
 
 # ------------------------------------------------- the full arc: the duplicate
@@ -430,9 +444,9 @@ def test_early_escalation_partial_credit_clears_part_and_reopens_the_rest(jan, u
     res = as_(client, CTRL).post("/api/items/%d/actions/close" % item_id,
                                  json={"reason": "Concession approved."})
     assert res.status_code == 200, res.text
+    # Closing through the queue ran the gateway: the write-off is done, once.
+    assert res.json()["dispute"]["gateway_error"] is None
     with jan["lease_gateway"].begin() as conn:
-        synced = sync_disputes(conn, dispute_id=did)
-        assert len(synced.written_off) == 1
         assert sync_disputes(conn, dispute_id=did).written_off == []
     assert account_balance(jan, "Landlord receivable") == 0
     assert account_balance(jan, "Lease cost") == Decimal("16726.50") + Decimal("407.71")
@@ -499,10 +513,20 @@ def test_only_the_regions_manager_approves_a_letter(jan, upheld, client):
     with jan["lease_agent"].begin() as conn:
         with pytest.raises(Denied):
             transition(conn, load_actor(conn, "agent:disputes"), item_id, "approve")
-    # Approving through the queue works the same way; the gateway sweep sends.
-    assert as_(client, RM).post("/api/items/%d/actions/approve" % item_id).status_code == 200
+    # Approving through the queue works the same way, and sends the letter.
+    res = as_(client, RM).post("/api/items/%d/actions/approve" % item_id)
+    assert res.status_code == 200, res.text
+    sent = res.json()["dispute"]
+    assert (sent["id"], sent["status"], sent["gateway_error"]) == (did, "sent", None)
+    assert sent["notice_to"]["email"] == "dana.reyes@serramonteretail.example"
+    assert q(jan, "SELECT count(*) FROM outbox") == 1
     with jan["lease_gateway"].begin() as conn:
-        assert len(sync_disputes(conn).sent) == 1
+        assert sync_disputes(conn).sent == []
+    # The letter is out, so the disputes sweep is queued to propose the receivable.
+    assert q(jan, "SELECT count(*) FROM job WHERE idempotency_key LIKE :k",
+             k="disputes:sent:%s:%%" % did) == 1
+    outcomes = drain(jan["lease_agent"], "disputes")
+    assert sum((o.result["receivables_proposed"] for o in outcomes), []) == [did]
 
 
 def test_a_reply_must_come_from_the_authorized_representative(jan, upheld, client):
@@ -563,3 +587,4 @@ def test_the_lease_agent_cannot_send_or_post_a_dispute(jan, upheld):
         with pytest.raises(Exception, match="permission denied"):
             conn.execute(text("UPDATE dispute SET receivable_entry_id = 1"))
         conn.rollback()
+
