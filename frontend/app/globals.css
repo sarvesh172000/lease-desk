@@ -31,34 +31,38 @@
     --warn: 251 191 36; --warn-soft: 52 38 8;  --warn-line: 102 73 14;
     --esc: 167 139 250; --esc-soft: 38 29 64;  --esc-line: 76 57 125;
 
+    --rail: 14 16 19;
     --shadow: 0 0 0;
     color-scheme: dark;
   }
 
+  /* Light: the same cool neutrals as dark, inverted. Accent and semantic
+     colours are darker shades so text on white passes AA. */
   :root[data-theme="light"] {
-    --bg: 246 245 241;
+    --bg: 245 246 248;
     --surface: 255 255 255;
     --raised: 255 255 255;
-    --sunken: 239 237 231;
-    --line: 222 219 210;
-    --line-strong: 199 195 184;
+    --sunken: 238 240 243;
+    --line: 223 226 231;
+    --line-strong: 196 201 209;
 
-    --ink: 27 31 36;
-    --ink-soft: 69 75 83;
-    --ink-muted: 107 112 121;
-    --ink-faint: 145 150 160;
+    --ink: 14 17 22;
+    --ink-soft: 61 69 80;
+    --ink-muted: 91 100 112;
+    --ink-faint: 128 136 148;
 
-    --accent: 15 92 90;
-    --accent-soft: 227 239 238;
-    --accent-strong: 10 68 66;
+    --accent: 15 118 110;
+    --accent-soft: 220 243 240;
+    --accent-strong: 17 94 89;
     --accent-ink: 255 255 255;
 
-    --ok: 29 107 61;   --ok-soft: 228 241 232;  --ok-line: 169 210 183;
-    --bad: 168 38 31;  --bad-soft: 251 233 231; --bad-line: 234 177 171;
-    --warn: 138 90 0;  --warn-soft: 251 240 217;--warn-line: 230 200 134;
+    --ok: 21 112 72;   --ok-soft: 225 244 234;  --ok-line: 160 214 186;
+    --bad: 185 28 28;  --bad-soft: 253 234 234; --bad-line: 240 176 176;
+    --warn: 146 84 6;  --warn-soft: 253 242 218;--warn-line: 233 196 128;
     --esc: 91 58 154;  --esc-soft: 239 233 249; --esc-line: 201 184 234;
 
-    --shadow: 27 31 36;
+    --rail: 250 251 252;
+    --shadow: 14 17 22;
     color-scheme: light;
   }
 

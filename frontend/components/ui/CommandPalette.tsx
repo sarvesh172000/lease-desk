@@ -3,10 +3,28 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import { FileText, Gauge, ScrollText, Sparkles } from "lucide-react";
+import {
+  BookMarked,
+  Building2,
+  CalendarClock,
+  CalendarRange,
+  Gauge,
+  Link2,
+  MailWarning,
+  MessageSquareText,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getExceptions, getLeases } from "@/lib/api";
 import type { ExceptionSummary, LeaseSummary } from "@/lib/types";
+
+const OPEN_EVENT = "leasedesk:command-palette";
+
+/** Open the palette from a button (the top bar's search field). */
+export function openCommandPalette() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
 
 /**
  * ⌘K. It is cheap and it makes a demo feel like a tool rather than a slide —
@@ -26,8 +44,13 @@ export function CommandPalette() {
         setOpen((v) => !v);
       }
     };
+    const onOpen = () => setOpen(true);
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener(OPEN_EVENT, onOpen);
+    };
   }, []);
 
   const go = (href: string) => {
@@ -54,9 +77,15 @@ export function CommandPalette() {
         </Command.Empty>
 
         <Group heading="Go to">
-          <Item onSelect={() => go("/")} icon={<Gauge className="h-4 w-4" />}>Dashboard</Item>
-          <Item onSelect={() => go("/leases")} icon={<FileText className="h-4 w-4" />}>Leases</Item>
-          <Item onSelect={() => go("/audit")} icon={<ScrollText className="h-4 w-4" />}>Audit trail</Item>
+          <Item onSelect={() => go("/")} icon={<Gauge className="h-4 w-4" />}>Today</Item>
+          <Item onSelect={() => go("/month")} icon={<CalendarRange className="h-4 w-4" />}>Month run</Item>
+          <Item onSelect={() => go("/exceptions")} icon={<TriangleAlert className="h-4 w-4" />}>Exceptions</Item>
+          <Item onSelect={() => go("/questions")} icon={<MessageSquareText className="h-4 w-4" />}>Questions</Item>
+          <Item onSelect={() => go("/leases")} icon={<Building2 className="h-4 w-4" />}>Leases</Item>
+          <Item onSelect={() => go("/obligations")} icon={<CalendarClock className="h-4 w-4" />}>Obligations</Item>
+          <Item onSelect={() => go("/disputes")} icon={<MailWarning className="h-4 w-4" />}>Disputes</Item>
+          <Item onSelect={() => go("/policies")} icon={<BookMarked className="h-4 w-4" />}>Policies</Item>
+          <Item onSelect={() => go("/audit")} icon={<Link2 className="h-4 w-4" />}>Audit trail</Item>
           <Item onSelect={() => go("/welcome")} icon={<Sparkles className="h-4 w-4" />}>Welcome page</Item>
         </Group>
 
