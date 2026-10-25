@@ -39,7 +39,18 @@ from typing import Any, Callable, Dict, Mapping, Optional, Union
 
 from .cards import suggested_action_card
 from .client import ApiError, LeaseDeskClient
-from .grammar import APPROVALS, DESK, HELP, INVESTIGATION, RULEBOOK, Command, from_selection, parse, render
+from .grammar import (
+    APPROVALS,
+    CONNECT_CHAT,
+    DESK,
+    HELP,
+    INVESTIGATION,
+    RULEBOOK,
+    Command,
+    from_selection,
+    parse,
+    render,
+)
 from .live import Feed
 from .pairing import MemoryPairingStore, PairingStore, describe_actor, remembered
 from .protocol import ERROR, INVALID, UNPAIRED, Reply
@@ -51,9 +62,9 @@ DESCRIPTION = ("Lease accounting for Northbay PT inside ASI:One: what needs you 
                "your own Lease Desk permissions. Pair first with a one-time code from the web app.")
 
 NOT_PAIRED = ("This chat isn't paired with a Lease Desk account yet, so I can't show or change "
-              "anything. Open Lease Desk → Today → *Pair ASI:One* and send `pair XXXX-XXXX` here.")
+              f"anything. In Lease Desk, open {CONNECT_CHAT} and send `pair XXXX-XXXX` here.")
 BAD_CODE = ("That code didn't work: it may be mistyped, already used, or older than ten minutes. "
-            "Get a fresh one from Lease Desk → Today → *Pair ASI:One*.")
+            f"Get a fresh one in Lease Desk: {CONNECT_CHAT}.")
 
 FEED_NAME = "front_desk"
 SPECIALISTS = (APPROVALS, RULEBOOK, INVESTIGATION)

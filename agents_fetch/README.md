@@ -32,7 +32,7 @@ ASI:One ──Chat Protocol──▶ Northbay Lease Desk (front desk: pairing, g
 ## What you can say
 
 ```
-pair K7QM-9XDA                       link this chat to your Lease Desk account (code from Today)
+pair K7QM-9XDA                       link this chat to your Lease Desk account (code from Connect chat)
 what needs me this week?             your open items and questions, with due dates and dollars at stake
 review 42                            a held item as an Interactive Card: amounts, sources, trust, why
 why was this held?                   (right after a review) or: why 42
@@ -51,7 +51,7 @@ Anything else, from a paired person, may be read by ASI:One's model (below).
   Every action is `POST /api/items/{id}/actions/{action}` as the paired
   person, so `can()`, the gateway and the hash-chained audit stream run
   exactly as they do for a click in the web app.
-- **Pairing, not passwords.** On the web app's Today screen a person asks for
+- **Pairing, not passwords.** In the web app (their name, top right → Connect chat) a person asks for
   a one-time code (`POST /api/pairing/codes`: eight characters, ten minutes,
   works once). Sending `pair <code>` makes the front desk claim it
   (`POST /api/pairing/claim`) for a scoped bearer token bound to that person
@@ -157,7 +157,7 @@ To bring them up (or re-register after a reset):
    agents publish `profiles/*.md` themselves), set a handle and avatar, and
    confirm the **AgentChatProtocol** manifest on the front desk.
 5. In ASI:One, search for "Northbay Lease Desk" (or its address), send `help`,
-   then `pair <code>` with a code from the web app's Today screen.
+   then `pair <code>` with a code from the web app (your name, top right → Connect chat).
 6. Fill in the public ASI:One chat URL above, and register the front desk
    address with the CalHacks ASI:One Submission Agent
    (asi1.ai/festival/calhacks2026/dashboard).

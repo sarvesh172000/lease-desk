@@ -14,7 +14,7 @@ own Lease Desk role and region.
 
 ## Start
 
-1. In the Lease Desk web app: **Today → Pair ASI:One** gives a one-time code.
+1. In the Lease Desk web app: **your name (top right) → Connect chat** gives a one-time code.
 2. Send `pair XXXX-XXXX` here. The code works once, for ten minutes.
 
 ## Ask it
