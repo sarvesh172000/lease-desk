@@ -14,6 +14,7 @@ import { pageImageUrl } from "@/lib/api";
 import { boxToPercent, scaleBox, type PageSize } from "@/lib/bbox";
 import type { Box } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 export interface PdfPageProps {
@@ -35,6 +36,7 @@ export default function PdfPage({ docId, page, box, pageSize, tone = "cited", la
   const [rendered, setRendered] = useState(false);
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState<(typeof ZOOMS)[number]>(1);
+  const reduce = useReducedMotion();
 
   const src = pageImageUrl(docId, page);
   // `pageSize` is in PDF points; the image is a 150-DPI raster of the same
@@ -60,7 +62,8 @@ export default function PdfPage({ docId, page, box, pageSize, tone = "cited", la
     sc.scrollLeft = zoom === 1 ? 0 : Math.max(0, px.left + px.width / 2 - sc.clientWidth / 2);
   }, [rendered, box, pageSize, zoom]);
 
-  const color = tone === "billed" ? "border-bad bg-bad/10" : "border-mark bg-mark/20";
+  const fill = tone === "billed" ? "bg-bad/10" : "bg-warn/20";
+  const stroke = tone === "billed" ? "text-bad" : "text-warn";
 
   if (failed) {
     return (
@@ -72,7 +75,7 @@ export default function PdfPage({ docId, page, box, pageSize, tone = "cited", la
 
   return (
     <div className="relative h-full">
-      <div ref={scrollRef} className={cn("h-full overflow-y-auto bg-[#e9e7e1] p-3", zoom === 1 ? "overflow-x-hidden" : "overflow-x-auto")}>
+      <div ref={scrollRef} className={cn("h-full overflow-y-auto bg-sunken p-3", zoom === 1 ? "overflow-x-hidden" : "overflow-x-auto")}>
         <div ref={wrapRef} className="relative mx-auto bg-white shadow-[0_1px_4px_rgba(0,0,0,0.18)]" style={{ width: `${zoom * 100}%` }}>
           {/* A cross-origin API render, already served immutable: the image
               optimizer would add a hop and nothing else. */}
@@ -91,21 +94,43 @@ export default function PdfPage({ docId, page, box, pageSize, tone = "cited", la
           {!rendered ? <div className="absolute inset-0 animate-pulse bg-sunken" /> : null}
           {rect && rendered ? (
             <>
-              <div
+              <motion.div
                 data-testid="citation-box"
+                data-tone={tone}
                 aria-label={label ? `Highlighted: ${label}` : "Highlighted region"}
-                className={cn("pointer-events-none absolute rounded-[2px] border-2", color)}
+                className={cn("pointer-events-none absolute rounded-[2px]", fill)}
+                initial={reduce ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3, delay: 0.45 }}
                 style={{
                   left: `calc(${rect.left}% - 3px)`,
                   top: `calc(${rect.top}% - 2px)`,
                   width: `calc(${rect.width}% + 6px)`,
                   height: `calc(${rect.height}% + 4px)`,
                 }}
-              />
+              >
+                {/* the outline draws itself in, so the eye follows it to the line */}
+                <svg aria-hidden className={cn("absolute inset-0 h-full w-full overflow-visible", stroke)} preserveAspectRatio="none" viewBox="0 0 100 100">
+                  <motion.rect
+                    x="0"
+                    y="0"
+                    width="100"
+                    height="100"
+                    rx="2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                    initial={reduce ? false : { pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
+                  />
+                </svg>
+              </motion.div>
               {/* margin marker: points at the box without covering any text */}
               <div
                 aria-hidden
-                className={cn("pointer-events-none absolute left-1 w-1.5 rounded-full", tone === "billed" ? "bg-bad" : "bg-mark")}
+                className={cn("pointer-events-none absolute left-1 w-1.5 rounded-full", tone === "billed" ? "bg-bad" : "bg-warn")}
                 style={{ top: `calc(${rect.top}% - 2px)`, height: `calc(${rect.height}% + 4px)` }}
               />
             </>
@@ -120,7 +145,7 @@ export default function PdfPage({ docId, page, box, pageSize, tone = "cited", la
               type="button"
               aria-pressed={zoom === z}
               onClick={() => setZoom(z)}
-              className={cn("num px-2 py-1 font-medium", zoom === z ? "bg-accent text-white" : "text-ink-soft hover:bg-sunken")}
+              className={cn("num px-2 py-1 font-medium", zoom === z ? "bg-accent text-accent-ink" : "text-ink-soft hover:bg-sunken")}
             >
               {z === 1 ? "Fit" : `${z * 100}%`}
             </button>

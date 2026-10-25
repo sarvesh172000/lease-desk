@@ -16,6 +16,7 @@ import {
   getObligations,
   recordDisputeReply,
   approveException,
+  askWhy,
   backtestPolicy,
   decidePolicy,
   getPolicies,
@@ -43,6 +44,7 @@ import {
   holdException,
   payAsBilledException,
   performAction,
+  requestEvidencePack,
   resetDemo,
   subscribeApiHealth,
   subscribeDataSource,
@@ -51,7 +53,7 @@ import {
 } from "./api";
 import type {
   DisputeDetail,
-  DisputeReply, ActionResult, DemoResetResult, BacktestRun, ItemAction, MonthMetricName } from "./types";
+  DisputeReply, ActionResult, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, WhyAnswer } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -290,5 +292,44 @@ export function useOnboardPolicies() {
   return useMutation<{ job_id: number; entity_id: string; year: number }, Error, { entityId: string; year?: number }>({
     mutationFn: ({ entityId, year }) => onboardPolicies(entityId, year),
     onSettled: () => void qc.invalidateQueries({ queryKey: ["policies"] }),
+  });
+}
+
+/** "Why?" on one item: a 2-3 sentence answer and the rows it rests on (POST /api/items/{id}/why). */
+export function useAskWhy(itemId: number | string | null | undefined) {
+  return useMutation<WhyAnswer, Error, string | undefined>({
+    mutationFn: (question) => askWhy(itemId!, question),
+  });
+}
+
+/** What an evidence pack download resolves with: the file is already saved. */
+export interface EvidencePackResult {
+  filename: string;
+  bytes: number;
+  chainVerified: boolean | null;
+  brokenSeq: number | null;
+}
+
+/**
+ * Download an evidence pack (PDF) and report the chain stamp from the
+ * response headers; null when the API does not expose them (see the PDF).
+ */
+export function useEvidencePack() {
+  return useMutation<EvidencePackResult, Error, { subject: EvidencePackSubject; filename: string }>({
+    mutationFn: async ({ subject, filename }) => {
+      const { pdf, chainVerified, brokenSeq } = await requestEvidencePack(subject);
+      const url = URL.createObjectURL(pdf);
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      return { filename, bytes: pdf.size, chainVerified, brokenSeq };
+    },
   });
 }

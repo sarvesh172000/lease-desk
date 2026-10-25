@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { CommandPalette, openCommandPalette } from "@/components/ui/CommandPalette";
 import { ThemeToggle } from "@/components/theme";
+import { Tooltip } from "@/components/ui/Tooltip";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -122,16 +123,26 @@ export function AppShell({ children }: { children: ReactNode }) {
 // Left rail
 // ---------------------------------------------------------------------------
 
+/** The money screen needs the width for two documents side by side, so the rail folds to icons there. */
+const isCompact = (p: string) => /^\/exceptions\/[^/]+/.test(p);
+
 function Rail({ pathname }: { pathname: string }) {
   const exceptions = useExceptions();
   const open = exceptions.data?.filter((e) => e.status !== "balanced").length ?? 0;
+  const compact = isCompact(pathname);
   return (
-    <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col gap-5 border-r border-line bg-rail px-3 py-4">
-      <Link href="/" className="flex items-center gap-2.5 rounded-sm px-2 py-1">
+    <aside
+      className={cn(
+        "sticky top-0 flex h-screen shrink-0 flex-col gap-5 border-r border-line bg-rail py-4 transition-[width] duration-base ease-out",
+        compact ? "w-16 px-2" : "w-56 px-3",
+      )}
+      data-compact={compact ? "true" : "false"}
+    >
+      <Link href="/" aria-label="Lease Desk, Today" className={cn("flex items-center gap-2.5 rounded-sm py-1", compact ? "justify-center px-0" : "px-2")}>
         <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-xs bg-accent font-mono text-sm font-bold text-accent-ink">
           L
         </span>
-        <span className="flex flex-col leading-tight">
+        <span className={cn("flex flex-col leading-tight", compact && "sr-only")}>
           <span className="text-[0.95rem] font-semibold tracking-tight text-ink">Lease Desk</span>
           <span className="text-2xs text-ink-muted">Northbay Physical Therapy</span>
         </span>
@@ -140,17 +151,18 @@ function Rail({ pathname }: { pathname: string }) {
       <nav aria-label="Main" className="flex flex-col gap-5">
         {NAV.map((group) => (
           <div key={group.title} className="flex flex-col gap-0.5">
-            <span className="eyebrow px-2.5 pb-1.5">{group.title}</span>
+            <span className={cn("eyebrow px-2.5 pb-1.5", compact && "sr-only")}>{group.title}</span>
             {group.items.map((item) => {
               const active = item.match(pathname);
               const Icon = item.icon;
-              return (
+              const link = (
                 <Link
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "group relative flex h-9 items-center gap-2.5 rounded-sm px-2.5 text-sm transition-colors duration-fast ease-out",
+                    "group relative flex h-9 items-center gap-2.5 rounded-sm text-sm transition-colors duration-fast ease-out",
+                    compact ? "justify-center px-0" : "px-2.5",
                     active ? "font-medium text-accent" : "text-ink-soft hover:bg-raised hover:text-ink",
                   )}
                 >
@@ -163,22 +175,35 @@ function Rail({ pathname }: { pathname: string }) {
                     />
                   ) : null}
                   <Icon aria-hidden className="relative h-4 w-4 shrink-0 transition-transform duration-fast ease-out group-hover:scale-110" strokeWidth={1.75} />
-                  <span className="relative flex-1">{item.label}</span>
+                  <span className={cn("relative flex-1", compact && "sr-only")}>{item.label}</span>
                   {item.count === "exceptions" && open > 0 ? (
-                    <span className="num relative rounded-xs bg-warn-soft px-1.5 text-xs font-semibold text-warn" aria-label={`${open} open`}>
+                    <span
+                      className={cn(
+                        "num rounded-xs bg-warn-soft font-semibold text-warn",
+                        compact ? "absolute -right-0.5 -top-0.5 px-1 text-2xs" : "relative px-1.5 text-xs",
+                      )}
+                      aria-label={`${open} open`}
+                    >
                       {open}
                     </span>
                   ) : null}
                 </Link>
+              );
+              return compact ? (
+                <Tooltip key={item.href} label={item.label} side="right">
+                  {link}
+                </Tooltip>
+              ) : (
+                link
               );
             })}
           </div>
         ))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-2 rounded-sm border border-line p-2.5">
-        <LiveIndicator />
-        <DataSourceBadge />
+      <div className={cn("mt-auto flex flex-col gap-2 rounded-sm border border-line", compact ? "items-center p-1.5" : "p-2.5")}>
+        <LiveIndicator compact={compact} />
+        <DataSourceBadge compact={compact} />
       </div>
     </aside>
   );
@@ -188,27 +213,57 @@ const LIVE: Record<LiveState, { label: string; title: string; dot: string; pulse
   connected: { label: "Live", title: "Live updates on: changes appear as they are committed", dot: "bg-ok", pulse: true },
   connecting: { label: "Connecting", title: "Connecting to live updates", dot: "bg-warn", pulse: true },
   reconnecting: { label: "Reconnecting", title: "Live updates dropped; reconnecting. Screens refresh as usual meanwhile", dot: "bg-warn", pulse: true },
-  lost: { label: "Live unavailable", title: "Could not reach live updates; screens refresh as usual", dot: "bg-ink-faint" },
-  off: { label: "Live off", title: "Live updates are not configured for this deployment; screens refresh as usual", dot: "bg-ink-faint" },
+  lost: { label: "Live unavailable", title: "Could not reach live updates; screens refresh as usual", dot: "bg-ink-muted" },
+  off: { label: "Live off", title: "Live updates are not configured here. Screens refresh as usual; nothing is wrong.", dot: "bg-ink-muted" },
 };
 
-/** The SpacetimeDB mirror's connection. Off is a normal state, shown quietly. */
-function LiveIndicator() {
+/**
+ * The SpacetimeDB mirror's connection. Off is the normal state when the
+ * mirror is not configured: a neutral grey dot, explained on hover.
+ */
+function LiveIndicator({ compact }: { compact?: boolean }) {
   const state = useLiveConnection();
   const l = LIVE[state];
   return (
-    <span className="flex items-center gap-2 text-xs text-ink-soft" title={l.title} data-testid="live-indicator" data-state={state}>
-      <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", l.dot, l.pulse && "animate-pulse-dot")} />
-      <span>{l.label}</span>
-      <span className="sr-only">: {l.title}</span>
-    </span>
+    <Tooltip label={l.title} side="right">
+      <span
+        tabIndex={0}
+        className="flex w-fit items-center gap-2 rounded-xs text-xs text-ink-muted"
+        data-testid="live-indicator"
+        data-state={state}
+      >
+        <span aria-hidden className={cn("h-2 w-2 shrink-0 rounded-full", l.dot, l.pulse && "animate-pulse-dot")} />
+        <span className={cn(compact && "sr-only")}>{l.label}</span>
+        <span className="sr-only">: {l.title}</span>
+      </span>
+    </Tooltip>
   );
 }
 
 /** Where the figures come from. Fixtures only ever by choice (NEXT_PUBLIC_USE_FIXTURES=1). */
-function DataSourceBadge() {
+function DataSourceBadge({ compact }: { compact?: boolean }) {
   const source = useDataSource();
   const health = useApiHealth();
+  if (compact) {
+    const s = source === "fixtures" ? "fixtures" : health.reachable ? "api" : "api-unreachable";
+    const text = s === "fixtures" ? "Offline demo: fixtures, not a live API" : s === "api" ? "Live API" : "API unreachable";
+    return (
+      <Tooltip label={text} side="right">
+        <span
+          tabIndex={0}
+          data-testid="data-source"
+          data-source={s}
+          aria-label={text}
+          className={cn(
+            "rounded-xs border px-1 py-0.5 font-mono text-2xs font-semibold uppercase",
+            s === "fixtures" ? "border-warn-line bg-warn-soft text-warn" : s === "api" ? "border-ok-line bg-ok-soft text-ok" : "border-bad-line bg-bad-soft text-bad",
+          )}
+        >
+          {s === "fixtures" ? "FX" : "API"}
+        </span>
+      </Tooltip>
+    );
+  }
   if (source === "api" && !health.reachable)
     return (
       <span
@@ -337,8 +392,7 @@ const ROLE_TONE: Record<string, string> = {
   auditor: "bg-ok-soft text-ok",
 };
 
-/** `bare`: a tone-only disc, for the people stacked behind the current one. */
-function Avatar({ actor, className, bare }: { actor: Actor; className?: string; bare?: boolean }) {
+function Avatar({ actor, className }: { actor: Actor; className?: string }) {
   return (
     <span
       aria-hidden
@@ -348,7 +402,7 @@ function Avatar({ actor, className, bare }: { actor: Actor; className?: string; 
         className,
       )}
     >
-      {bare ? null : initials(actor.name)}
+      {initials(actor.name)}
     </span>
   );
 }
@@ -366,7 +420,6 @@ function RoleSwitcher() {
   if (!me.data) return null;
   const current = me.data;
   const people = (actors.data ?? []).filter(isPerson);
-  const others = people.filter((a) => a.id !== current.id).slice(0, 2);
   const demo = people.length > 0;
 
   const become = async (id: string) => {
@@ -401,13 +454,7 @@ function RoleSwitcher() {
             busy && "opacity-60",
           )}
         >
-          {/* The people you can switch to sit behind you, so your own initials stay whole. */}
-          <span className="flex flex-row-reverse">
-            <Avatar actor={current} className="relative" />
-            {others.map((a) => (
-              <Avatar key={a.id} actor={a} bare className="-mr-5" />
-            ))}
-          </span>
+          <Avatar actor={current} />
           <span className="flex flex-col items-start leading-tight">
             <span className="text-sm font-semibold text-ink">{current.name}</span>
             <span className="text-2xs text-ink-muted">

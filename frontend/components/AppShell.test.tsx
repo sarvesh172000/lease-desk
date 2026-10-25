@@ -31,11 +31,14 @@ vi.mock("@/lib/hooks", () => ({
 vi.mock("@/lib/live", () => ({ useLiveConnection: () => h.live }));
 
 import { AppShell } from "./AppShell";
+import { TooltipProvider } from "./ui/Tooltip";
 
 function renderShell(children: ReactNode = <p>page</p>) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <AppShell>{children}</AppShell>
+      <TooltipProvider>
+        <AppShell>{children}</AppShell>
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -103,6 +106,17 @@ describe("AppShell", () => {
     h.live = "reconnecting";
     renderShell();
     expect(screen.getByTestId("live-indicator")).toHaveTextContent("Reconnecting");
+  });
+
+  it("shows only the current person's avatar on the persona button", () => {
+    h.actors = [
+      h.me,
+      { id: "PER-RM-BAY", name: "Dana Whitfield", role: "regional_manager", region_id: "REG-BAY", entity_id: "ENT-CA" },
+    ];
+    renderShell();
+    const trigger = screen.getByRole("button", { name: /Signed in as Priya Raghunathan/ });
+    expect(trigger).toHaveTextContent("PR");
+    expect(trigger).not.toHaveTextContent("DW");
   });
 
   it("shows the period from the API's business clock", () => {

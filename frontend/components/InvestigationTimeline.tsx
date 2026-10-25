@@ -1,31 +1,29 @@
 "use client";
 
-import { investigate } from "@/lib/api";
-import { pct, signedMoney } from "@/lib/format";
-import type { InvestigationEvent } from "@/lib/types";
+import { money, pct, signedMoney } from "@/lib/format";
+import type { Investigation, InvestigationEvent } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Play, RotateCcw } from "lucide-react";
+import type { ReactNode } from "react";
+import type { InvestigationRun, Stage } from "./money/useInvestigationRun";
 import { Button } from "./ui/Button";
 
-type Stage = InvestigationEvent["stage"];
 const STAGES: Array<{ stage: Stage; title: string; agent: string }> = [
-  { stage: "searching", title: "Search the corpus", agent: "Investigation agent" },
+  { stage: "searching", title: "Search the mailbox", agent: "Investigation agent" },
   { stage: "found", title: "Find the explaining document", agent: "Investigation agent" },
   { stage: "remeasured", title: "Remeasure the lease", agent: "Accounting engine" },
   { stage: "complete", title: "Propose entries", agent: "Accounting engine" },
 ];
 
-function detail(ev: InvestigationEvent) {
+function liveDetail(ev: InvestigationEvent): ReactNode {
   switch (ev.stage) {
     case "searching":
       return <span>{ev.message}</span>;
     case "found":
       return (
         <span>
-          <span className="font-mono text-ink-soft" title={ev.doc_id ?? undefined}>
-            {ev.source ?? (ev.doc_id ? (ev.doc_id.length > 24 ? `${ev.doc_id.slice(0, 12)}…` : ev.doc_id) : "document not on file")}
-          </span>
+          <span className="font-medium text-ink">{ev.source ?? ev.doc_id ?? "Document not on file"}</span>
           {ev.page != null ? <span className="text-ink-muted"> · p.{ev.page}</span> : null}
           {ev.confidence != null ? (
             <>
@@ -33,7 +31,6 @@ function detail(ev: InvestigationEvent) {
               · confidence <span className="num font-semibold">{pct(ev.confidence)}</span>
             </>
           ) : null}
-          <span className="mt-1 block italic text-ink-soft">“{ev.quote}”</span>
         </span>
       );
     case "not_found":
@@ -41,19 +38,20 @@ function detail(ev: InvestigationEvent) {
     case "remeasured":
       return (
         <span className="num">
-          Liability {signedMoney(ev.liability_delta)} · ROU {signedMoney(ev.rou_delta)}
+          Liability {signedMoney(ev.liability_delta)}
+          {ev.rou_delta != null ? ` · ROU ${signedMoney(ev.rou_delta)}` : ""}
         </span>
       );
     case "complete":
-      return ev.balanced == null ? (
+      return (
         <span>
           {ev.entries ? `${ev.entries} entries proposed` : "No entries proposed"}
-          {ev.message ? <span className="mt-1 block text-ink-soft">{ev.message}</span> : null}
-        </span>
-      ) : (
-        <span>
-          {ev.entries} entries proposed ·{" "}
-          <span className={cn("font-semibold", ev.balanced ? "text-ok" : "text-bad")}>{ev.balanced ? "balanced" : "NOT balanced"}</span>
+          {ev.balanced != null ? (
+            <>
+              {" · "}
+              <span className={cn("font-semibold", ev.balanced ? "text-ok" : "text-bad")}>{ev.balanced ? "balanced" : "not balanced"}</span>
+            </>
+          ) : null}
           {ev.message ? <span className="mt-1 block text-ink-soft">{ev.message}</span> : null}
         </span>
       );
@@ -62,140 +60,109 @@ function detail(ev: InvestigationEvent) {
   }
 }
 
-/** The stage that fills a timeline slot: `not_found` answers the "found" step. */
-function eventFor(seen: Map<string, InvestigationEvent>, stage: Stage): InvestigationEvent | undefined {
-  return seen.get(stage) ?? (stage === "found" ? seen.get("not_found") : undefined);
+/** The same four lines, read from the investigation already on record. */
+function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
+  const ev = inv.evidence[0];
+  switch (stage) {
+    case "searching":
+      return <span>Mailbox and document store searched.</span>;
+    case "found":
+      return ev ? (
+        <span>
+          <span className="font-medium text-ink">{ev.source}</span>
+          <span className="text-ink-muted"> · p.{ev.page}</span> · confidence <span className="num font-semibold">{pct(inv.confidence)}</span>
+        </span>
+      ) : (
+        <span className="text-ink-muted">Nothing on record explains the variance.</span>
+      );
+    case "remeasured":
+      return inv.liability_before != null && inv.liability_after != null ? (
+        <span className="num">
+          Liability {money(inv.liability_before)} → {money(inv.liability_after)}
+        </span>
+      ) : (
+        <span className="text-ink-muted">No remeasurement.</span>
+      );
+    case "complete":
+      return (
+        <span>
+          {inv.entries.length} entries proposed ·{" "}
+          <span className={cn("font-semibold", inv.balanced ? "text-ok" : "text-bad")}>{inv.balanced ? "balanced" : "not balanced"}</span>
+        </span>
+      );
+  }
 }
 
-export function InvestigationTimeline({
-  exceptionId,
-  autoStart = false,
-  onEvent,
-}: {
-  exceptionId: string;
-  autoStart?: boolean;
-  onEvent?: (e: InvestigationEvent) => void;
-}) {
-  const [events, setEvents] = useState<InvestigationEvent[]>([]);
-  const [state, setState] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+/**
+ * The investigation, stage by stage. A live run shows exactly what the stream
+ * sent, as it arrives; an investigation already on record shows its result at
+ * once, with Replay to watch it again.
+ */
+export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun; recorded?: Investigation | null }) {
   const reduce = useReducedMotion();
-
-  const run = useCallback(async () => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setEvents([]);
-    setError(null);
-    setState("running");
-    try {
-      let failed: string | null = null;
-      await investigate(
-        exceptionId,
-        (ev) => {
-          if (ev.stage === "error") {
-            failed = ev.message;
-            return;
-          }
-          setEvents((prev) => [...prev, ev]);
-          onEventRef.current?.(ev);
-        },
-        ctrl.signal,
-      );
-      if (ctrl.signal.aborted) return;
-      if (failed) {
-        setError(failed);
-        setState("error");
-      } else {
-        setState("done");
-      }
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      setError("Investigation stream failed: " + (e instanceof Error ? e.message : String(e)));
-      setState("error");
-    }
-  }, [exceptionId]);
-
-  useEffect(() => {
-    if (autoStart) void run();
-    return () => abortRef.current?.abort();
-  }, [autoStart, run]);
-
-  const seen = new Map<string, InvestigationEvent>(events.map((e) => [e.stage, e]));
-  const finished = seen.has("complete");
-  const nextIdx = STAGES.findIndex((s) => !eventFor(seen, s.stage));
-
-  // The line into a step draws only once its own event has arrived, so the
-  // stroke is a readout of real progress, not a timed animation.
+  const settled = run.state === "idle" && !!recorded;
+  const finished = !!run.get("complete");
+  const nextIdx = STAGES.findIndex((s) => !(run.get(s.stage) ?? (s.stage === "found" ? run.get("not_found") : undefined)));
   const draw = reduce ? { duration: 0 } : { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
 
   return (
     <div>
       <ol className="relative">
         {STAGES.map((s, i) => {
-          const ev = eventFor(seen, s.stage);
-          const active = state === "running" && i === nextIdx && !finished;
-          const skipped = !ev && finished;
+          const ev = run.get(s.stage) ?? (s.stage === "found" ? run.get("not_found") : undefined);
+          const done = settled || !!ev;
+          const active = run.state === "running" && i === nextIdx && !finished;
+          const skipped = !done && run.state === "done";
           return (
-            <li key={s.stage} className="relative flex gap-3 pb-4 last:pb-0" data-stage={s.stage} data-done={ev ? "true" : "false"}>
+            <li key={s.stage} className="relative flex gap-3 pb-4 last:pb-0" data-stage={s.stage} data-done={done ? "true" : "false"}>
               {i < STAGES.length - 1 ? (
                 <span aria-hidden className="absolute left-[9px] top-5 h-[calc(100%-12px)] w-px bg-line">
                   <motion.span
                     className="absolute inset-0 block origin-top bg-accent"
                     initial={false}
-                    animate={{ scaleY: ev ? 1 : 0 }}
-                    transition={draw}
+                    animate={{ scaleY: done ? 1 : 0 }}
+                    transition={settled ? { duration: 0 } : draw}
                   />
                 </span>
               ) : null}
               <motion.span
                 aria-hidden
                 initial={false}
-                animate={ev ? { scale: [1, 1.22, 1] } : { scale: 1 }}
-                transition={reduce ? { duration: 0 } : { duration: 0.34, ease: "easeOut" }}
+                animate={ev && !reduce ? { scale: [1, 1.22, 1] } : { scale: 1 }}
+                transition={{ duration: 0.34, ease: "easeOut" }}
                 className={cn(
-                  "relative z-10 mt-0.5 flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border text-[10px] font-bold",
-                  ev ? "border-accent bg-accent text-white" : active ? "animate-pulse border-accent bg-accent-soft" : "border-line-strong bg-surface",
+                  "relative z-10 mt-0.5 flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border",
+                  done ? "border-accent bg-accent text-accent-ink" : active ? "animate-pulse border-accent bg-accent-soft" : "border-line-strong bg-surface",
                 )}
               >
-                {ev ? "✓" : ""}
+                {done ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
               </motion.span>
               <div className="min-w-0 flex-1 text-sm">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className={cn("font-medium transition-colors", !ev && !active && "text-ink-muted")}>{s.title}</span>
-                  <span className="text-2xs uppercase tracking-wide text-ink-faint">{s.agent}</span>
+                  <span className={cn("font-medium transition-colors", !done && !active && "text-ink-muted")}>{s.title}</span>
+                  <span className="shrink-0 text-2xs uppercase tracking-wide text-ink-faint">{s.agent}</span>
                 </div>
                 <AnimatePresence initial={false} mode="wait">
-                  {ev ? (
+                  {settled && recorded ? (
+                    <div key="recorded" className="mt-0.5 text-ink-soft">
+                      {recordedDetail(s.stage, recorded)}
+                    </div>
+                  ) : ev ? (
                     <motion.div
                       key="detail"
-                      initial={reduce ? false : { opacity: 0, y: -4 }}
+                      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={reduce ? { duration: 0 } : { duration: 0.24, ease: "easeOut", delay: 0.1 }}
+                      transition={{ duration: 0.24, ease: "easeOut", delay: 0.1 }}
                       className="mt-0.5 text-ink-soft"
                     >
-                      {detail(ev)}
+                      {liveDetail(ev)}
                     </motion.div>
                   ) : active ? (
-                    <motion.div
-                      key="working"
-                      initial={reduce ? false : { opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="mt-0.5 text-ink-muted"
-                    >
+                    <motion.div key="working" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-0.5 text-ink-muted">
                       Working…
                     </motion.div>
                   ) : skipped ? (
-                    <motion.div
-                      key="skipped"
-                      initial={reduce ? false : { opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="mt-0.5 text-ink-muted"
-                    >
+                    <motion.div key="skipped" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-0.5 text-ink-muted">
                       Skipped · nothing on record changes the lease terms.
                     </motion.div>
                   ) : null}
@@ -206,22 +173,34 @@ export function InvestigationTimeline({
         })}
       </ol>
 
-      {state === "error" ? (
-        <p role="alert" className="mt-3 rounded border border-bad-line bg-bad-soft px-3 py-2 text-sm text-bad">
-          {error}
-        </p>
+      {run.state === "error" ? (
+        <div role="alert" className="mt-3 flex items-start justify-between gap-3 rounded-sm border border-bad-line bg-bad-soft px-3 py-2 text-sm text-bad">
+          <span>{run.error}</span>
+          <Button size="sm" variant="secondary" onClick={run.start}>
+            Retry
+          </Button>
+        </div>
       ) : null}
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <span className="text-xs text-ink-muted">
-          {state === "idle" && "Not run in this session."}
-          {state === "running" && "Streaming from the investigation…"}
-          {state === "done" && `${events.length} event${events.length === 1 ? "" : "s"} received.`}
-          {state === "error" && "Stopped."}
+        <span className="text-xs text-ink-muted" role="status">
+          {run.state === "idle" && (recorded ? "On record. Replay to watch it again." : "Not run yet.")}
+          {run.state === "running" && "Streaming from the investigation…"}
+          {run.state === "done" && `${run.events.length} event${run.events.length === 1 ? "" : "s"} received.`}
+          {run.state === "error" && "Stopped."}
         </span>
-        <Button size="sm" variant={state === "idle" ? "primary" : "secondary"} onClick={() => void run()} disabled={state === "running"}>
-          {state === "idle" ? "Run investigation" : "Re-run"}
-        </Button>
+        {run.state !== "error" ? (
+          <Button
+            size="sm"
+            variant={run.state === "idle" && !recorded ? "primary" : "secondary"}
+            icon={run.state === "idle" && !recorded ? <Play aria-hidden className="h-3.5 w-3.5" /> : <RotateCcw aria-hidden className="h-3.5 w-3.5" />}
+            onClick={run.start}
+            loading={run.state === "running"}
+            disabled={run.state === "running"}
+          >
+            {run.state === "idle" && !recorded ? "Run investigation" : "Replay"}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

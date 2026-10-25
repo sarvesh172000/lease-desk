@@ -13,7 +13,7 @@ describe("JournalEntryTable", () => {
     expect(screen.getByTestId("total-credit")).toHaveTextContent("$447,880.44");
     const assertion = screen.getByTestId("balance-assertion");
     expect(assertion).toHaveAttribute("data-balanced", "true");
-    expect(assertion).toHaveTextContent(/Balanced\. Debits equal credits at \$447,880\.44/);
+    expect(assertion).toHaveTextContent(/Balanced: debits = credits at \$447,880\.44 each side/);
   });
 
   it("right-aligns amounts in tabular figures and leaves zero cells blank", () => {
