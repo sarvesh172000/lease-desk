@@ -25,7 +25,7 @@ import { WorkStateBadge } from "@/components/WorkStateBadge";
 import { ApiError, itemIdFor, pageImageUrl } from "@/lib/api";
 import { day, money, signedMoney } from "@/lib/format";
 import { useException, useLeases, useLeaseVersions, useMe, useSchedule } from "@/lib/hooks";
-import { chargeLabel, clinicLabel, monthLong } from "@/lib/labels";
+import { chargeLabel, clinicLabel, monthLong, supportsNote } from "@/lib/labels";
 import type { Box, Evidence, ExceptionDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -92,6 +92,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   const run = useInvestigationRun(ex.exception_id);
   const inv = ex.investigation;
   const phase = phaseOf(run, !!inv);
+  // an investigation on record and the story has reached it: the header shows its verdict, not the checker's proposal
+  const settled = !!inv && reached(phase, "found");
   // the API refuses the investigation for other roles (403); allowed-actions does not list it yet, so the role decides here
   const me = useMe();
   const canInvestigate = me.data?.role === "controller" || me.data?.role === "regional_manager";
@@ -197,14 +199,14 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
 
       {/* the calculation */}
       <div className="grid grid-cols-1 overflow-hidden rounded-md sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.5fr] border border-line bg-surface shadow-raised">
-        <Figure label="Lease supports" value={money(ex.expected)} />
+        <Figure label="Lease supports" value={money(ex.expected)} note={supportsNote(ex.rule)} />
         <Figure label="Billed" value={money(ex.actual)} />
         <Figure label="Variance" value={signedMoney(ex.delta)} tone={ex.delta === 0 ? undefined : "bad"} />
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 sm:border-t-0 lg:border-l">
           <div className="min-w-0">
             <div className="eyebrow">Explanation</div>
-            {inv && reached(phase, "found") ? (
-              <InvestigationVerdict investigation={inv} />
+            {settled && inv ? (
+              <InvestigationVerdict investigation={inv} resolution={ex.resolution} />
             ) : ex.reason ? (
               <>
                 <div className="font-semibold">
@@ -218,8 +220,18 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               <div className="mt-0.5 text-sm text-ink-muted">No investigation on record yet.</div>
             )}
           </div>
-          {/* the hold's confidence throughout; the investigation's own score is in the verdict */}
-          <ConfidenceRing value={ex.confidence ?? null} />
+          {/*
+            Always the API's own figure for the hold; the investigation's score is in the verdict. Only the
+            presentation follows the state, on the same condition as the verdict so both flip in one render:
+            the checker's figure before a run, dimmed and sweeping while a run re-checks it, coloured by value
+            once a document explains the charge, plain ink once a search found nothing (the figure weighs the
+            sources, it does not grade the verdict beside it).
+          */}
+          <ConfidenceRing
+            value={ex.confidence ?? null}
+            tone={run.state === "running" && !settled ? "busy" : settled && !inv?.explains_variance ? "neutral" : "value"}
+            label={run.state === "running" && !settled ? "Checking…" : settled ? "Hold confidence" : "Checker confidence"}
+          />
         </div>
       </div>
 
@@ -455,11 +467,12 @@ function RemeasurementDetail({ ex, show }: { ex: ExceptionDetail; show: boolean 
   );
 }
 
-function Figure({ label, value, tone }: { label: string; value: string; tone?: "bad" }) {
+function Figure({ label, value, tone, note }: { label: string; value: string; tone?: "bad"; note?: string | null }) {
   return (
     <div className="border-t border-line px-5 py-3 first:border-t-0 lg:border-l lg:border-t-0 lg:first:border-l-0">
       <div className="eyebrow">{label}</div>
       <div className={cn("num mt-1 text-[1.6rem] font-semibold leading-tight", tone === "bad" && "text-bad")}>{value}</div>
+      {note ? <div className="mt-0.5 text-2xs text-ink-muted">{note}</div> : null}
     </div>
   );
 }
