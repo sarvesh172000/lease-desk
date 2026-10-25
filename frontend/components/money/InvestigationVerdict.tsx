@@ -20,8 +20,8 @@ export function InvestigationVerdict({ investigation }: Readonly<{ investigation
   return (
     <>
       <div className="font-semibold">{rootCauseLabel(investigation.root_cause)}</div>
-      <div className={cn("text-sm", investigation.explains_variance ? "text-ok" : "text-bad")}>
-        {investigation.explains_variance ? "Explains the variance" : "No document explains the variance"}
+      <div className={cn("text-sm", investigation.explains_variance ? "text-ok" : "text-ink-soft")}>
+        {investigation.explains_variance ? "Explains the variance" : "No document changes the lease · the hold stands"}
         {score == null ? null : <span className="num text-ink-soft"> · {pct(score)} sure of the explanation</span>}
       </div>
     </>

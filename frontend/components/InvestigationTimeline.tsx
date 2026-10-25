@@ -34,7 +34,12 @@ function liveDetail(ev: InvestigationEvent): ReactNode {
         </span>
       );
     case "not_found":
-      return <span className="text-bad">{ev.message}</span>;
+      return (
+        <span>
+          {ev.message}
+          <span className="mt-0.5 block text-ink-muted">No document changes the lease; the hold stands.</span>
+        </span>
+      );
     case "remeasured":
       return (
         <span className="num">
@@ -45,8 +50,8 @@ function liveDetail(ev: InvestigationEvent): ReactNode {
     case "complete":
       return (
         <span>
-          {ev.entries ? `${ev.entries} entries proposed` : "No entries proposed"}
-          {ev.balanced != null ? (
+          {ev.entries ? `${ev.entries} entries proposed` : "No entries · nothing to post until the charge is explained"}
+          {ev.balanced != null && ev.entries ? (
             <>
               {" · "}
               <span className={cn("font-semibold", ev.balanced ? "text-ok" : "text-bad")}>{ev.balanced ? "balanced" : "not balanced"}</span>
@@ -73,7 +78,10 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
           {ev.page != null ? <span className="text-ink-muted"> · p.{ev.page}</span> : null} · confidence <span className="num font-semibold">{pct(inv.confidence)}</span>
         </span>
       ) : (
-        <span className="text-ink-muted">Nothing on record explains the variance.</span>
+        <span>
+          No explaining document.
+          <span className="mt-0.5 block text-ink-muted">No document changes the lease; the hold stands.</span>
+        </span>
       );
     case "remeasured":
       return inv.liability_before != null && inv.liability_after != null ? (
@@ -81,14 +89,16 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
           Liability {money(inv.liability_before)} → {money(inv.liability_after)}
         </span>
       ) : (
-        <span className="text-ink-muted">No remeasurement.</span>
+        <span className="text-ink-muted">Skipped · nothing changes the lease terms.</span>
       );
     case "complete":
-      return (
+      return inv.entries.length ? (
         <span>
           {inv.entries.length} entries proposed ·{" "}
           <span className={cn("font-semibold", inv.balanced ? "text-ok" : "text-bad")}>{inv.balanced ? "balanced" : "not balanced"}</span>
         </span>
+      ) : (
+        <span>No entries · nothing to post until the charge is explained</span>
       );
   }
 }
@@ -110,9 +120,10 @@ export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun
       <ol className="relative">
         {STAGES.map((s, i) => {
           const ev = run.get(s.stage) ?? (s.stage === "found" ? run.get("not_found") : undefined);
-          const done = settled || !!ev;
+          const recordedSkip = settled && s.stage === "remeasured" && recorded?.liability_after == null;
+          const done = (settled && !recordedSkip) || !!ev;
           const active = run.state === "running" && i === nextIdx && !finished;
-          const skipped = !done && run.state === "done";
+          const skipped = !done && (run.state === "done" || recordedSkip);
           return (
             <li key={s.stage} className="relative flex gap-3 pb-4 last:pb-0" data-stage={s.stage} data-done={done ? "true" : "false"}>
               {i < STAGES.length - 1 ? (
@@ -163,7 +174,7 @@ export function InvestigationTimeline({ run, recorded }: { run: InvestigationRun
                     </motion.div>
                   ) : skipped ? (
                     <motion.div key="skipped" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-0.5 text-ink-muted">
-                      Skipped · nothing on record changes the lease terms.
+                      Skipped · nothing changes the lease terms.
                     </motion.div>
                   ) : null}
                 </AnimatePresence>

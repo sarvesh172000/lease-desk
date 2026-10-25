@@ -83,6 +83,11 @@ function Card({ index, mode, label, onLanded }: { index: number; mode: StackProp
         opacity = 0.15;
         tz -= 0.6;
       }
+    } else if (mode === "none") {
+      // nothing explains it: the fan opens wider and settles back, no card comes forward
+      tx *= 1.5;
+      tz -= 0.5;
+      opacity = 0.3;
     }
     g.position.x += (tx - g.position.x) * k;
     g.position.y += (ty - g.position.y) * k;

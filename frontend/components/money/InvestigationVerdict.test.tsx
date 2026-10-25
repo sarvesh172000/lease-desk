@@ -11,7 +11,7 @@ const base: Investigation = {
 describe("InvestigationVerdict", () => {
   it("prints no score when nothing explains the variance", () => {
     render(<InvestigationVerdict investigation={base} />);
-    expect(screen.getByText("No document explains the variance")).toBeInTheDocument();
+    expect(screen.getByText("No document changes the lease · the hold stands")).toBeInTheDocument();
     expect(screen.queryByText(/sure of the explanation/)).toBeNull();
     expect(explanationScore(base)).toBeNull();
   });
