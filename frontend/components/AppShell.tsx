@@ -168,14 +168,14 @@ function Rail({ pathname }: { pathname: string }) {
                   className={cn(
                     "group relative flex h-9 items-center gap-2.5 rounded-sm text-sm transition-colors duration-fast ease-out",
                     compact ? "justify-center px-0" : "px-2.5",
-                    active ? "font-medium text-accent" : "text-ink-soft hover:bg-raised hover:text-ink",
+                    active ? "font-medium text-accent-ink" : "text-ink-soft hover:bg-raised hover:text-ink",
                   )}
                 >
                   {active ? (
                     <motion.span
                       layoutId="rail-active"
                       aria-hidden
-                      className="absolute inset-0 rounded-sm bg-accent/10 shadow-[inset_2px_0_0_rgb(var(--accent))]"
+                      className="absolute inset-0 rounded-sm bg-accent"
                       transition={{ duration: 0.2, ease: EASE }}
                     />
                   ) : null}

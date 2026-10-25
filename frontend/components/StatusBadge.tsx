@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const STYLE: Record<Status, string> = {
   balanced: "bg-ok-soft text-ok border-ok-line",
   exception: "bg-bad-soft text-bad border-bad-line",
-  pending_review: "bg-warn-soft text-warn border-warn-line",
+  pending_review: "bg-accent-soft text-accent border-line-strong",
   escalated: "bg-esc-soft text-esc border-esc-line",
 };
 

@@ -31,7 +31,8 @@ export function Tiles({ summary, loading, error, leasesNeedingAttention }: { sum
       <MetricTile
         index={2}
         label="Dollars held"
-        tone={s?.held_total ? "bad" : "ok"}
+        emphasis={!!s?.held_total}
+        tone="ok"
         loading={loading}
         value={error || !s ? "—" : <CountUp value={s.held_total} prefix="$" duration={1100} />}
         sub={s ? `${s.held_count} over-bill${s.held_count === 1 ? "" : "s"} held back` : "Over-bills held back"}

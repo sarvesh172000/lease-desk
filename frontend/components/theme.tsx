@@ -23,7 +23,7 @@ function subscribe(fn: () => void): () => void {
 }
 
 export function useTheme(): [Theme, (t: Theme) => void] {
-  const theme = useSyncExternalStore(subscribe, read, () => "dark" as Theme);
+  const theme = useSyncExternalStore(subscribe, read, () => "light" as Theme);
   const set = (t: Theme) => {
     document.documentElement.dataset.theme = t;
     try {

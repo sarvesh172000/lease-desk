@@ -6,7 +6,7 @@ describe("StatusBadge", () => {
   it.each([
     ["balanced", "Balanced", "text-ok"],
     ["exception", "Exception", "text-bad"],
-    ["pending_review", "Pending review", "text-warn"],
+    ["pending_review", "Pending review", "text-accent"],
     ["escalated", "Escalated", "text-esc"],
   ] as const)("renders %s as %s with its own colour", (status, label, cls) => {
     const { container } = render(<StatusBadge status={status} />);
