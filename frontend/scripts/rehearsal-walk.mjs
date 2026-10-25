@@ -2,49 +2,24 @@
 // step, recording console errors, failed or 4xx/5xx requests and layout shifts,
 // and saving a screenshot per step.
 // usage: node r8-walk.mjs <base> <outDir> <theme> [reduced-motion:0|1] [suffix] [steps: comma list or all]
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { launchChrome, sleep, watchProblems } from "./lib/chrome.mjs";
 
 const [BASE, OUT, THEME = "dark", REDUCED = "0", SUFFIX = "", STEPS = "all"] = process.argv.slice(2);
 const API = process.env.API_URL || "http://localhost:8000";
 const want = (n) => STEPS === "all" || STEPS.split(",").includes(n);
 mkdirSync(OUT, { recursive: true });
-// A port per process, so two walks at once don't collide.
-const PORT = 9300 + (process.pid % 500);
-const chrome = spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", [
-  "--headless=new", `--remote-debugging-port=${PORT}`, "--hide-scrollbars", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
-  `--user-data-dir=${mkdtempSync(join(tmpdir(), "ldr8-"))}`, "--window-size=1280,800", "about:blank",
-], { stdio: "ignore" });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let target;
-for (let i = 0; i < 60 && !target; i++) {
-  await sleep(200);
-  try { target = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()).find((t) => t.type === "page"); } catch {}
-}
-const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise((r) => ws.addEventListener("open", r, { once: true }));
-let id = 0; const pending = new Map();
+const chrome = await launchChrome({ width: 1280, height: 800, prefix: "ldr8-" });
+const { send } = chrome;
 const log = { console: [], network: [], steps: [] };
 let current = "setup";
-ws.addEventListener("message", (ev) => {
-  const m = JSON.parse(ev.data);
-  if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
-  if (m.method === "Runtime.consoleAPICalled" && (m.params.type === "error" || m.params.type === "warning")) {
-    log.console.push({ step: current, type: m.params.type, text: m.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 300) });
-  }
-  if (m.method === "Runtime.exceptionThrown") {
-    log.console.push({ step: current, type: "exception", text: (m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 1500) });
-  }
-  if (m.method === "Network.responseReceived" && m.params.response.status >= 400) {
-    log.network.push({ step: current, status: m.params.response.status, url: m.params.response.url.replace(API, "").replace(BASE, "") });
-  }
-  if (m.method === "Network.loadingFailed" && !m.params.canceled) {
-    log.network.push({ step: current, status: "failed", url: m.params.errorText });
-  }
-});
-const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+watchProblems(chrome, (e) => {
+  if (e.kind === "console") log.console.push({ step: current, type: e.type, text: e.text });
+  else log.network.push({ step: current, status: e.status, url: e.url.replace(API, "").replace(BASE, "") });
+}, { warnings: true });
 const evalJs = async (expression) => (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
 const shot = async (name) => {
   const s = await send("Page.captureScreenshot", { format: "png" });
@@ -146,5 +121,4 @@ writeFileSync(join(OUT, `walk${SUFFIX}-${THEME}.json`), JSON.stringify(report, n
 console.log(`path ${(pathMs / 1000).toFixed(1)}s incl. settles · console ${log.console.length} · network ${log.network.length}`);
 for (const c of log.console) console.log("  console", c.step, c.type, c.text.slice(0, 160));
 for (const n of log.network) console.log("  network", n.step, n.status, n.url);
-ws.close();
-chrome.kill();
+chrome.close();

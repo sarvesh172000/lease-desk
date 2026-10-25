@@ -7,10 +7,9 @@
 // usage: node scripts/ui-suite.mjs <base> <outDir>
 //   MUTATE=1   also run the M cases (approvals): a fresh local desk only
 //   ONLY=R08,R10   run just these cases (the sign-in they need still runs)
-import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { launchChrome, sleep, watchProblems } from "./lib/chrome.mjs";
 
 const [BASE = "http://localhost:3000", OUT = "out/ui"] = process.argv.slice(2);
 const MUTATE = process.env.MUTATE === "1";
@@ -23,43 +22,21 @@ if (MUTATE && !LOCAL) {
 }
 mkdirSync(OUT, { recursive: true });
 
-// --- Chrome over CDP (as rehearsal-walk.mjs) ------------------------------------
-const PORT = 9300 + (process.pid % 500);
-const chrome = spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", [
-  "--headless=new", `--remote-debugging-port=${PORT}`, "--hide-scrollbars", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
-  `--user-data-dir=${mkdtempSync(join(tmpdir(), "ldui-"))}`, "--window-size=1440,900", "about:blank",
-], { stdio: "ignore" });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let target;
-for (let i = 0; i < 60 && !target; i++) {
-  await sleep(200);
-  try { target = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()).find((t) => t.type === "page"); } catch {}
-}
-const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise((r) => ws.addEventListener("open", r, { once: true }));
-let id = 0;
-const pending = new Map();
+// --- Chrome over CDP -------------------------------------------------------------
+const chrome = await launchChrome({ width: 1440, height: 900, prefix: "ldui-" });
+const { send } = chrome;
 let current = "setup";
 const noise = { console: [], network: [] };
-ws.addEventListener("message", (ev) => {
-  const m = JSON.parse(ev.data);
-  if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
-  if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") {
-    noise.console.push({ case: current, text: m.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 300) });
+watchProblems(chrome, (e) => {
+  if (e.kind === "console") {
+    noise.console.push({ case: current, text: (e.type === "exception" ? "uncaught: " : "") + e.text.slice(0, 300) });
+    return;
   }
-  if (m.method === "Runtime.exceptionThrown") {
-    noise.console.push({ case: current, text: "uncaught: " + (m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 300) });
-  }
-  if (m.method === "Network.responseReceived") {
-    const { status, url } = m.params.response;
-    // signed out, /me answering 401 is the answer, not an error
-    if (status >= 400 && !(status === 401 && url.includes("/api/auth/me"))) noise.network.push({ case: current, status, url: url.replace(BASE, "") });
-  }
-  if (m.method === "Network.loadingFailed" && !m.params.canceled && !/ERR_ABORTED/.test(m.params.errorText)) {
-    noise.network.push({ case: current, status: "failed", url: m.params.errorText });
-  }
+  // signed out, /me answering 401 is the answer, not an error; an aborted load is navigation
+  if (e.status === 401 && e.url.includes("/api/auth/me")) return;
+  if (e.status === "failed" && /ERR_ABORTED/.test(e.url)) return;
+  noise.network.push({ case: current, status: e.status, url: e.url.replace(BASE, "") });
 });
-const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 const js = async (expression) => {
   const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
   if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description ?? r.result.exceptionDetails.text);
@@ -106,7 +83,8 @@ async function test(caseId, title, body, { allow = [] } = {}) {
   const consoleErrors = noise.console.slice(before.c);
   const badRequests = noise.network.slice(before.n).filter((n) => !allow.includes(n.status));
   if (consoleErrors.length) check(false, `console clean (${consoleErrors.length}: ${consoleErrors[0].text.slice(0, 120)})`);
-  if (badRequests.length) check(false, `requests clean (${badRequests.map((n) => `${n.status} ${n.url}`).slice(0, 3).join("; ")})`);
+  const seen = badRequests.slice(0, 3).map((n) => n.status + " " + n.url).join("; ");
+  if (badRequests.length) check(false, `requests clean (${seen})`);
   if (error) check(false, `ran without error: ${error}`);
   const ok = checks.length > 0 && checks.every((c) => c.ok);
   results.push({ id: caseId, title, ok, checks });
@@ -124,7 +102,8 @@ const openExceptions = () => api("/api/exceptions").then((r) => JSON.parse(r.bod
 async function signInAs(name) {
   // the persona menu switches in demo mode; from signed out, the login picker
   if (await js(`!!${q('button[aria-label^="Signed in as"]')}`)) {
-    if (await js(`!!${q(`button[aria-label^="Signed in as ${name}"]`)}`)) return true;
+    const mine = q('button[aria-label^="Signed in as ' + name + '"]');
+    if (await js(`!!${mine}`)) return true;
     await pointerDown('button[aria-label^="Signed in as"]');
     await waitFor(`${qa('[role="menuitem"]')}.length > 0`, 5000);
     await clickText('[role="menuitem"]', name);
@@ -173,7 +152,7 @@ if (LOCAL) {
 await test("R04", "Demo sign-in", async () => {
   await go("/login");
   check(await waitFor(q('[data-testid="personas"] button')), "the persona list renders");
-  const names = await js(`${qa('[data-testid="personas"] button')}.map((b) => b.innerText.split("\\n")[0])`);
+  const names = await js(`${qa('[data-testid="personas"] button')}.map((b) => b.innerText.split(String.fromCharCode(10))[0])`);
   check(names?.length >= 4, `four people to sign in as (${names?.join(", ")})`);
   await clickText('[data-testid="personas"] button', "Priya");
   check(await waitFor(`location.pathname === "/" && ${q('[data-testid="tiles"]')}`, 15000), "Priya lands on Today");
@@ -435,6 +414,5 @@ if (MUTATE) {
 const failed = results.filter((r) => !r.ok);
 writeFileSync(join(OUT, "ui-suite.json"), JSON.stringify({ base: BASE, mutate: MUTATE, results, noise }, null, 2));
 console.log(`\n${results.length - failed.length}/${results.length} cases passed · ${OUT}/ui-suite.json`);
-ws.close();
-chrome.kill();
+chrome.close();
 process.exit(failed.length ? 1 : 0);
