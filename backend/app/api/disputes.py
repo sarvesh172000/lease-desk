@@ -14,10 +14,12 @@ Approving the letter is the DISPUTE work item's ordinary approve
 (transition(), so can() scopes it to the clinic's region; the queue's
 /api/items/{id}/actions/approve does the same thing). After any write the
 gateway runs for that dispute, on its own `lease_gateway` transaction after
-the write commits (gateway.sync_disputes): it queues the approved letter as
-an email, posts the approved receivable, clears credit memos and settles. If
-the gateway fails the write stands and the response carries `gateway_error`;
-syncing again is safe, every step is idempotent.
+the write commits (gateway.sync_disputes, through items.sync_dispute): it
+queues the approved letter as an email, posts the approved receivable, clears
+credit memos and settles. A letter that went out queues the disputes sweep,
+which proposes the receivable to a controller. If the gateway fails the write
+stands and the response carries `gateway_error`; syncing again is safe, every
+step is idempotent.
 
 A reply is recorded by an AP clerk (acknowledged, queried, full credit) or a
 controller (any outcome, including partial credit and refusal, which reopen
@@ -36,7 +38,6 @@ Response shapes (no §16 fixture; documented here):
                     reply_outcomes (what this actor may record), gateway_error
 """
 
-import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
@@ -48,13 +49,11 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
-from ..work import disputes, gateway
+from ..work import disputes
 from ..work.events import append_event
 from ..work.transitions import Denied, IllegalTransition, transition
 from .deps import get_engine, get_gateway_engine
-from .items import in_scope, scope_sql, work_actor
-
-log = logging.getLogger(__name__)
+from .items import in_scope, scope_sql, sync_dispute, work_actor
 
 router = APIRouter(prefix="/api", tags=["disputes"])
 
@@ -295,13 +294,7 @@ class _errors:
 
 def _after_write(eng: Engine, gateway_engine: Engine, actor: SessionActor,
                  dispute_id: str) -> DisputeDetail:
-    error = None
-    try:
-        with gateway_engine.begin() as conn:
-            gateway.sync_disputes(conn, dispute_id=dispute_id)
-    except Exception as exc:  # noqa: BLE001 - the write is committed; never lose it to the gateway
-        log.warning("dispute %s not synced by the gateway: %s", dispute_id, exc)
-        error = "%s: %s" % (type(exc).__name__, exc)
+    error = sync_dispute(eng, gateway_engine, dispute_id)
     with eng.connect() as conn:
         detail = _detail(conn, actor, dispute_id)
     detail.gateway_error = error

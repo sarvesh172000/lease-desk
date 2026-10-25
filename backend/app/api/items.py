@@ -32,6 +32,12 @@ through the gateway, on a `lease_gateway` connection, in a transaction of its
 own *after* the approval commits. If posting fails the approval stands, the
 item stays APPROVED, and the response says posting is pending; posting again
 later is safe because the gateway is idempotent on the charge's key.
+
+Upholding a hold with something disputed queues the disputes sweep in the same
+transaction, so the worker drafts the letter (work/disputes.py) without anyone
+running a job by hand. Any action on a DISPUTE or DISPUTE_RECEIVABLE item then
+runs the gateway for that dispute, as POST /api/disputes/{id}/approve does:
+approving the letter here sends it, and the response's `dispute` says so.
 """
 
 import logging
@@ -47,7 +53,7 @@ from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
 from ..jobs.queue import enqueue
-from ..work import charges, gateway, modifications
+from ..work import charges, disputes, gateway, modifications
 from ..work.events import events_for
 from ..work.roles import Actor
 from ..work.transitions import (
@@ -152,10 +158,21 @@ class Posting(BaseModel):
     disputed: Optional[float] = None     # what stayed out of the ledger
 
 
+class DisputeOutcome(BaseModel):
+    # The dispute after the gateway ran for it: `sent` once the approved
+    # letter is in the outbox. gateway_error: the action stands, the gateway
+    # has not caught up yet (syncing again is safe).
+    id: str
+    status: str
+    notice_to: Dict[str, Any]
+    gateway_error: Optional[str] = None
+
+
 class ActionResult(BaseModel):
     state: str
     item: Dict[str, Any]
     posting: Optional[Posting] = None   # only after approving an item the gateway can post
+    dispute: Optional[DisputeOutcome] = None   # only after acting on a dispute's letter or receivable
 
 
 # --- scope ------------------------------------------------------------------------
@@ -279,6 +296,7 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
                 if action == "approve" and kind == gateway.CHARGE_CHECK:
                     row = charges.approve_charge(conn, work_actor(actor), item_id,
                                                  resolution=_resolution(patch), reason=reason)
+                    _queue_dispute_draft(conn, row)
                 elif kind == modifications.MODIFICATION_KIND:
                     row = transition(conn, work_actor(actor), item_id, action,
                                      reason=reason, patch=patch)
@@ -308,7 +326,51 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
             with eng.connect() as conn:
                 row = dict(conn.execute(text("SELECT * FROM work_item WHERE id = :id"),
                                         {"id": row["id"]}).mappings().one())
-    return ActionResult(state=row["state"], item=_public_item(row), posting=posting)
+    dispute = None
+    if row["kind"] in (disputes.DISPUTE, disputes.RECEIVABLE):
+        error = sync_dispute(eng, gateway_engine, row["subject_id"])
+        with eng.connect() as conn:
+            d = conn.execute(text("SELECT id, status, notice_to FROM dispute WHERE id = :id"),
+                             {"id": row["subject_id"]}).mappings().one()
+            row = dict(conn.execute(text("SELECT * FROM work_item WHERE id = :id"),
+                                    {"id": row["id"]}).mappings().one())
+        dispute = DisputeOutcome(id=d["id"], status=d["status"], notice_to=d["notice_to"] or {},
+                                 gateway_error=error)
+    return ActionResult(state=row["state"], item=_public_item(row), posting=posting,
+                        dispute=dispute)
+
+
+def _queue_dispute_draft(conn: Connection, row: Mapping) -> None:
+    """A hold upheld with something disputed is a letter to write: queue the
+    disputes agent's sweep (jobs/obligations.py) in the approval's own
+    transaction, once per hold. The worker drafts it as agent:disputes."""
+    evidence = row.get("evidence") or {}
+    if (row.get("proposal") == "hold" and evidence.get("resolution") == charges.UPHELD
+            and (_float(evidence.get("disputed")) or 0) > 0):
+        enqueue(conn, "disputes", {"entity_id": row.get("entity_id")},
+                idempotency_key="disputes:upheld:%d" % row["id"])
+
+
+def sync_dispute(eng: Engine, gateway_engine: Engine, dispute_id: str) -> Optional[str]:
+    """The gateway for one dispute, on its own `lease_gateway` transaction
+    after the write commits: send an approved letter, post an approved
+    receivable, clear and settle. A letter that went out is a receivable to
+    propose, so the disputes sweep is queued for it. Returns the gateway's
+    error, if any; the write stands either way and syncing again is safe."""
+    try:
+        with gateway_engine.begin() as conn:
+            synced = gateway.sync_disputes(conn, dispute_id=dispute_id)
+    except Exception as exc:  # noqa: BLE001 - the write is committed; never lose it to the gateway
+        log.warning("dispute %s not synced by the gateway: %s", dispute_id, exc)
+        return "%s: %s" % (type(exc).__name__, exc)
+    if synced.sent:
+        with eng.begin() as conn:
+            entity_id = conn.execute(text("SELECT entity_id FROM dispute WHERE id = :id"),
+                                     {"id": dispute_id}).scalar()
+            for outbox_id in synced.sent:
+                enqueue(conn, "disputes", {"entity_id": entity_id},
+                        idempotency_key="disputes:sent:%s:%d" % (dispute_id, outbox_id))
+    return None
 
 
 def _learn_from_answer(conn: Connection, item_id: int) -> None:
