@@ -2,7 +2,7 @@
   "base": "http://localhost:3000",
   "theme": "dark",
   "reducedMotion": false,
-  "pathMs": 20567,
+  "pathMs": 20957,
   "console": [],
   "network": [
     {
@@ -20,8 +20,8 @@
     {
       "name": "welcome",
       "did": true,
-      "readyMs": 135,
-      "total": 547,
+      "readyMs": 206,
+      "total": 889,
       "cls": 0,
       "url": "/welcome",
       "overflow": 0,
@@ -30,15 +30,15 @@
     {
       "name": "login",
       "did": true,
-      "readyMs": 107,
-      "total": 108,
+      "readyMs": 106,
+      "total": 107,
       "cls": 0.019,
       "url": "/login",
       "overflow": 0,
       "shifts": [
         {
           "v": 0.019,
-          "t": 22,
+          "t": 19,
           "who": [
             "div.w-full.max-w-[420px]"
           ],
@@ -51,12 +51,27 @@
     {
       "name": "today",
       "did": true,
-      "readyMs": 103,
-      "total": 105,
-      "cls": 0.002,
+      "readyMs": 102,
+      "total": 104,
+      "cls": 0.058,
       "url": "/",
       "overflow": 0,
-      "shifts": []
+      "shifts": [
+        {
+          "v": 0.058,
+          "t": 132,
+          "who": [
+            "div.grid.grid-cols-[minmax(0,1fr)_300px].gap-5",
+            "div[tiles].grid.grid-cols-4.gap-4",
+            "div.group.relative.overflow-hidden"
+          ],
+          "moved": [
+            36,
+            36,
+            35
+          ]
+        }
+      ]
     },
     {
       "name": "audit",
@@ -72,7 +87,7 @@
       "name": "month",
       "did": true,
       "readyMs": 108,
-      "total": 108,
+      "total": 110,
       "cls": 0,
       "url": "/month",
       "overflow": 0,
@@ -81,8 +96,8 @@
     {
       "name": "leases",
       "did": true,
-      "readyMs": 8,
-      "total": 8,
+      "readyMs": 111,
+      "total": 112,
       "cls": 0,
       "url": "/leases",
       "overflow": 0,
@@ -91,8 +106,8 @@
     {
       "name": "lease-detail",
       "did": true,
-      "readyMs": 102,
-      "total": 103,
+      "readyMs": 103,
+      "total": 104,
       "cls": 0,
       "url": "/leases/LEASE-01",
       "overflow": 0,

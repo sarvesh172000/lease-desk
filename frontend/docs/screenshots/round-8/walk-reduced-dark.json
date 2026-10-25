@@ -2,7 +2,7 @@
   "base": "http://localhost:3000",
   "theme": "dark",
   "reducedMotion": true,
-  "pathMs": 110554,
+  "pathMs": 110606,
   "console": [],
   "network": [
     {
@@ -20,8 +20,8 @@
     {
       "name": "welcome",
       "did": true,
-      "readyMs": 1,
-      "total": 626,
+      "readyMs": 3,
+      "total": 419,
       "cls": 0,
       "url": "/welcome",
       "overflow": 0,
@@ -30,15 +30,15 @@
     {
       "name": "login",
       "did": true,
-      "readyMs": 105,
-      "total": 107,
+      "readyMs": 116,
+      "total": 119,
       "cls": 0.019,
       "url": "/login",
       "overflow": 0,
       "shifts": [
         {
           "v": 0.019,
-          "t": 22,
+          "t": 35,
           "who": [
             "div.w-full.max-w-[420px]"
           ],
@@ -51,15 +51,15 @@
     {
       "name": "today",
       "did": true,
-      "readyMs": 103,
-      "total": 105,
-      "cls": 0.118,
+      "readyMs": 260,
+      "total": 264,
+      "cls": 0.106,
       "url": "/",
       "overflow": 0,
       "shifts": [
         {
           "v": 0.02,
-          "t": 73,
+          "t": 249,
           "who": [
             "div.grid.grid-cols-[minmax(0,1fr)_300px].gap-5",
             "div[tiles].grid.grid-cols-4.gap-4",
@@ -72,15 +72,15 @@
           ]
         },
         {
-          "v": 0.098,
-          "t": 270,
+          "v": 0.086,
+          "t": 291,
           "who": [
-            "tbody",
             "?",
-            "?"
+            "?",
+            "div.flex.shrink-0.flex-col"
           ],
           "moved": [
-            17,
+            0,
             0,
             0
           ]
@@ -90,15 +90,15 @@
     {
       "name": "money",
       "did": true,
-      "readyMs": 409,
-      "total": 409,
-      "cls": 0.157,
+      "readyMs": 464,
+      "total": 468,
+      "cls": 0.149,
       "url": "/exceptions/exc_18",
       "overflow": 0,
       "shifts": [
         {
-          "v": 0.15,
-          "t": 35,
+          "v": 0.139,
+          "t": 74,
           "who": [
             "div.flex.min-w-0.flex-1",
             "div[balance-assertion].mt-3.flex.items-center",
@@ -116,7 +116,7 @@
       "name": "investigate",
       "did": false,
       "readyMs": null,
-      "total": 30050,
+      "total": 30007,
       "cls": 0,
       "url": "/exceptions/exc_18",
       "overflow": 0,
@@ -125,8 +125,8 @@
     {
       "name": "why",
       "did": true,
-      "readyMs": 103,
-      "total": 110,
+      "readyMs": 106,
+      "total": 121,
       "cls": 0,
       "url": "/exceptions/exc_18",
       "overflow": 0,
@@ -135,8 +135,8 @@
     {
       "name": "evidence-pack",
       "did": true,
-      "readyMs": 3,
-      "total": 6,
+      "readyMs": 2,
+      "total": 5,
       "cls": 0,
       "url": "/exceptions/exc_18",
       "overflow": 0,
@@ -145,8 +145,8 @@
     {
       "name": "switch-dana",
       "did": true,
-      "readyMs": 109,
-      "total": 643,
+      "readyMs": 107,
+      "total": 640,
       "cls": 0.004,
       "url": "/exceptions/exc_18",
       "overflow": 0,
@@ -155,15 +155,15 @@
     {
       "name": "dana-today",
       "did": true,
-      "readyMs": 13,
-      "total": 13,
+      "readyMs": 12,
+      "total": 12,
       "cls": 0.117,
       "url": "/",
       "overflow": 0,
       "shifts": [
         {
           "v": 0.115,
-          "t": 32,
+          "t": 22,
           "who": [
             "div.flex.min-w-0.flex-1",
             "div.flex.flex-col.gap-0.5",
@@ -181,7 +181,7 @@
       "name": "jan-hold",
       "did": false,
       "readyMs": null,
-      "total": 15045,
+      "total": 15091,
       "cls": 0,
       "url": "/",
       "overflow": 0,
@@ -191,7 +191,7 @@
       "name": "uphold",
       "did": false,
       "readyMs": null,
-      "total": 20679,
+      "total": 20692,
       "cls": 0,
       "url": "/",
       "overflow": 0,
@@ -200,8 +200,8 @@
     {
       "name": "disputes",
       "did": true,
-      "readyMs": 106,
-      "total": 111,
+      "readyMs": 133,
+      "total": 136,
       "cls": 0,
       "url": "/disputes",
       "overflow": 0,
@@ -210,8 +210,8 @@
     {
       "name": "dispute-letter",
       "did": true,
-      "readyMs": 104,
-      "total": 104,
+      "readyMs": 103,
+      "total": 105,
       "cls": 0,
       "url": "/disputes/DSP-000006",
       "overflow": 0,
@@ -220,8 +220,8 @@
     {
       "name": "audit",
       "did": true,
-      "readyMs": 24,
-      "total": 25,
+      "readyMs": 39,
+      "total": 40,
       "cls": 0,
       "url": "/audit",
       "overflow": 0,
@@ -230,8 +230,8 @@
     {
       "name": "month",
       "did": true,
-      "readyMs": 106,
-      "total": 107,
+      "readyMs": 102,
+      "total": 110,
       "cls": 0,
       "url": "/month",
       "overflow": 0,
@@ -251,7 +251,7 @@
       "name": "lease-detail",
       "did": true,
       "readyMs": 103,
-      "total": 109,
+      "total": 104,
       "cls": 0,
       "url": "/leases/LEASE-01",
       "overflow": 0,
@@ -260,11 +260,11 @@
     {
       "name": "cold-today",
       "cold": true,
-      "readyMs": 125,
-      "total": 131,
+      "readyMs": 123,
+      "total": 129,
       "nav": {
-        "dcl": 22,
-        "load": 44,
+        "dcl": 20,
+        "load": 43,
         "ttfb": 3
       },
       "url": "/"
@@ -272,12 +272,12 @@
     {
       "name": "cold-money",
       "cold": true,
-      "readyMs": 131,
-      "total": 161,
+      "readyMs": 146,
+      "total": 183,
       "nav": {
-        "dcl": 46,
-        "load": 80,
-        "ttfb": 22
+        "dcl": 57,
+        "load": 83,
+        "ttfb": 33
       },
       "url": "/exceptions/exc_7"
     }

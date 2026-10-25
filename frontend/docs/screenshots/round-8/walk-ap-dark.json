@@ -2,7 +2,7 @@
   "base": "http://localhost:3000",
   "theme": "dark",
   "reducedMotion": false,
-  "pathMs": 17145,
+  "pathMs": 17566,
   "console": [],
   "network": [
     {
@@ -20,8 +20,8 @@
     {
       "name": "welcome",
       "did": true,
-      "readyMs": 117,
-      "total": 525,
+      "readyMs": 497,
+      "total": 905,
       "cls": 0,
       "url": "/welcome",
       "overflow": 0,
@@ -30,15 +30,15 @@
     {
       "name": "login",
       "did": true,
-      "readyMs": 106,
-      "total": 108,
+      "readyMs": 107,
+      "total": 109,
       "cls": 0.019,
       "url": "/login",
       "overflow": 0,
       "shifts": [
         {
           "v": 0.019,
-          "t": 32,
+          "t": 19,
           "who": [
             "div.w-full.max-w-[420px]"
           ],
@@ -51,8 +51,8 @@
     {
       "name": "today",
       "did": true,
-      "readyMs": 104,
-      "total": 106,
+      "readyMs": 102,
+      "total": 103,
       "cls": 0.002,
       "url": "/",
       "overflow": 0,
@@ -61,8 +61,8 @@
     {
       "name": "audit",
       "did": true,
-      "readyMs": 108,
-      "total": 110,
+      "readyMs": 107,
+      "total": 109,
       "cls": 0,
       "url": "/audit",
       "overflow": 0,
@@ -71,8 +71,8 @@
     {
       "name": "month",
       "did": true,
-      "readyMs": 6,
-      "total": 7,
+      "readyMs": 8,
+      "total": 9,
       "cls": 0,
       "url": "/month",
       "overflow": 0,
@@ -81,8 +81,8 @@
     {
       "name": "leases",
       "did": true,
-      "readyMs": 10,
-      "total": 13,
+      "readyMs": 9,
+      "total": 10,
       "cls": 0,
       "url": "/leases",
       "overflow": 0,
