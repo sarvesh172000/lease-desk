@@ -1,0 +1,26 @@
+# The four Fetch.ai agents (agents_fetch/), for a host that keeps them running
+# around the clock (docs/DEPLOY.md). They talk to the Lease Desk API over HTTP
+# and to Agentverse through their mailboxes, so the image needs neither the
+# backend nor an open port. Built from the repo root:
+#
+#   docker build -f deploy/Dockerfile.agents -t leasedesk-agents .
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+# Exact versions with hashes (deploy/agents-requirements.lock, generated from
+# agents_fetch/requirements.txt), wheels only, so no package's setup script
+# ever runs at build time.
+COPY deploy/agents-requirements.lock deploy/agents-requirements.lock
+RUN pip install --no-cache-dir --only-binary :all: --require-hashes -r deploy/agents-requirements.lock
+COPY agents_fetch agents_fetch
+
+RUN useradd --create-home --uid 10001 app
+USER app
+
+# Seeds, the API URL and the optional keys come from the environment; there is
+# no .env in the image.
+CMD ["python", "-m", "agents_fetch.run"]

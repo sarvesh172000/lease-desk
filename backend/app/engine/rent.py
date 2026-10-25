@@ -22,6 +22,7 @@ The traps the lease language creates, each of which this handles explicitly:
 """
 
 import csv
+import os
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -30,7 +31,11 @@ from typing import Dict, Optional, Tuple
 US_CITY_AVERAGE = "CUUR0000SA0"
 WEST_REGION = "CUUR0400SA0"
 
-DEFAULT_SNAPSHOT = Path(__file__).resolve().parents[3] / "data" / "reference" / "cpi_bls.csv"
+# The repository's reference data; LEASEDESK_REFERENCE_DIR moves it. The image
+# keeps it at /app/reference, because the generated data is mounted (or baked)
+# at /app/data, where a reference copy would be hidden.
+DEFAULT_SNAPSHOT = Path(os.environ.get("LEASEDESK_REFERENCE_DIR")
+                        or Path(__file__).resolve().parents[3] / "data" / "reference") / "cpi_bls.csv"
 
 
 class IndexUnavailable(LookupError):
