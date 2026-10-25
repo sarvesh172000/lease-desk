@@ -135,8 +135,9 @@ def test_exception_detail_matches_the_fixture(client, as_in_the_fixtures):
     # and lease_citation.)
     assert set(body) - set(fixture) == {"item_id", "state", "proposal", "reason", "rule",
                                         "payable", "disputed", "resolution", "resolved_by",
-                                        "override_reason"}
+                                        "override_reason", "modification"}
     assert body["invoice_line"] is None and body["lease_citation"] is None
+    assert body["modification"] is None  # nothing investigated, so no lease change
 
 
 def test_the_live_checker_output_has_the_fixture_shape(client, checked):
