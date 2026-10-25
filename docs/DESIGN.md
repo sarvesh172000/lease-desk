@@ -492,8 +492,8 @@ from `datagen`, so the fixtures and the live API agree.
 `GET /api/leases`
 
 ```json
-[{"lease_id": "LEASE-01", "clinic_id": "CLINIC-01",
-  "location": "Northbay PT — Daly City — Suite 210",
+[{"lease_id": "LEASE-01", "clinic_id": "STORE-01",
+  "location": "Northbay Coffee — Daly City — Suite 210",
   "lessor": "Serramonte Retail Partners LLC",
   "status": "exception", "monthly_rent": 19626.65,
   "liability": 559665.35, "end": "2028-12-31"}]
@@ -503,7 +503,7 @@ from `datagen`, so the fixtures and the live API agree.
 
 ```json
 [{"exception_id": "exc_01_jan_cam", "lease_id": "LEASE-01",
-  "clinic_id": "CLINIC-01", "period": "2026-01-01",
+  "clinic_id": "STORE-01", "period": "2026-01-01",
   "charge_type": "cam_estimate", "expected": 5941.67, "actual": 6458.33,
   "delta": 516.66, "status": "pending_review", "confidence": 0.94}]
 ```
@@ -513,7 +513,7 @@ from `datagen`, so the fixtures and the live API agree.
 
 ```json
 {"exception_id": "exc_01_jul_amendment", "lease_id": "LEASE-01",
- "clinic_id": "CLINIC-01", "period": "2026-07-01", "charge_type": "base_rent",
+ "clinic_id": "STORE-01", "period": "2026-07-01", "charge_type": "base_rent",
  "expected": 19626.65, "actual": 17400.00,
  "delta": -2226.65, "status": "pending_review", "confidence": 0.94,
  "invoice_line": null, "lease_citation": null,

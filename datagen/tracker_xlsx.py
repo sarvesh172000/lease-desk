@@ -55,11 +55,11 @@ class TrackerNote:
 # Notes the previous accountant left. Some are still true, some are a year
 # stale, and none of them is dated in the cell itself.
 _NOTES = {
-    "CLINIC-01": ("Landlord agreed 3% cap verbally - get in writing", AMBER),
-    "CLINIC-02": ("Suite 118 was given back in 2024!! still being billed?", RED),
-    "CLINIC-03": ("escalation date is APRIL not Jan - they keep getting this wrong", AMBER),
-    "CLINIC-04": ("checked against lease 2025, all good", GREEN),
-    "CLINIC-05": ("abatement thru June per Dana - confirm", AMBER),
+    "STORE-01": ("Landlord agreed 3% cap verbally - get in writing", AMBER),
+    "STORE-02": ("Suite 118 was given back in 2024!! still being billed?", RED),
+    "STORE-03": ("escalation date is APRIL not Jan - they keep getting this wrong", AMBER),
+    "STORE-04": ("checked against lease 2025, all good", GREEN),
+    "STORE-05": ("abatement thru June per Dana - confirm", AMBER),
 }
 
 

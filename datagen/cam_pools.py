@@ -12,7 +12,7 @@ to be overcharged:
   - and the one that only shows up across clinics: **the same vendor line
     billed in full to two tenants in the same center**.
 
-That last case is why Serramonte Medical Plaza holds two Northbay suites. The
+That last case is why Serramonte Plaza holds two Northbay suites. The
 parking lot repaving below is charged at 100% to both, so neither invoice looks
 wrong on its own. Only looking across the center finds it.
 """

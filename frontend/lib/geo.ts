@@ -1,5 +1,5 @@
 /**
- * Public geography only: which region a clinic's city belongs to, for
+ * Public geography only: which region a store's city belongs to, for
  * grouping the portfolio when the API gives no region. Never money, never a
  * lease fact. Unknown cities fall back to "Other".
  */
@@ -35,7 +35,7 @@ const CITY_REGION: Record<string, RegionId> = {
   tucson: "REG-DESERT",
 };
 
-/** "Northbay PT — Daly City — Suite 210" → "REG-BAY"; nothing recognisable → "OTHER". */
+/** "Northbay Coffee — Daly City — Suite 210" → "REG-BAY"; nothing recognisable → "OTHER". */
 export function regionOfLocation(location: string | null | undefined): RegionId {
   if (!location) return "OTHER";
   const l = location.toLowerCase();

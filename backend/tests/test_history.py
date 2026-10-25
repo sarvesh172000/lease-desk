@@ -38,7 +38,7 @@ def test_a_lease_is_not_billed_before_it_commences():
     """LEASE-04 commences 2025-01-01, so 2024 must be empty for it."""
     company = build_company()
     h = build_history(company, build_leases(company), year=2024)
-    assert not [i for i in h.invoices if i.clinic_id == "CLINIC-04"]
+    assert not [i for i in h.invoices if i.clinic_id == "STORE-04"]
 
 
 def test_the_year_is_mostly_but_not_entirely_correct(history):

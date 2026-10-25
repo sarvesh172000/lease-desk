@@ -15,8 +15,8 @@ before moving on. Deliver production-ready **Next.js 15 (App Router) + React 19
 
 ## 1. The product in one breath
 
-Lease Desk fills the **lease accountant's seat** at a 30-clinic physical
-therapy group (Northbay Physical Therapy). Every month, a team of AI agents
+Lease Desk fills the **lease accountant's seat** at a 30-store coffee
+chain (Northbay Coffee). Every month, a team of AI agents
 reads every landlord invoice, checks every charge against what the lease
 actually says, drafts payments and accounting entries, and **holds only the
 money that is wrong** — showing the billed line in the invoice and the clause
@@ -77,7 +77,7 @@ toy).
 
 ## 3. The three demo beats (design around these)
 
-1. **The hidden amendment.** CLINIC-01's July rent stops matching by
+1. **The hidden amendment.** STORE-01's July rent stops matching by
    **−$2,226.65**. The agent searches the mailbox, finds an executed amendment
    (trust rank 1, confidence 94%) that cut rent to $17,400 and extended the
    lease 3 years, remeasures under ASC 842 — liability

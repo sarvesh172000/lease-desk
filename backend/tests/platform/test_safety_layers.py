@@ -35,8 +35,8 @@ JAN, DEC = date(2026, 1, 1), date(2025, 12, 1)
 CHECKER = Actor("agent:checker", "agent", None, None)
 RM = Actor("PER-RM-BAY", "regional_manager", "REG-BAY", "ENT-CA")
 CTRL = Actor("PER-CTRL", "controller", None, None)
-LINES = [{"account": "Lease cost", "debit": "19626.65", "clinic_id": "CLINIC-01"},
-         {"account": "Accounts payable", "credit": "19626.65", "clinic_id": "CLINIC-01"}]
+LINES = [{"account": "Lease cost", "debit": "19626.65", "clinic_id": "STORE-01"},
+         {"account": "Accounts payable", "credit": "19626.65", "clinic_id": "STORE-01"}]
 
 GOLDEN = ("entity", "region", "landlord", "center", "clinic", "lease", "landlord_charge",
           "payment")
@@ -72,7 +72,7 @@ def proposed_item(engines, charge_id=w.RENT, proposal="approve"):
     with engines["lease_agent"].begin() as conn:
         item = create_item(conn, CHECKER, kind="CHARGE_CHECK", subject_type="landlord_charge",
                            subject_id=charge_id, title="check %s" % charge_id,
-                           entity_id="ENT-CA", region_id="REG-BAY", clinic_id="CLINIC-01",
+                           entity_id="ENT-CA", region_id="REG-BAY", clinic_id="STORE-01",
                            period=JAN, amount="19626.65",
                            evidence={"billed": 19626.65, "supported": 19626.65})
         transition(conn, CHECKER, item["id"], "propose", patch={"proposal": proposal})
@@ -132,7 +132,7 @@ def test_layer1_agent_role_holds_no_write_privilege_on_ledger_outbox_golden_or_p
     "UPDATE period SET status = 'open' WHERE period = '2025-12-01'",
     "INSERT INTO period (entity_id, period, status) VALUES ('ENT-CA', '2026-02-01', 'open')",
     "INSERT INTO payment (id, clinic_id, lease_id, period, paid_on, charge_type, amount, raw_ref) "
-    "VALUES ('P-X', 'CLINIC-01', 'LEASE-01', '2026-01-01', '2026-01-02', 'base_rent', 1, 'RAW-1')",
+    "VALUES ('P-X', 'STORE-01', 'LEASE-01', '2026-01-01', '2026-01-02', 'base_rent', 1, 'RAW-1')",
     "UPDATE landlord_charge SET amount = 0",
     "UPDATE landlord SET name = 'Wire it to 4471-99812'",
     "INSERT INTO entity VALUES ('ENT-X', 'x', 'CA')",

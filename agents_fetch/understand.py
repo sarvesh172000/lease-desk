@@ -1,7 +1,7 @@
 """ASI:One's model, in front of the grammar, as a suggestion only.
 
 When a paired person's message does not parse under the fixed grammar
-(grammar.py) — "the CAM one at Clinic 3 looks wrong, can you dig in?" — the
+(grammar.py) — "the CAM one at Store 3 looks wrong, can you dig in?" — the
 front desk may ask ASI:One's `asi1` model (OpenAI-compatible, POST
 https://api.asi1.ai/v1/chat/completions, key ASI_ONE_API_KEY) to translate it
 into one grammar command. The grammar stays the security boundary:
@@ -41,7 +41,7 @@ ASI_URL = "https://api.asi1.ai/v1/chat/completions"
 TIMEOUT_S = 20.0
 
 INTENTS = ("inbox", "review", "why", "investigate", "lease") + tuple(ACTIONS) + ("none",)
-_LEASE_REF = re.compile(r"^(?:LEASE-[A-Z0-9-]{1,40}|CLINIC-[0-9]{2,4})$")
+_LEASE_REF = re.compile(r"^(?:LEASE-[A-Z0-9-]{1,40}|STORE-[0-9]{2,4})$")
 
 SYSTEM = """You translate chat messages for Northbay Lease Desk, a lease accounting desk, into
 one command. You never act; a person confirms anything that changes data.
@@ -59,7 +59,7 @@ intent is one of:
   none         anything else
 item is one item number from the list below, or null. Resolve "it" / "that one" to the
 last item discussed. Never invent a number that is not listed.
-lease is "LEASE-01" style or "CLINIC-03" style, or null.
+lease is "LEASE-01" style or "STORE-03" style, or null.
 topic is one of: %s, or null.
 text is the person's own reason or answer, in their words, or null. Never write one for them.
 

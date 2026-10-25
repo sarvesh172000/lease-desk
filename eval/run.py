@@ -86,7 +86,7 @@ def score_checking(key: dict) -> Section:
     billed = [c for i in invoices for c in i.charges]
     findings = check_month(charges_from_invoices(invoices), rules, JANUARY)
 
-    # Scored per charge, not per clinic: CLINIC-01 has two rent lines, and
+    # Scored per charge, not per clinic: STORE-01 has two rent lines, and
     # holding the genuine one while paying the duplicate is not a catch.
     held = {f.charge.charge_id: f for f in holds(findings)}
     section = Section("checking")

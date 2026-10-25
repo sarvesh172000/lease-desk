@@ -126,7 +126,7 @@ BASE_URL=http://localhost:3011 npm run screenshots
 | Route | What |
 |---|---|
 | `/` | Dashboard: active leases, open exceptions, dollars held, portfolio liability; exceptions queue; every charge checked this month; latest agent activity |
-| `/leases` | TanStack Table, status counts as filter chips, clinic filter, search, sortable columns |
+| `/leases` | TanStack Table, status counts as filter chips, store filter, search, sortable columns |
 | `/leases/[id]` | Lease facts, its exceptions, schedule (active / v1 / v2) |
 | `/exceptions/[id]` | The money screen: invoice with the billed line boxed next to the cited source (evidence or lease clause) boxed, calculation strip, evidence card, investigation timeline (SSE), journal entries with a balance assertion, before/after remeasurement, Approve / Hold from allowed-actions |
 | `/audit` | Audit trail with the "chain verified" badge, denied-attempt filter, `?lease_id=` |

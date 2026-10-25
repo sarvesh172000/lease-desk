@@ -2,7 +2,7 @@ import type { Actor } from "./types";
 /**
  * Readable names for the API's keys, in one place, so every screen says
  * "CAM estimate" and "Daly City, Suite 210" rather than `cam_estimate` and
- * `CLINIC-01`. Ids stay available as secondary text; these never replace them
+ * `STORE-01`. Ids stay available as secondary text; these never replace them
  * in data, only on screen.
  */
 
@@ -43,11 +43,11 @@ export function rootCauseLabel(code: string | null | undefined): string {
   return ROOT_CAUSE_LABEL[code] ?? chargeLabel(code);
 }
 
-const BRAND = /^Northbay(?: Physical Therapy| PT)\s*[—–-]\s*/i;
+const BRAND = /^Northbay(?: Coffee| Physical Therapy| PT)\s*[—–-]\s*/i;
 
 /**
- * "Northbay PT — Daly City — Suite 210" → "Daly City, Suite 210".
- * The brand is the same on every clinic, so only the place tells them apart.
+ * "Northbay Coffee — Daly City — Suite 210" → "Daly City, Suite 210".
+ * The brand is the same on every store, so only the place tells them apart.
  */
 export function placeLabel(location: string | null | undefined): string | null {
   if (!location) return null;
@@ -59,10 +59,10 @@ export function placeLabel(location: string | null | undefined): string | null {
   return parts.length ? parts.join(", ") : null;
 }
 
-/** A clinic in words, falling back to its id when the location is unknown. */
+/** A store in words, falling back to its id when the location is unknown. */
 export function clinicLabel(location: string | null | undefined, clinicId?: string | null): string {
   const place = placeLabel(location);
-  return place ? `Northbay PT ${place}` : clinicId ?? "Unknown clinic";
+  return place ? `Northbay Coffee ${place}` : clinicId ?? "Unknown store";
 }
 
 const monthLongFmt = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });

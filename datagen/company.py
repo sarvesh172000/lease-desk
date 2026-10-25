@@ -1,13 +1,13 @@
-"""Northbay Physical Therapy — the fictional company, generated from a seed.
+"""Northbay Coffee — the fictional coffee chain, generated from a seed.
 
-Phase 1 scope: one legal entity in California, one region, 5 clinics, 2
+Phase 1 scope: one legal entity in California, one region, 5 stores, 2
 landlords, 2 centers. Everything is deterministic from `SEED`, so the same
 company, the same leases and the same answer key come out of every run. The
 eval depends on that.
 
 Two deliberate shapes here, both set up for later phases:
 
-  - **Serramonte Medical Plaza holds two Northbay clinics.** That is what makes
+  - **Serramonte Plaza holds two Northbay stores.** That is what makes
     the Phase 2 shared-pool double billing case possible: one vendor line can
     be billed in full to both suites.
   - **Every lease names an authorized representative in its notices clause.**
@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 SEED = 20261023
-COMPANY_NAME = "Northbay Physical Therapy"
+COMPANY_NAME = "Northbay Coffee"
 
-# Phase 1 ran on five California clinics. Phase 2 is the whole company. The
+# Phase 1 ran on five California stores. Phase 2 is the whole company. The
 # five are unchanged inside it — same ids, same suites, same square footage,
 # same landlords — so every rehearsed figure survives the scale-up.
 PHASE1 = "phase1"
@@ -177,7 +177,7 @@ def build_company(scope: str = PHASE1, seed: int = SEED) -> Company:
 
 
 def _phase1(seed: int) -> Company:
-    entity = Entity("ENT-CA", "Northbay Physical Therapy of California, Inc.", "CA")
+    entity = Entity("ENT-CA", "Northbay Coffee Company of California, Inc.", "CA")
     region = Region("REG-BAY", "Bay Area", "PER-RM-BAY")
 
     people = [
@@ -210,23 +210,23 @@ def _phase1(seed: int) -> Company:
 
     centers = [
         # Two Northbay suites here — the Phase 2 double-billing setup.
-        Center("CTR-SERRA", "Serramonte Medical Plaza",
+        Center("CTR-SERRA", "Serramonte Plaza",
                "2001 Junipero Serra Blvd, Daly City, CA 94014", "LL-SERRA", 64_000),
         Center("CTR-BAYVIEW", "Bayview Commons",
                "410 E Hillsdale Blvd, San Mateo, CA 94403", "LL-PACIFIC", 48_500),
     ]
 
     clinics = [
-        Clinic("CLINIC-01", "Northbay PT — Daly City", "ENT-CA", "REG-BAY",
-               "CTR-SERRA", "Suite 210", 6_200, "outpatient"),
-        Clinic("CLINIC-02", "Northbay PT — Serramonte Hand Therapy", "ENT-CA", "REG-BAY",
-               "CTR-SERRA", "Suite 115", 3_100, "hand therapy"),
-        Clinic("CLINIC-03", "Northbay PT — San Mateo", "ENT-CA", "REG-BAY",
-               "CTR-BAYVIEW", "Suite 100", 5_400, "outpatient"),
-        Clinic("CLINIC-04", "Northbay PT — Bayview Sports Medicine", "ENT-CA", "REG-BAY",
-               "CTR-BAYVIEW", "Suite 240", 4_150, "sports medicine"),
-        Clinic("CLINIC-05", "Northbay PT — Bayview Aquatic", "ENT-CA", "REG-BAY",
-               "CTR-BAYVIEW", "Suite 305", 2_800, "aquatic therapy"),
+        Clinic("STORE-01", "Northbay Coffee — Daly City", "ENT-CA", "REG-BAY",
+               "CTR-SERRA", "Suite 210", 6_200, "café"),
+        Clinic("STORE-02", "Northbay Coffee — Serramonte Express", "ENT-CA", "REG-BAY",
+               "CTR-SERRA", "Suite 115", 3_100, "express bar"),
+        Clinic("STORE-03", "Northbay Coffee — San Mateo", "ENT-CA", "REG-BAY",
+               "CTR-BAYVIEW", "Suite 100", 5_400, "café"),
+        Clinic("STORE-04", "Northbay Coffee — Bayview Drive-Thru", "ENT-CA", "REG-BAY",
+               "CTR-BAYVIEW", "Suite 240", 4_150, "drive-thru"),
+        Clinic("STORE-05", "Northbay Coffee — Bayview Roastery", "ENT-CA", "REG-BAY",
+               "CTR-BAYVIEW", "Suite 305", 2_800, "roastery"),
     ]
 
     return Company(entity, region, people, landlords, centers, clinics, seed,
@@ -251,8 +251,8 @@ def _one(items, attr, value):
 # precisely why permission checks need both.
 
 _ENTITIES = [
-    ("ENT-NV", "Northbay Physical Therapy of Nevada, LLC", "NV"),
-    ("ENT-AZ", "Northbay Physical Therapy of Arizona, LLC", "AZ"),
+    ("ENT-NV", "Northbay Coffee Company of Nevada, LLC", "NV"),
+    ("ENT-AZ", "Northbay Coffee Company of Arizona, LLC", "AZ"),
 ]
 
 _REGIONS = [
@@ -305,25 +305,25 @@ _LANDLORDS = [
      "Darius Bennett", "dbennett@meridianstreet.example", "LL-HARBORPT"),
 ]
 
-# center_id, name, address, landlord, total rsf, how many Northbay clinics
+# center_id, name, address, landlord, total rsf, how many Northbay stores
 _CENTERS = [
-    ("CTR-WILSHIRE", "Wilshire Medical Court", "2240 Wilshire Blvd, Santa Monica, CA 90403",
+    ("CTR-WILSHIRE", "Wilshire Court", "2240 Wilshire Blvd, Santa Monica, CA 90403",
      "LL-CRESTLINE", 71_500, 5),
-    ("CTR-GLENDALE", "Glendale Health Pavilion", "520 N Brand Blvd, Glendale, CA 91203",
+    ("CTR-GLENDALE", "Glendale Pavilion", "520 N Brand Blvd, Glendale, CA 91203",
      "LL-VALLEYOAK", 58_200, 4),
-    ("CTR-HARBOR", "Harbor Point Medical Center", "3300 E Willow St, Long Beach, CA 90806",
+    ("CTR-HARBOR", "Harbor Point Center", "3300 E Willow St, Long Beach, CA 90806",
      "LL-HARBORPT", 49_800, 3),
     ("CTR-SAHARA", "Sahara Crossing", "7920 W Sahara Ave, Las Vegas, NV 89117",
      "LL-SUNRIDGE", 44_600, 4),
-    ("CTR-REDROCK", "Red Rock Professional Plaza", "6690 Via Austi Pkwy, Las Vegas, NV 89119",
+    ("CTR-REDROCK", "Red Rock Plaza", "6690 Via Austi Pkwy, Las Vegas, NV 89119",
      "LL-REDROCK", 38_900, 3),
-    ("CTR-CAMELBACK", "Camelback Medical Commons", "4480 E Camelback Rd, Phoenix, AZ 85018",
+    ("CTR-CAMELBACK", "Camelback Commons", "4480 E Camelback Rd, Phoenix, AZ 85018",
      "LL-SAGUARO", 52_300, 6),
 ]
 
 _SERVICE_LINES = [
-    "outpatient", "sports medicine", "hand therapy", "aquatic therapy",
-    "pediatric therapy", "vestibular therapy", "post-surgical rehabilitation",
+    "café", "drive-thru", "express bar", "roastery",
+    "bakery café", "reserve bar", "kiosk",
 ]
 
 _CITY_FOR = {
@@ -341,7 +341,7 @@ _REGION_FOR = {
     "CTR-CAMELBACK": ("REG-DESERT", "ENT-AZ"),
 }
 
-# Suite sizes, cycled deterministically so every clinic differs but no run does.
+# Suite sizes, cycled deterministically so every store differs but no run does.
 _RSF_CYCLE = (5_900, 3_400, 4_750, 2_950, 6_400, 3_850, 5_200, 4_100)
 
 
@@ -367,8 +367,8 @@ def _full(base: Company, seed: int) -> Company:
         for n in range(count):
             index += 1
             clinics.append(Clinic(
-                clinic_id="CLINIC-%02d" % index,
-                name="Northbay PT — %s %s" % (
+                clinic_id="STORE-%02d" % index,
+                name="Northbay Coffee — %s %s" % (
                     _CITY_FOR[center_id],
                     _SERVICE_LINES[index % len(_SERVICE_LINES)].title()),
                 entity_id=entity_id,

@@ -189,9 +189,9 @@ def datagen_replies(dup_amount=DUP_BILLED, early_amount=EARLY_DISPUTED):
     """The teammate's landlord replies, for our two disputes: the first is a
     full credit, the second a 25% partial (datagen/replies.py cycles)."""
     replies = build_replies(build_company(), [
-        {"clinic_id": "CLINIC-01", "claimed": float(dup_amount), "about": "duplicate base rent",
+        {"clinic_id": "STORE-01", "claimed": float(dup_amount), "about": "duplicate base rent",
          "sent": LETTER_DAY, "message_id": "dispute-dup-r1@lease-desk"},
-        {"clinic_id": "CLINIC-03", "claimed": float(early_amount), "about": "escalation timing",
+        {"clinic_id": "STORE-03", "claimed": float(early_amount), "about": "escalation timing",
          "sent": LETTER_DAY, "message_id": "dispute-early-r1@lease-desk"},
     ])
     assert [r.outcome for r in replies] == [FULL_CREDIT, PARTIAL_CREDIT]
