@@ -218,12 +218,6 @@ function Clear() {
   return null;
 }
 
-export default function ChainStrip3D(props: StripProps & { crackStartedAt: number | null }) {
-  const [labels, setLabels] = useState<HTMLDivElement | null>(null);
-  return (
-    <>
-      {/* the labels portal into a div of ours, so leaving the page removes them with it rather than racing the canvas */}
-      <div ref={setLabels} className="pointer-events-none absolute inset-0 z-[5]" aria-hidden />
 // Hidden (opacity 0) until the first frame has placed it, so it never flashes at the corner.
 const LABEL =
   "pointer-events-none absolute left-0 top-0 z-[5] whitespace-nowrap rounded-xs border border-line bg-surface/95 font-mono text-2xs shadow-raised";
@@ -241,9 +235,6 @@ export default function ChainStrip3D(props: Readonly<StripProps & { crackStarted
         <Clear />
         <ambientLight intensity={1.5} />
         <directionalLight position={[2, 4, 5]} intensity={1.1} />
-        {labels ? <Strip {...props} labels={labels} /> : null}
-      </Canvas>
-    </>
         <Strip {...props} labels={{ block, link }} />
       </Canvas>
       {sel ? (
