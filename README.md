@@ -20,7 +20,7 @@ Postgres and the Fetch.ai agents run on Azure.
 
 ## The moment
 
-> **$443,255.70 was missing from the balance sheet.** STORE-01's lease was
+> **$443,255.70 was missing from the balance sheet.** CLINIC-01's lease was
 > amended in June: three more years, lower rent. The amendment went to
 > facilities and never reached accounting. In July the landlord billed the new
 > rent, and the books kept running the old schedule.

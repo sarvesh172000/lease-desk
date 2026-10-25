@@ -32,8 +32,8 @@ def engine_for(engines, actor: Actor):
 
 def seed_world(conn) -> None:
     execute_raw(conn, """
-        INSERT INTO entity VALUES ('ENT-CA', 'Northbay Coffee of California', 'CA'),
-                                  ('ENT-NV', 'Northbay Coffee of Nevada', 'NV');
+        INSERT INTO entity VALUES ('ENT-CA', 'Northbay PT of California', 'CA'),
+                                  ('ENT-NV', 'Northbay PT of Nevada', 'NV');
         INSERT INTO region (id, name) VALUES ('REG-BAY', 'Bay Area'), ('REG-DESERT', 'Desert');
     """)
     conn.execute(text("""

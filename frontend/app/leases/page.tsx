@@ -164,7 +164,7 @@ function LeaseTable({ rows, regionOf, onOpen }: { rows: LeaseSummary[]; regionOf
         <thead>
           <tr className="table-head">
             <th className="py-2 pl-5 pr-2 font-semibold">Status</th>
-            <th className="px-2 py-2 font-semibold">Store</th>
+            <th className="px-2 py-2 font-semibold">Clinic</th>
             <th className="px-2 py-2 font-semibold">Region</th>
             <th className="px-2 py-2 text-right font-semibold">Monthly rent</th>
             <th className="px-2 py-2 text-right font-semibold">Liability</th>

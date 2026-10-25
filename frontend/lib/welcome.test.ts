@@ -38,7 +38,7 @@ describe("where a welcome-page figure comes from", () => {
 
 describe("the amendment case", () => {
   const row = (over: Partial<ExceptionSummary>): ExceptionSummary => ({
-    exception_id: "exc_1", lease_id: "LEASE-01", clinic_id: "STORE-01", period: "2026-01-01", charge_type: "cam_estimate",
+    exception_id: "exc_1", lease_id: "LEASE-01", clinic_id: "CLINIC-01", period: "2026-01-01", charge_type: "cam_estimate",
     expected: 1, actual: 2, delta: 1, status: "pending_review", confidence: 1, ...over,
   });
 

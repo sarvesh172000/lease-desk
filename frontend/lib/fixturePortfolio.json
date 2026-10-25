@@ -1,8 +1,8 @@
 [
  {
   "lease_id": "LEASE-02",
-  "clinic_id": "STORE-02",
-  "location": "Northbay Coffee — Serramonte Express — Suite 115",
+  "clinic_id": "CLINIC-02",
+  "location": "Northbay PT — Serramonte Hand Therapy — Suite 115",
   "lessor": "Serramonte Retail Partners LLC",
   "status": "balanced",
   "monthly_rent": 9700.0,
@@ -11,8 +11,8 @@
  },
  {
   "lease_id": "LEASE-03",
-  "clinic_id": "STORE-03",
-  "location": "Northbay Coffee — San Mateo — Suite 100",
+  "clinic_id": "CLINIC-03",
+  "location": "Northbay PT — San Mateo — Suite 100",
   "lessor": "Pacific Crest Properties LLC",
   "status": "balanced",
   "monthly_rent": 17270.11,
@@ -21,8 +21,8 @@
  },
  {
   "lease_id": "LEASE-04",
-  "clinic_id": "STORE-04",
-  "location": "Northbay Coffee — Bayview Drive-Thru — Suite 240",
+  "clinic_id": "CLINIC-04",
+  "location": "Northbay PT — Bayview Sports Medicine — Suite 240",
   "lessor": "Pacific Crest Properties LLC",
   "status": "balanced",
   "monthly_rent": 13680.0,
@@ -31,8 +31,8 @@
  },
  {
   "lease_id": "LEASE-05",
-  "clinic_id": "STORE-05",
-  "location": "Northbay Coffee — Bayview Roastery — Suite 305",
+  "clinic_id": "CLINIC-05",
+  "location": "Northbay PT — Bayview Aquatic — Suite 305",
   "lessor": "Pacific Crest Properties LLC",
   "status": "balanced",
   "monthly_rent": 8343.3,

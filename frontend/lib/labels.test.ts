@@ -22,10 +22,10 @@ describe("labels", () => {
   });
 
   it("turns a clinic's location into its place, with the id as the fallback", () => {
-    expect(placeLabel("Northbay Coffee — Daly City — Suite 210")).toBe("Daly City, Suite 210");
-    expect(placeLabel("Northbay Coffee - San Mateo — Suite 100")).toBe("San Mateo, Suite 100");
-    expect(clinicLabel("Northbay Coffee — Daly City — Suite 210", "STORE-01")).toBe("Northbay Coffee Daly City, Suite 210");
-    expect(clinicLabel(null, "STORE-01")).toBe("STORE-01");
+    expect(placeLabel("Northbay PT — Daly City — Suite 210")).toBe("Daly City, Suite 210");
+    expect(placeLabel("Northbay Physical Therapy - San Mateo — Suite 100")).toBe("San Mateo, Suite 100");
+    expect(clinicLabel("Northbay PT — Daly City — Suite 210", "CLINIC-01")).toBe("Northbay PT Daly City, Suite 210");
+    expect(clinicLabel(null, "CLINIC-01")).toBe("CLINIC-01");
     expect(placeLabel(null)).toBeNull();
   });
 

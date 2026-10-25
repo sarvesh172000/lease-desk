@@ -3,7 +3,7 @@ the answers committed in data/reference/llm_cache.
 
 The world is built the way `make demo-data` builds it: January generated,
 seeded, the leases confirmed and checked; then July generated, seeded and
-checked. STORE-01's amendment takes effect in July, so July's rent is billed
+checked. CLINIC-01's amendment takes effect in July, so July's rent is billed
 $2,226.65 under the schedule and held. Investigating that hold, with no key
 and an empty cache of its own, must find the amendment in the mailbox and
 remeasure the lease to the figures the pitch quotes.
@@ -186,7 +186,7 @@ def test_the_investigation_is_auditable_approvable_and_rechecks_july(client, jul
     assert sources["decision"]["trusted"] == "eml-20260618-amend"
     assert any(s["kind"] == "amendment" and s["rank"] == 1 for s in sources["sources"])
     why = client.get("/api/items/%d/why" % charge_item_id).json()["answer"]
-    assert "Northbay Coffee" in why and "base rent" in why
+    assert "Northbay PT" in why and "base rent" in why
     assert "amendment" in why and "rank 1" in why
 
     with engines["owner"].connect() as conn:

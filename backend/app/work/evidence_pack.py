@@ -374,7 +374,7 @@ def _render(subject: Subject, sections: List[Dict], loose: List[Dict], policies:
     for s in sections:
         item, calc = s["item"], s["calc"]
         story += [p("Work item %s: %s" % (item["id"], _esc(item["title"])), h2),
-                  p("Kind %s, state <b>%s</b>, proposal %s, store %s, period %s." % (
+                  p("Kind %s, state <b>%s</b>, proposal %s, clinic %s, period %s." % (
                       _esc(item["kind"]), _esc(item["state"]), _esc(item.get("proposal") or "none"),
                       _esc(item.get("clinic_id") or "-"), _esc(item.get("period") or "-")))]
         if item.get("reason"):

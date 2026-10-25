@@ -2,7 +2,7 @@
 
     GET /api/summary/month?period=2026-01&entity=ENT-CA
 
-"January 2026, Northbay Coffee Company of California, Inc.: 5 stores,
+"January 2026, Northbay Physical Therapy of California, Inc.: 5 clinics,
 12 charges checked, 0 approved, 5 held for $25,736.36, 0 disputes drafted,
 0 questions out, batch ready for AP: no", as structured JSON in which every
 number carries its drill-down, so the UI can make each one clickable:
@@ -223,7 +223,7 @@ def month_summary(conn: Connection, period: date, entity_id: Optional[str] = Non
                 "filter": dict(base, **flt)}
 
     metrics = {
-        "clinics": {"value": len(_clinics(conn, period, entity_id)), "label": "stores",
+        "clinics": {"value": len(_clinics(conn, period, entity_id)), "label": "clinics",
                     "drill": drill("clinics", table="landlord_charge", distinct="clinic_id")},
         "checked": {"value": len(checks), "label": "charges checked",
                     "drill": drill("checked", kind="CHARGE_CHECK")},
@@ -241,7 +241,7 @@ def month_summary(conn: Connection, period: date, entity_id: Optional[str] = Non
     }
     month_name = "%s %d" % (calendar.month_name[period.month], period.year)
     m = metrics
-    headline = ("%s, %s: %d stores, %d charges checked, %d approved, %d held for %s, "
+    headline = ("%s, %s: %d clinics, %d charges checked, %d approved, %d held for %s, "
                 "%d disputes drafted, %d questions out, batch ready for AP: %s" % (
                     month_name, name, m["clinics"]["value"], m["checked"]["value"],
                     m["approved"]["value"], m["held"]["value"], _money(held_amount),

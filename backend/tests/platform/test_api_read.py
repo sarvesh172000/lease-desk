@@ -124,8 +124,8 @@ def test_leases_lists_the_portfolio(client):
     body = client.get("/api/leases").json()
     assert [l["lease_id"] for l in body] == ["LEASE-0%d" % i for i in range(1, 6)]
     first = body[0]
-    assert first["clinic_id"] == "STORE-01"
-    assert first["location"] == "Northbay Coffee — Daly City — Suite 210"
+    assert first["clinic_id"] == "CLINIC-01"
+    assert first["location"] == "Northbay PT — Daly City — Suite 210"
     assert first["lessor"] == "Serramonte Retail Partners LLC"
     assert first["monthly_rent"] == 19626.65
     assert first["end"] == "2028-12-31"
@@ -318,7 +318,7 @@ def test_exceptions_lists_the_checker_holds(client, checked):
     cam = next(e for e in body if e["exception_id"] == "exc_%d" % cam_item(checked))
     # The fixture's own numbers: billed 6,458.33 against 5,941.67 supported.
     assert cam == {"exception_id": cam["exception_id"], "lease_id": "LEASE-01",
-                   "clinic_id": "STORE-01", "period": "2026-01-01",
+                   "clinic_id": "CLINIC-01", "period": "2026-01-01",
                    "charge_type": "cam_estimate", "expected": 5941.67, "actual": 6458.33,
                    "delta": 516.66, "status": "pending_review", "confidence": None}
 
@@ -402,7 +402,7 @@ def test_exception_detail_without_investigation_is_null(client, checked):
 
 def test_exception_detail_carries_the_recorded_investigation(client, seeded):
     item = insert_work_item(seeded["owner"], state="PROPOSED", subject_id="p",
-                            period="2026-07-01", clinic_id="STORE-01",
+                            period="2026-07-01", clinic_id="CLINIC-01",
                             evidence={"lease_id": "LEASE-01", "billed": 17400.00,
                                       "supported": 19626.65, "investigation": INVESTIGATION})
     body = client.get("/api/exceptions/exc_%d" % item).json()

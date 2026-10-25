@@ -125,7 +125,7 @@ def test_a_refused_card_button_is_refused_the_same_way(fetch_world, desk):
 
 def test_the_desert_manager_cannot_even_see_the_bay_area_item(fetch_world, desk):
     bay = open_item(fetch_world, w.RENT)
-    desert = open_item(fetch_world, "CHG-DESERT-01", clinic="STORE-21", amount="15200.00")
+    desert = open_item(fetch_world, "CHG-DESERT-01", clinic="CLINIC-21", amount="15200.00")
     pair(fetch_world, desk, "PER-RM-DESERT", DESERT_CHAT)
     inbox = desk.handle(DESERT_CHAT, "what needs me this week?")
     assert "#%d" % desert in inbox.text and "#%d" % bay not in inbox.text

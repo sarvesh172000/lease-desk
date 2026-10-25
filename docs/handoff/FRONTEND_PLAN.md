@@ -90,7 +90,7 @@ marked.
    it (`abstraction:llm` vs `abstraction:generator`). This is the core AI
    claim and today it is invisible.
 3. **Readable names, not keys (rounds 2–3).** The queue and "All charges this
-   month" show `base_rent`, `cam_estimate`, `STORE-01`, `LEASE-01`. Map
+   month" show `base_rent`, `cam_estimate`, `CLINIC-01`, `LEASE-01`. Map
    charge types to words and show the clinic's name/address with the id
    secondary.
 4. **No empty columns (round 3).** "Conf." is "—" on every row; hide a column

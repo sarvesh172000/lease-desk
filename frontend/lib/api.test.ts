@@ -169,8 +169,8 @@ describe("live API wiring", () => {
   it("lists every charge check under its exception id", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       json({ counts: {}, total: 2, items: [
-        { id: 3, kind: "CHARGE_CHECK", state: "PROPOSED", title: "b", clinic_id: "STORE-01", period: "2026-01-01", amount: 1, proposal: "approve", reason: "Matches the lease." },
-        { id: 1, kind: "CHARGE_CHECK", state: "PROPOSED", title: "a", clinic_id: "STORE-02", period: "2026-01-01", amount: 2, proposal: "hold", reason: "Suite 118" },
+        { id: 3, kind: "CHARGE_CHECK", state: "PROPOSED", title: "b", clinic_id: "CLINIC-01", period: "2026-01-01", amount: 1, proposal: "approve", reason: "Matches the lease." },
+        { id: 1, kind: "CHARGE_CHECK", state: "PROPOSED", title: "a", clinic_id: "CLINIC-02", period: "2026-01-01", amount: 2, proposal: "hold", reason: "Suite 118" },
       ] }),
     );
     vi.stubGlobal("fetch", fetchMock);

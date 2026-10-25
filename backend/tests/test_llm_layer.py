@@ -242,9 +242,9 @@ def test_refusal_raises_rather_than_returning_content(tmp_path):
 def test_usage_rolls_up_by_clinic(tmp_path):
     llm = build(tmp_path)
     llm.structured(
-        "lease_abstraction", Extracted, variables={"company": "A"}, clinic_id="STORE-3"
+        "lease_abstraction", Extracted, variables={"company": "A"}, clinic_id="CLINIC-3"
     )
-    assert llm.usage.by_clinic()["STORE-3"] > 0
+    assert llm.usage.by_clinic()["CLINIC-3"] > 0
 
 
 def test_cost_matches_published_opus_rates():

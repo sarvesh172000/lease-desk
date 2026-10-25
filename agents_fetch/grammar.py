@@ -191,9 +191,9 @@ _INBOX_RE = re.compile(
     r"what needs me(?: this week)?|what do i need to do(?: this week)?|"
     r"what needs my (?:attention|approval))[ \t]*[.?!]*$", re.IGNORECASE)
 
-_LEASE_REF = re.compile(r"LEASE-[A-Z0-9-]{1,40}|STORE-[0-9]{2,4}")
+_LEASE_REF = re.compile(r"LEASE-[A-Z0-9-]{1,40}|CLINIC-[0-9]{2,4}")
 _LEASE_ID_RE = re.compile(r"\bLEASE-[A-Za-z0-9-]{1,40}\b", re.IGNORECASE)
-_CLINIC_RE = re.compile(r"\b(?:store|clinic)[ \t\-#]*0*(\d{1,4})\b", re.IGNORECASE)
+_CLINIC_RE = re.compile(r"\bclinic[ \t\-#]*0*(\d{1,4})\b", re.IGNORECASE)
 
 # what a person calls a term -> words that appear in the term's field name
 TOPICS = {
@@ -218,7 +218,7 @@ _TOPIC_WORDS = (
 )
 # A topic as words _topic() reads back as that topic (render()).
 _TOPIC_PHRASE = {"discount": "discount rate"}
-_LEASE_HINTS = ("lease", "store", "clinic", "where does it say", "rulebook", "clause")
+_LEASE_HINTS = ("lease", "clinic", "where does it say", "rulebook", "clause")
 
 
 def _topic(text: str) -> Optional[str]:
@@ -236,7 +236,7 @@ def _lease_ref(text: str) -> Optional[str]:
         return m.group(0).upper()
     m = _CLINIC_RE.search(text)
     if m:
-        return "STORE-%02d" % int(m.group(1))
+        return "CLINIC-%02d" % int(m.group(1))
     return None
 
 
@@ -359,7 +359,7 @@ Then:
 - `investigate 42` (or `why is 42 off?`) — the investigation agent searches the mailbox for what explains it
 - `answer 42 <your answer>` — answer the open question on item 42
 - `approve 42 <reason>` / `uphold 42 <reason>` / `hold 42 <reason>` / `reject 42 <reason>` / `resume 42`
-- `what is Store 03's escalation and where does it say so?` — lease terms with page and quote
+- `what is Clinic 03's escalation and where does it say so?` — lease terms with page and quote
 - `whoami`, `unpair`
 
 Actions only run when the message starts with the action and the item number; if I read \

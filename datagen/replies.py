@@ -143,13 +143,13 @@ def _body(outcome, landlord, clinic, dispute, claimed, granted) -> str:
 
 def _default_disputes() -> List[dict]:
     return [
-        {"clinic_id": "STORE-01", "claimed": 516.66, "about": "operating expense estimate",
+        {"clinic_id": "CLINIC-01", "claimed": 516.66, "about": "operating expense estimate",
          "sent": date(2026, 2, 3), "message_id": "eml-20260203-dispute-01"},
-        {"clinic_id": "STORE-02", "claimed": 4_820.00, "about": "rent for Suite 118",
+        {"clinic_id": "CLINIC-02", "claimed": 4_820.00, "about": "rent for Suite 118",
          "sent": date(2026, 2, 3), "message_id": "eml-20260203-dispute-02"},
-        {"clinic_id": "STORE-03", "claimed": 543.61, "about": "escalation timing",
+        {"clinic_id": "CLINIC-03", "claimed": 543.61, "about": "escalation timing",
          "sent": date(2026, 2, 4), "message_id": "eml-20260204-dispute-03"},
-        {"clinic_id": "STORE-05", "claimed": 229.44, "about": "escalation frequency",
+        {"clinic_id": "CLINIC-05", "claimed": 229.44, "about": "escalation frequency",
          "sent": date(2026, 2, 4), "message_id": "eml-20260204-dispute-04"},
     ]
 

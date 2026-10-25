@@ -402,7 +402,7 @@ def test_an_approved_policy_is_cited_on_a_later_months_decision(confirmed):
                 ON CONFLICT DO NOTHING;
             INSERT INTO landlord_charge (id, lease_id, clinic_id, invoice_id, suite, period,
                                          charge_type, description, amount, raw_ref)
-            VALUES ('chg-feb-1', 'LEASE-04', 'STORE-04', 'PACIF-202602-0005', 'Suite 240',
+            VALUES ('chg-feb-1', 'LEASE-04', 'CLINIC-04', 'PACIF-202602-0005', 'Suite 240',
                     '2026-02-01', 'cam_estimate', 'Operating Expense Estimate', 3371.88,
                     'raw-feb-1');
         """))

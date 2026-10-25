@@ -164,7 +164,7 @@ function Rail({ pathname }: { pathname: string }) {
         </span>
         <span className={cn("flex min-w-0 flex-col leading-tight", compact && "sr-only")}>
           <span className="text-[0.95rem] font-semibold tracking-tight text-ink">Lease Desk</span>
-          <span className="truncate text-2xs text-ink-muted">Northbay Coffee</span>
+          <span className="truncate text-2xs text-ink-muted">Northbay Physical Therapy</span>
         </span>
       </Link>
 
@@ -366,7 +366,7 @@ function ContextPicker() {
           aria-label={`Entity Northbay Physical Therapy, period ${label}`}
           className="hidden h-9 shrink-0 items-center gap-2 rounded-sm border border-line bg-surface px-3 text-sm text-ink transition-colors sm:flex duration-fast ease-out hover:border-line-strong data-[state=open]:border-line-strong"
         >
-          <span>Northbay Coffee</span>
+          <span>Northbay PT</span>
           <span aria-hidden className="text-ink-faint">/</span>
           <span className="num font-semibold">{label}</span>
           <ChevronDown aria-hidden className="h-3.5 w-3.5 text-ink-muted" />
@@ -377,7 +377,7 @@ function ContextPicker() {
           <Menu.Label className={MENU_LABEL}>Entity</Menu.Label>
           <Menu.Item className={MENU_ITEM} disabled>
             <Check aria-hidden className="h-4 w-4 text-accent" />
-            Northbay Coffee
+            Northbay Physical Therapy
           </Menu.Item>
           <Menu.Separator className="my-1 h-px bg-line" />
           <Menu.Label className={MENU_LABEL}>Period</Menu.Label>

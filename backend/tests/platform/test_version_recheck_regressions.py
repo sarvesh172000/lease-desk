@@ -93,7 +93,7 @@ def _draft_modification(engines, version, effective, changed_terms):
             title=f"{LEASE} v{version} test amendment",
             entity_id=ENTITY,
             region_id="REG-BAY",
-            clinic_id="STORE-01",
+            clinic_id="CLINIC-01",
             period=MONTH,
             evidence=modification_evidence,
         )

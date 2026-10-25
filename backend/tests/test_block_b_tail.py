@@ -280,7 +280,7 @@ def test_the_amendment_removes_the_july_hold(july_replay):
 
 def test_the_change_is_attributed_to_the_right_charge(july_replay):
     change = next(c for c in july_replay.changes if c.kind == NOW_APPROVED)
-    assert change.clinic_id == "STORE-01"
+    assert change.clinic_id == "CLINIC-01"
     assert change.then_supported == 19_626.65
     assert change.now_supported == 17_400.00
 

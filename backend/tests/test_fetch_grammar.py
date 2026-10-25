@@ -125,8 +125,8 @@ def test_review_and_why():
 
 
 def test_lease_questions():
-    c = parse("what is Store 03's escalation and where does it say so?")
-    assert (c.name, c.lease_ref, c.topic) == ("lease", "STORE-03", "escalation")
+    c = parse("what is Clinic 03's escalation and where does it say so?")
+    assert (c.name, c.lease_ref, c.topic) == ("lease", "CLINIC-03", "escalation")
     c = parse("what's the CAM on lease-14?")
     assert (c.name, c.lease_ref, c.topic) == ("lease", "LEASE-14", "cam")
     assert parse("clinic 7 lease").topic is None
@@ -159,7 +159,7 @@ def test_commands_crossing_agent_messaging_are_revalidated():
 
 DETAIL = {
     "item": {"id": 42, "kind": "CHARGE_CHECK", "state": "PROPOSED", "proposal": "hold",
-             "title": "Parking lot repaving billed in full", "clinic_id": "STORE-03",
+             "title": "Parking lot repaving billed in full", "clinic_id": "CLINIC-03",
              "period": "2026-04-01", "amount": 9840.0},
     "evidence": {"billed": 9840.0, "supported": 1640.0, "trust_explanation": "The lease outranks an email.",
                  "confidence": 0.38},
@@ -241,7 +241,7 @@ def test_investigate_crosses_agent_messaging_and_buttons_re_checked():
 @pytest.mark.parametrize("line", ["approve 42", "approve 42 rent matches the amendment", "uphold 7 caps CAM at 5%",
                                   "hold 9 waiting on the landlord", "answer 17 yes, suite 110 is ours", "resume 3",
                                   "reject 5 duplicate", "review 42", "investigate 42", "what needs me this week?",
-                                  "lease STORE-03 escalation", "lease LEASE-01", "lease LEASE-01 discount rate"])
+                                  "lease CLINIC-03 escalation", "lease LEASE-01", "lease LEASE-01 discount rate"])
 def test_render_gives_back_the_line_that_parses_to_the_command(line):
     c = parse(line)
     assert c.name not in ("unknown", "help")

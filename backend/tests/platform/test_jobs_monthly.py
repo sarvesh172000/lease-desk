@@ -80,7 +80,7 @@ def q(eng, sql, **params):
 
 
 def _charge(cid="INV-1-L1", **kw):
-    base = dict(charge_id=cid, invoice_id="INV-1", lease_id="LEASE-01", clinic_id="STORE-01",
+    base = dict(charge_id=cid, invoice_id="INV-1", lease_id="LEASE-01", clinic_id="CLINIC-01",
                 period=JAN, charge_type="base_rent", suite="Suite 100", amount=100.0)
     base.update(kw)
     return Charge(**base)

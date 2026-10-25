@@ -442,7 +442,7 @@ def choose_route(decision: Decision, *, kind: str, amount_at_stake: Any,
                        "accounting judgement: the controller's.")
     elif decision.action == ASK:
         role, nature = REGIONAL_MANAGER, LANDLORD_FACT
-        reasons.append("What the landlord agreed to is a landlord fact: the store's "
+        reasons.append("What the landlord agreed to is a landlord fact: the clinic's "
                        "regional manager knows it.")
     elif decision.action == HOLD:
         role, nature = REGIONAL_MANAGER, LANDLORD_FACT

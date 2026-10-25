@@ -26,8 +26,8 @@ from app.work.gateway import (
 )
 
 JAN, DEC = date(2026, 1, 1), date(2025, 12, 1)
-RENT_LINES = [{"account": "Lease cost", "debit": "19626.65", "clinic_id": "STORE-01"},
-              {"account": "Accounts payable", "credit": "19626.65", "clinic_id": "STORE-01"}]
+RENT_LINES = [{"account": "Lease cost", "debit": "19626.65", "clinic_id": "CLINIC-01"},
+              {"account": "Accounts payable", "credit": "19626.65", "clinic_id": "CLINIC-01"}]
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ def test_engine_line_objects_and_tuples_are_accepted(world):
 
     a, b = w.item(world["owner"], w.RENT), w.item(world["owner"], w.CAM)
     post(world, a, [Line("Lease cost", debit=10.5), Line("Accounts payable", credit=10.5)], key="a")
-    post(world, b, [("CAM expense", 7, 0), ("Accounts payable", 0, 7, "STORE-01")], key="b")
+    post(world, b, [("CAM expense", 7, 0), ("Accounts payable", 0, 7, "CLINIC-01")], key="b")
     assert entries(world) == 2
 
 
@@ -230,8 +230,8 @@ def test_an_approved_january_rent_charge_posts_as_period_cost(world):
           JOIN account a ON a.id = l.account_id WHERE journal_entry_id = :e ORDER BY l.id
     """, e=entry)
     assert [(l["name"], l["debit"] or -l["credit"], l["clinic_id"]) for l in lines] == [
-        ("Lease cost", Decimal("19626.65"), "STORE-01"),
-        ("Accounts payable", Decimal("-19626.65"), "STORE-01")]
+        ("Lease cost", Decimal("19626.65"), "CLINIC-01"),
+        ("Accounts payable", Decimal("-19626.65"), "CLINIC-01")]
     assert state(world, item) == "POSTED"
     with world["lease_gateway"].begin() as conn:     # posting again is a no-op
         assert post_approved_charge(conn, item) == entry
