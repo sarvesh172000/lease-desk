@@ -527,45 +527,108 @@ def _route_unreadable(conn: Connection, actor, lease: Mapping, draft: Draft) -> 
 @dataclass
 class ConfirmedRules:
     rules: Dict[str, Any]                 # lease_id -> LeaseRule
-    versions: Dict[str, int]              # lease_id -> confirmed lease_version id
+    versions: Dict[str, int]              # lease_id -> terminal confirmed lease_version id
     waiting: Dict[str, str]               # lease_id -> why it cannot be checked yet
+    version_chains: Dict[str, Tuple[int, ...]] = field(default_factory=dict)
 
     @property
     def fingerprint(self) -> str:
-        """Names the set of confirmed versions; a re-check is due when it changes."""
-        return ",".join(str(v) for _, v in sorted(self.versions.items())) or "none"
+        """Names every ordered standing version chain; a re-check is due when it changes."""
+        chains = self.version_chains or {
+            lease_id: (version_id,) for lease_id, version_id in self.versions.items()
+        }
+        if not chains:
+            return "none"
+        return json.dumps(
+            {lease_id: list(chain) for lease_id, chain in sorted(chains.items())},
+            separators=(",", ":"),
+        )
 
 
 # Item states in which a confirmation stands. Approving sets confirmed_by;
 # an approved item pulled back (hold) leaves the stamp on the row as history,
 # but the version is not confirmed again until it is approved again.
 CONFIRMED_STATES = frozenset({"APPROVED", "POSTED", "CLOSED"})
+POSTED_MODIFICATION_STATES = frozenset({"POSTED"})
 
 
-def is_confirmed(confirmed_by: Optional[str], item_state: Optional[str]) -> bool:
-    return confirmed_by is not None and (item_state is None or item_state in CONFIRMED_STATES)
+def is_confirmed(confirmed_by: Optional[str], item_state: Optional[str],
+                 item_kind: Optional[str] = None) -> bool:
+    if confirmed_by is None:
+        return False
+    standing = POSTED_MODIFICATION_STATES if item_kind == "LEASE_MODIFICATION" \
+        else CONFIRMED_STATES
+    return item_state is None or item_state in standing
 
 
-def confirmed_rules(conn: Connection, entity_id: str) -> ConfirmedRules:
-    """A `LeaseRule` for every lease of the entity whose version 1 a person
-    has confirmed, built from that version's stored terms. Every other lease
-    is waiting, with the reason."""
+def confirmed_rules(conn: Connection, entity_id: str, *, as_of: date) -> ConfirmedRules:
+    """Rules from the latest standing version effective for ``as_of``.
+
+    The date is required so historical checking cannot silently use today's
+    latest version. An unconfirmed later draft never hides the last confirmed
+    version. A modification becomes standing only after gateway posting and
+    starts at its own ``effective_from`` date.
+    """
     from ..engine.charges import LeaseRule, Proof
     from ..engine.from_datagen import PROOF_TEMPLATES
 
-    leases = conn.execute(text("""
-        SELECT l.id, l.clinic_id, k.suite, v.id AS version_id, v.confirmed_by,
-               w.id AS item_id, w.state AS item_state
+    rows = conn.execute(text("""
+        SELECT l.id, l.clinic_id, k.suite, v.id AS version_id, v.version,
+               v.effective_from, v.confirmed_by, w.id AS item_id, w.state AS item_state,
+               w.kind AS item_kind,
+               CASE WHEN w.kind = :modification THEN (
+                   SELECT proposed.diff->'set'->'evidence'->'changed_terms'
+                     FROM audit_event proposed
+                    WHERE proposed.subject_type = 'work_item'
+                      AND proposed.subject_id = w.id::text
+                      AND proposed.action = 'propose' AND proposed.allowed
+                      AND proposed.actor_id = 'agent:investigation'
+                    ORDER BY proposed.seq DESC LIMIT 1
+               ) END AS changed_terms
           FROM lease l
           JOIN clinic k ON k.id = l.clinic_id
-          LEFT JOIN lease_version v ON v.lease_id = l.id AND v.version = 1
-          LEFT JOIN work_item w ON w.kind = :kind AND w.subject_type = :st
-                               AND w.subject_id = v.id::text
+          LEFT JOIN lease_version v ON v.lease_id = l.id
+          LEFT JOIN LATERAL (
+              SELECT wi.id, wi.state, wi.kind FROM work_item wi
+               WHERE wi.subject_type = :st AND wi.subject_id = v.id::text
+                 AND wi.kind IN (:abstraction, :modification)
+               ORDER BY wi.id DESC LIMIT 1
+          ) w ON true
          WHERE k.entity_id = :e
-         ORDER BY l.id
-    """), {"e": entity_id, "kind": ITEM_KIND, "st": SUBJECT}).mappings().all()
-    confirmed = [r["version_id"] for r in leases
-                 if is_confirmed(r["confirmed_by"], r["item_state"])]
+         ORDER BY l.id, v.version
+    """), {"e": entity_id, "st": SUBJECT, "abstraction": ITEM_KIND,
+             "modification": "LEASE_MODIFICATION"}).mappings().all()
+    by_lease: Dict[str, List[Mapping[str, Any]]] = {}
+    for row in rows:
+        by_lease.setdefault(row["id"], []).append(row)
+
+    chosen: Dict[str, Mapping[str, Any]] = {}
+    standing_by_lease: Dict[str, List[Mapping[str, Any]]] = {}
+    latest: Dict[str, Optional[Mapping[str, Any]]] = {}
+    for lease_id, candidates in by_lease.items():
+        versions = [r for r in candidates if r["version_id"] is not None]
+        applicable = [r for r in versions if r["effective_from"] <= as_of]
+        latest[lease_id] = max(
+            applicable or versions,
+            key=lambda r: (r["effective_from"], r["version"]),
+            default=None,
+        )
+        standing = sorted(
+            (r for r in applicable
+             if is_confirmed(r["confirmed_by"], r["item_state"], r["item_kind"])),
+            key=lambda r: (r["effective_from"], r["version"]),
+        )
+        if standing:
+            foundation = min(applicable, key=lambda r: r["version"])
+            chain = [foundation] + [
+                candidate for candidate in standing
+                if candidate["version_id"] != foundation["version_id"]
+            ]
+            standing_by_lease[lease_id] = sorted(
+                chain, key=lambda r: (r["effective_from"], r["version"]))
+            chosen[lease_id] = standing[-1]
+
+    confirmed = [r["version_id"] for chain in standing_by_lease.values() for r in chain]
     terms: Dict[int, Dict[str, Any]] = {}
     if confirmed:
         for t in conn.execute(text("""
@@ -578,42 +641,34 @@ def confirmed_rules(conn: Connection, entity_id: str) -> ConfirmedRules:
             terms.setdefault(t["lease_version_id"], {})[t["field"]] = (value, t["quote"])
 
     out = ConfirmedRules({}, {}, {})
-    for r in leases:
-        lease_id = r["id"]
-        if r["version_id"] is None:
-            out.waiting[lease_id] = "no lease_version yet: the abstraction step has not drafted it"
+    for lease_id in by_lease:
+        row = chosen.get(lease_id)
+        if row is None:
+            draft = latest.get(lease_id)
+            if draft is None:
+                out.waiting[lease_id] = (
+                    "no lease_version yet: the abstraction step has not drafted it")
+            elif draft["effective_from"] > as_of:
+                out.waiting[lease_id] = "no lease_version is effective by %s" % as_of
+            else:
+                out.waiting[lease_id] = (
+                    "lease_version %d is not confirmed (work item %s is %s); a person "
+                    "confirms it by approving that item" % (
+                        draft["version_id"], draft["item_id"] or "-",
+                        draft["item_state"] or "missing"))
             continue
-        if not is_confirmed(r["confirmed_by"], r["item_state"]):
-            out.waiting[lease_id] = (
-                "lease_version %d is not confirmed (work item %s is %s); a regional manager "
-                "confirms it by approving that item" % (
-                    r["version_id"], r["item_id"] or "-", r["item_state"] or "missing"))
-            continue
-        t = terms.get(r["version_id"], {})
+        t = terms.get(row["version_id"], {})
         missing = [f for f in RULE_FIELDS if t.get(f, (None,))[0] in (None, "")]
         try:
             if missing:
                 raise ValueError("missing %s" % ", ".join(missing))
-            start = _date(t["commencement"][0])
-            end = _date(t["expiration"][0])
-            if start is None or end is None or end < start:
-                raise ValueError("unreadable term dates")
-            rent = float(t["base_rent_monthly"][0])
-            kind = str(t["escalation_kind"][0])
-            amount = float(t["escalation_amount"][0])
+            commencement, end, steps = _composed_rent_steps(
+                standing_by_lease[lease_id], terms)
             psf = float(t["cam_estimate_psf_annual"][0])
             rsf = float(t["rentable_sf"][0])
-            if kind not in ("fixed_percent", "fixed_step"):
-                raise ValueError("escalation_kind %r" % kind)
-            # A confirmed 300% a year would hold every month of the lease;
-            # waiting on a person costs one question instead.
-            from ..agents.abstraction import percent_unit_problem
-            unit = percent_unit_problem(kind, amount)
-            if unit:
-                raise ValueError(unit)
-        except (TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             out.waiting[lease_id] = "confirmed lease_version %d cannot be checked against: %s" % (
-                r["version_id"], exc)
+                row["version_id"], exc)
             continue
         proof = {}
         for key, name in PROOF_FIELD.items():
@@ -622,14 +677,111 @@ def confirmed_rules(conn: Connection, entity_id: str) -> ConfirmedRules:
             if quote:
                 proof[key] = Proof(section, quote)
         section, template = PROOF_TEMPLATES["premises"]
-        proof["premises"] = Proof(section, template.format(suite=r["suite"]))
+        proof["premises"] = Proof(section, template.format(suite=row["suite"]))
         proof["payment_timing"] = Proof(*PROOF_TEMPLATES["payment_timing"])
         out.rules[lease_id] = LeaseRule(
-            lease_id=lease_id, clinic_id=r["clinic_id"], suite=r["suite"],
-            commencement=start, expiration=end, steps=rent_steps(start, end, rent, kind, amount),
+            lease_id=lease_id, clinic_id=row["clinic_id"], suite=row["suite"],
+            commencement=commencement, expiration=end, steps=steps,
             cam_estimate_monthly=round(rsf * psf / 12, 2), cam_estimate_psf_annual=psf,
             proof=proof)
-        out.versions[lease_id] = r["version_id"]
+        out.versions[lease_id] = row["version_id"]
+        out.version_chains[lease_id] = tuple(
+            version["version_id"] for version in standing_by_lease[lease_id]
+        )
+    return out
+
+
+def _composed_rent_steps(chain: List[Mapping[str, Any]],
+                         terms: Mapping[int, Mapping[str, Any]]):
+    """Compose posted amendment deltas without resetting unchanged rent.
+
+    Every version stores a full term snapshot for audit and display. Only the
+    fields named by its immutable ``changed_terms`` event alter the standing
+    contract. Regenerating the current rent regime from its original anchor
+    preserves anniversary boundaries for extension-only amendments.
+    """
+    from ..agents.abstraction import percent_unit_problem
+    from ..engine.charges import RentStep
+
+    base = min(chain, key=lambda row: row["version"])
+    base_terms = terms[base["version_id"]]
+    commencement = _date(base_terms["commencement"][0])
+    end = _date(base_terms["expiration"][0])
+    if commencement is None or end is None or end < commencement:
+        raise ValueError("unreadable term dates")
+    regime_start = commencement
+    regime_rent = float(base_terms["base_rent_monthly"][0])
+    kind = str(base_terms["escalation_kind"][0])
+    amount = float(base_terms["escalation_amount"][0])
+    _validate_escalation(kind, amount, percent_unit_problem)
+    steps = rent_steps(regime_start, end, regime_rent, kind, amount)
+
+    amendments = sorted(
+        (row for row in chain if row["version_id"] != base["version_id"]),
+        key=lambda row: (row["effective_from"], row["version"]),
+    )
+    for row in amendments:
+        snapshot = terms[row["version_id"]]
+        changed = _changed_terms(row)
+        effective = row["effective_from"]
+        new_end = (_date(snapshot["expiration"][0])
+                   if "expiration" in changed else end)
+        if new_end is None or new_end < effective:
+            raise ValueError("version %d has an unreadable expiration" % row["version"])
+        rent_changed = bool(changed & {
+            "base_rent_monthly", "escalation_kind", "escalation_amount",
+        })
+        if rent_changed:
+            current_rent = _rent_on(steps, effective)
+            if current_rent is None:
+                raise ValueError("version %d starts outside the standing rent schedule"
+                                 % row["version"])
+            if "base_rent_monthly" in changed:
+                regime_rent = float(snapshot["base_rent_monthly"][0])
+            else:
+                regime_rent = current_rent
+            if "escalation_kind" in changed:
+                kind = str(snapshot["escalation_kind"][0])
+            if "escalation_amount" in changed:
+                amount = float(snapshot["escalation_amount"][0])
+            _validate_escalation(kind, amount, percent_unit_problem)
+            regime_start = effective
+            prefix = _rent_before(steps, effective, RentStep)
+        else:
+            prefix = _rent_before(steps, regime_start, RentStep)
+        end = new_end
+        steps = prefix + rent_steps(regime_start, end, regime_rent, kind, amount)
+    return commencement, end, steps
+
+
+def _changed_terms(row: Mapping[str, Any]) -> set[str]:
+    raw = row.get("changed_terms")
+    return set(raw) if isinstance(raw, Mapping) else set(RULE_FIELDS)
+
+
+def _validate_escalation(kind: str, amount: float, validate) -> None:
+    if kind not in ("fixed_percent", "fixed_step"):
+        raise ValueError("escalation_kind %r" % kind)
+    problem = validate(kind, amount)
+    if problem:
+        raise ValueError(problem)
+
+
+def _rent_on(steps, when: date) -> Optional[float]:
+    for step in steps:
+        if step.start <= when <= step.end:
+            return float(step.monthly_rent)
+    return None
+
+
+def _rent_before(steps, cutoff: date, rent_step):
+    out = []
+    for step in steps:
+        if step.start >= cutoff:
+            break
+        stop = min(step.end, cutoff - timedelta(days=1))
+        if step.start <= stop:
+            out.append(rent_step(step.start, stop, step.monthly_rent))
     return out
 
 

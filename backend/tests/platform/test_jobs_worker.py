@@ -119,5 +119,8 @@ def test_once_exits_nonzero_while_a_job_is_failed_or_dead(agent, monkeypatch):
 
 
 def test_handler_for_names_the_known_kinds():
-    with pytest.raises(HandlerError, match="known: abstraction, checking, disputes, ingest, obligations"):
+    with pytest.raises(
+        HandlerError,
+        match="known: abstraction, checking, disputes, ingest, modification_recheck, obligations",
+    ):
         handler_for("bogus")

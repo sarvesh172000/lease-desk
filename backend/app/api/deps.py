@@ -7,9 +7,11 @@ The API serves as `lease_api`. `get_engine` is the same engine auth reads
 actors with (`auth.deps.api_engine`), so overriding `api_engine` covers both;
 overriding `get_engine` alone still works for read-only tests.
 
-The one other role the API process holds is `lease_gateway`, and only to call
-work/gateway.py, which posts and releases on a connection of its own role
-(PHASE_1.md group 2). No route runs its own SQL on it.
+The API process also holds narrowly used `lease_gateway` and `lease_agent`
+engines. Routes pass the gateway engine only to work/gateway.py for posting
+and batch release. Investigation persistence uses the agent engine to create
+lease-version drafts and enqueue their recheck; the `lease_api` role is never
+given either capability.
 """
 
 from datetime import date
@@ -35,8 +37,18 @@ def get_engine(eng: Engine = Depends(api_engine)) -> Engine:
 
 
 def get_gateway_engine() -> Engine:
-    """For work/gateway.py calls only: post_approved_charge, release_batch."""
+    """For work/gateway.py calls only: posting and batch release."""
     return engine("lease_gateway")
+
+
+def get_agent_engine() -> Engine:
+    """For synchronous agent work started by an API request.
+
+    Investigation persistence creates lease-version drafts and queues the
+    post-approval recheck under the same constrained role as the worker. The
+    API role is deliberately not granted those writes.
+    """
+    return engine("lease_agent")
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

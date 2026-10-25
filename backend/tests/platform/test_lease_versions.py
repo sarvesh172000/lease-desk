@@ -321,7 +321,7 @@ def test_before_any_draft_the_reason_says_so(seeded):
 def test_rules_from_confirmed_terms_match_the_lease_as_generated(seeded, generated):
     lw.draft_and_confirm(seeded, generated)
     with seeded["lease_agent"].connect() as conn:
-        confirmed = confirmed_rules(conn, ENTITY)
+        confirmed = confirmed_rules(conn, ENTITY, as_of=JAN)
     assert confirmed.waiting == {} and sorted(confirmed.rules) == LEASES
     from datagen.company import build_company
     from datagen.leases import build_leases
@@ -366,7 +366,7 @@ def test_a_confirmed_version_missing_a_term_waits_with_the_reason(seeded, genera
             DELETE FROM lease_term WHERE field = 'base_rent_monthly' AND lease_version_id =
                 (SELECT id FROM lease_version WHERE lease_id = 'LEASE-03')"""))
     with seeded["lease_agent"].connect() as conn:
-        confirmed = confirmed_rules(conn, ENTITY)
+        confirmed = confirmed_rules(conn, ENTITY, as_of=JAN)
     assert "LEASE-03" not in confirmed.rules
     assert "base_rent_monthly" in confirmed.waiting["LEASE-03"]
 
@@ -409,7 +409,7 @@ def test_a_confirmation_pulled_back_by_hold_no_longer_counts(seeded, generated):
         transition(conn, load_actor(conn, lw.RM_BAY), item["id"], "hold",
                    reason="The rent on page 3 does not match the schedule.")
     with seeded["lease_agent"].connect() as conn:
-        confirmed = confirmed_rules(conn, ENTITY)
+        confirmed = confirmed_rules(conn, ENTITY, as_of=JAN)
     assert item["lease_id"] not in confirmed.rules
     assert "HELD" in confirmed.waiting[item["lease_id"]]
 

@@ -401,3 +401,10 @@ def test_http_why_is_scoped_like_the_item_read(january, generated):
     assert c.post("/api/items/999999/why").status_code == 404
     assert c.post("/api/items/0/why").status_code == 422
     assert c.post("/api/items/%s/why" % item["id"], json={"question": "x" * 1001}).status_code == 422
+
+
+def test_negative_money_uses_a_leading_unicode_minus():
+    from app.work.why import _money
+
+    assert _money(-2226.65) == "−$2,226.65"
+    assert "$-" not in _money(-2226.65)

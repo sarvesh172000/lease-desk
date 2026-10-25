@@ -297,11 +297,25 @@ def why(conn: Connection, item_id: Any, question: Optional[str] = None, *,
 def _why_state(item: Mapping, ev: Mapping, sources: List[Mapping]) -> str:
     if item.get("kind") == "CHARGE_CHECK" and ev.get("charge_type"):
         what = ", ".join(str(x) for x in (
-            item.get("clinic_id"), ev.get("charge_type"),
+            item.get("clinic_name") or item.get("clinic_id"),
+            _charge_name(ev.get("charge_type")),
             item["period"].strftime("%B %Y") if isinstance(item.get("period"), date) else None) if x)
     else:
         what = item.get("title") or item.get("kind")
     head = "Item %s (%s) is %s" % (item["id"], what, item["state"])
+    recorded = [s for s in sources if s.get("recorded")]
+    decision = ev.get("decision") if isinstance(ev.get("decision"), Mapping) else {}
+    trusted_id = decision.get("trusted")
+    trusted_amendment = next((
+        s for s in recorded
+        if s.get("source_id") == trusted_id
+        and _first(s, "trust_rank", "rank") == 1
+        and s.get("kind") == "amendment"), None)
+    if trusted_amendment is not None:
+        explanation = str(decision.get("explanation") or "The executed amendment governs.")
+        return ("%s because the resolver trusted %s (rank 1), which states %s. %s" % (
+            head, _source_name(trusted_amendment),
+            _show(_first(trusted_amendment, "value", "claim")), explanation))
     lease = next((s for s in sources if s.get("source") == "lease_version"), None)
     invoice = next((s for s in sources if s.get("source") == "landlord_invoice"), None)
     if item.get("kind") == "CHARGE_CHECK" and invoice is not None:
@@ -430,7 +444,11 @@ def _item(conn: Connection, item_id: Any) -> Dict[str, Any]:
         iid = int(item_id)
     except (TypeError, ValueError):
         raise WhyError("not a work item id: %r" % (item_id,)) from None
-    row = conn.execute(text("SELECT * FROM work_item WHERE id = :id"), {"id": iid}).mappings().first()
+    row = conn.execute(text("""
+        SELECT w.*, c.name AS clinic_name
+          FROM work_item w LEFT JOIN clinic c ON c.id = w.clinic_id
+         WHERE w.id = :id
+    """), {"id": iid}).mappings().first()
     if row is None:
         raise WhyError("no work item %s" % iid)
     return dict(row)
@@ -506,7 +524,14 @@ def _amount(v: Any) -> Optional[str]:
 
 def _money(v: Any) -> str:
     d = _dec(v)
-    return "an unknown amount" if d is None else "${:,.2f}".format(d)
+    if d is None:
+        return "an unknown amount"
+    return "−${:,.2f}".format(abs(d)) if d < 0 else "${:,.2f}".format(d)
+
+
+def _charge_name(value: Any) -> str:
+    return {"base_rent": "base rent", "cam_estimate": "operating expense estimate"}.get(
+        str(value), str(value).replace("_", " "))
 
 
 def _day(at: Any) -> str:

@@ -192,6 +192,32 @@ def test_onboarding_proposes_the_2025_habits_with_precedents(confirmed):
     assert ev["backtest"]["matched"] >= 21 and ev["backtest"]["changed"] == 0
 
 
+def test_onboarding_resolves_each_historical_month_against_that_months_version(
+        confirmed, monkeypatch):
+    from app.jobs import lease_versions
+    from app.work import policy_learner
+
+    seen = []
+    real = lease_versions.confirmed_rules
+
+    def as_of_rules(conn, entity_id, *, as_of):
+        seen.append(as_of)
+        return real(conn, entity_id, as_of=as_of)
+
+    monkeypatch.setattr(lease_versions, "confirmed_rules", as_of_rules)
+    out = as_agent(confirmed, policy_learner.onboard, ENTITY)
+    with confirmed["lease_reader"].connect() as conn:
+        periods = list(conn.execute(text("""
+            SELECT DISTINCT c.period FROM landlord_charge c
+              JOIN clinic k ON k.id = c.clinic_id
+             WHERE k.entity_id = :entity
+               AND c.period >= '2025-01-01' AND c.period < '2026-01-01'
+             ORDER BY c.period
+        """), {"entity": ENTITY}).scalars())
+    assert seen[:len(periods)] == periods
+    assert out["leases_confirmed"] == sorted(out["leases_confirmed"])
+
+
 def test_onboarding_without_confirmed_leases_says_what_it_cannot_tell(seeded):
     out = as_agent(seeded, onboard, ENTITY)
     assert len(out["proposed"]) == 4 and out["paid_anyway"] == []

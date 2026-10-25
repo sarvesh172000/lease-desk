@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.api.deps import get_gateway_engine
+from app.api.deps import get_agent_engine, get_gateway_engine
 from app.api.exceptions import sse_delay
 from app.auth.deps import api_engine, auth_settings
 from app.auth.sessions import COOKIE_NAME, issue_token
@@ -45,7 +45,6 @@ SIGN_IN = {
     "/api/pairing/me/revoke": "a paired chat ending its own pairing (bearer token, not a cookie)",
 }
 READ_ONLY = {
-    "/api/exceptions/{exc_id}/investigate": "streams evidence already on the item; writes nothing",
     "/api/items/{item_id}/why": "POST only to carry a question; answers from read-only queries as lease_reader",
     "/api/evidence-packs": "POST only to carry the subject; builds a PDF as lease_reader, writes nothing",
 }
@@ -121,6 +120,7 @@ def make_client(engines, **overrides) -> TestClient:
     app = create_app(settings)
     app.dependency_overrides[api_engine] = lambda: engines["lease_api"]
     app.dependency_overrides[get_gateway_engine] = lambda: engines["lease_gateway"]
+    app.dependency_overrides[get_agent_engine] = lambda: engines["lease_agent"]
     app.dependency_overrides[auth_settings] = lambda: settings
     app.dependency_overrides[sse_delay] = lambda: 0
     return TestClient(app)

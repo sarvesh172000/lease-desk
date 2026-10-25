@@ -50,7 +50,7 @@ import math
 import re
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -62,9 +62,11 @@ from ..agents import investigation_run
 from ..auth.deps import SessionActor, current_actor
 from ..docs.storage import LocalStorage
 from ..records.ingest import stable_id
-from ..work import charges
+from ..work import charges, modifications
+from ..work.roles import Actor
+from ..work.transitions import record_denial
 from . import evidence as where
-from .deps import get_data_dir, get_engine, get_gateway_engine, get_storage
+from .deps import get_agent_engine, get_data_dir, get_engine, get_gateway_engine, get_storage
 from .items import perform
 from .schemas import (
     ApproveResult,
@@ -96,7 +98,8 @@ CLOSED_STATES = ("POSTED", "CLOSED", "REJECTED")
 _ID = re.compile(r"^exc_([1-9][0-9]{0,17})$")
 
 _SELECT = """
-    SELECT w.id, w.state, w.clinic_id, w.period, w.amount, w.evidence, w.proposal, w.reason,
+    SELECT w.id, w.state, w.clinic_id, w.region_id, w.entity_id, w.period, w.amount,
+           w.evidence, w.proposal, w.reason, w.last_event_seq,
            c.id          AS charge_id,
            c.lease_id    AS charge_lease_id,
            c.clinic_id   AS charge_clinic_id,
@@ -236,7 +239,9 @@ def investigation_runner() -> Callable[..., Any]:
 
 @router.post("/exceptions/{exc_id}/investigate", response_class=StreamingResponse,
              responses={200: {"content": {"text/event-stream": {}}}})
-def investigate(exc_id: str, eng: Engine = Depends(get_engine),
+def investigate(exc_id: str, actor: SessionActor = Depends(current_actor),
+                eng: Engine = Depends(get_engine),
+                agent_engine: Engine = Depends(get_agent_engine),
                 data_dir: Path = Depends(get_data_dir),
                 storage: Optional[LocalStorage] = Depends(get_storage),
                 delay: float = Depends(sse_delay),
@@ -261,9 +266,12 @@ def investigate(exc_id: str, eng: Engine = Depends(get_engine),
     """
     with eng.connect() as conn:
         row = _row(conn, exc_id)
+        _authorize_investigation(conn, row, actor)
+        _require_recordable_investigation(row)
         flat = _flatten(row)
         lease_sha = _lease_sha(conn, data_dir, flat["lease_id"])
-    frames = _investigation_stream(eng, row["id"], flat, storage, lease_sha, run)
+    frames = _investigation_stream(
+        agent_engine, row["id"], row["last_event_seq"], flat, storage, lease_sha, run)
 
     def stream() -> Iterator[str]:
         for i, frame in enumerate(frames):
@@ -275,13 +283,41 @@ def investigate(exc_id: str, eng: Engine = Depends(get_engine),
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
+def _authorize_investigation(conn: Connection, row: Mapping[str, Any],
+                             actor: SessionActor) -> None:
+    if actor.entity_id is not None and row.get("entity_id") != actor.entity_id:
+        raise HTTPException(404, "no exception 'exc_%s'" % row["id"])
+    if actor.role == "regional_manager" and row.get("region_id") != actor.region_id:
+        raise HTTPException(404, "no exception 'exc_%s'" % row["id"])
+    if actor.role in ("controller", "regional_manager"):
+        return
+    reason = "role %s may not investigate a CHARGE_CHECK item" % actor.role
+    record_denial(
+        conn, Actor(actor.id, actor.role, actor.region_id, actor.entity_id),
+        "investigate", row, reason)
+    raise HTTPException(403, reason)
+
+
+def _require_recordable_investigation(row: Mapping[str, Any]) -> None:
+    evidence = row.get("evidence") if isinstance(row.get("evidence"), Mapping) else {}
+    if isinstance(evidence.get("investigation"), Mapping) and evidence["investigation"]:
+        return
+    if row.get("state") != "PROPOSED":
+        raise HTTPException(
+            409,
+            "exception exc_%s is %s; investigate it only while it awaits review"
+            % (row["id"], row.get("state")),
+        )
+
+
 def _sse(event: dict) -> str:
     return "data: %s\n\n" % json.dumps(event)
 
 
-def _investigation_stream(eng: Engine, item_id: int, flat: Dict[str, Any],
-                          storage: Optional[LocalStorage], lease_sha: Optional[str],
-                          run: Callable[..., Any]) -> Iterator[Dict[str, Any]]:
+def _investigation_stream(eng: Engine, item_id: int, expected_event_seq: Optional[int],
+                          flat: Dict[str, Any], storage: Optional[LocalStorage],
+                          lease_sha: Optional[str], run: Callable[..., Any]
+                          ) -> Iterator[Dict[str, Any]]:
     """The frames, lazily: the agent runs once the response has started."""
     raw = flat["evidence"].get("investigation")
     if isinstance(raw, dict) and raw:
@@ -309,26 +345,33 @@ def _investigation_stream(eng: Engine, item_id: int, flat: Dict[str, Any],
         return
 
     payload = investigation_run.to_payload(result)
-    yield from _replay(flat, payload, searched=searched)
+    payload.setdefault("searched", searched)
+    canonical_payload = payload
+    record_error = None
     try:
-        _record(eng, item_id, payload)
-    except Exception:  # noqa: BLE001 - the finding stands even if recording fails
+        recorded = _record(eng, item_id, expected_event_seq, result, payload)
+        canonical_payload = dict(recorded.payload)
+    except Exception as exc:  # noqa: BLE001 - the finding can still be shown honestly
         log.exception("could not record the investigation on work item %s", item_id)
+        record_error = exc
+    yield from _replay(flat, canonical_payload)
+    if record_error is not None:
         yield {"stage": "error",
                "message": "Found, but could not be recorded; it will not survive a reload."}
 
 
-def _record(eng: Engine, item_id: int, payload: dict) -> None:
-    """Merge the investigation into the item's evidence, leaving the checker's
-    own findings untouched."""
-    with eng.connect() as conn:
-        with conn.begin():
-            conn.execute(text("""
-                UPDATE work_item
-                   SET evidence = COALESCE(evidence, '{}'::jsonb)
-                                  || jsonb_build_object('investigation', CAST(:inv AS jsonb))
-                 WHERE id = :id
-            """), {"id": item_id, "inv": json.dumps(payload)})
+def _record(eng: Engine, item_id: int, expected_event_seq: Optional[int],
+            result: Any, payload: Mapping[str, Any]) -> modifications.RecordedInvestigation:
+    """Record through an agent-attributed transition, never a raw UPDATE.
+
+    The same transaction also re-resolves the charge with the trusted
+    amendment and, for a settled result, creates the unconfirmed version and
+    controller approval item. The transition's complete evidence patch is
+    therefore exactly what ``make replay`` reconstructs.
+    """
+    with eng.begin() as conn:
+        return modifications.record_investigation(
+            conn, item_id, result, payload, expected_event_seq=expected_event_seq)
 
 
 def _checker_frames(flat: Dict[str, Any], storage: Optional[LocalStorage],
@@ -361,6 +404,10 @@ def _checker_frames(flat: Dict[str, Any], storage: Optional[LocalStorage],
 def _replay(flat: Dict[str, Any], raw: dict, searched: Optional[int] = None) -> List[Dict[str, Any]]:
     """An investigation, stage by stage, read off what it recorded."""
     inv = _investigation(raw) or Investigation()
+    if searched is None:
+        recorded_searched = raw.get("searched")
+        if isinstance(recorded_searched, int) and not isinstance(recorded_searched, bool):
+            searched = recorded_searched
     if searched is not None:
         message = "Searching %s documents…" % "{:,}".format(searched)
     else:

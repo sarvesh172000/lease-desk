@@ -22,6 +22,11 @@ The three monthly steps, and what each honestly does today:
   reminders    Not a monthly step: one run per business date (jobs/reminders.py)
                reminds, escalates and releases undisputed amounts for open
                questions.
+  modification_recheck
+               Rechecks the amendment's effective month after the controller
+               approves its lease modification and the gateway posts it. The
+               durable job waits without spending attempts while posting is
+               still pending.
 
 And the policy engine's jobs (work/policy_learner.py, work/policies.py):
 
@@ -125,6 +130,12 @@ def policy_backtest(conn: Connection, payload: Mapping[str, Any]) -> Dict[str, A
             "backtest": summary(out["backtest"])}
 
 
+def modification_recheck(conn: Connection, payload: Mapping[str, Any]) -> Dict[str, Any]:
+    from ..work.modifications import run_recheck
+
+    return run_recheck(conn, payload)
+
+
 def _summarize(out: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in out.items() if k != "backtest"}
 
@@ -141,6 +152,7 @@ HANDLERS: Dict[str, Handler] = {
     "policy_learn": policy_learn,
     "policy_onboard": policy_onboard,
     "policy_backtest": policy_backtest,
+    "modification_recheck": modification_recheck,
 }
 
 

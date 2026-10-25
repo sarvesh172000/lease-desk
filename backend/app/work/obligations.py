@@ -63,6 +63,7 @@ STATEMENT_DAYS = 120                   # Section 4.6
 AUDIT_DAYS = 180                       # Section 4.7
 
 CONFIRMED_STATES = ("APPROVED", "POSTED", "CLOSED")
+POSTED_MODIFICATION_STATES = ("POSTED",)
 
 # The lease form's clauses (datagen/render_lease.py renders these sentences;
 # the section numbers are a fact about the template, like
@@ -148,12 +149,20 @@ def lease_terms(conn: Connection, lease_id: str) -> Tuple[Dict[str, Term], str]:
           FROM lease_version v
           JOIN lease_term t ON t.lease_version_id = v.id
          WHERE v.lease_id = :lease AND v.confirmed_by IS NOT NULL
-           AND coalesce((SELECT w.state FROM work_item w
-                          WHERE w.subject_type = 'lease_version' AND w.subject_id = v.id::text
-                          ORDER BY w.id DESC LIMIT 1), 'APPROVED') = ANY(:ok)
+           AND coalesce((
+               SELECT CASE
+                        WHEN w.kind = 'LEASE_MODIFICATION' THEN w.state = ANY(:mod_ok)
+                        ELSE w.state = ANY(:ok)
+                      END
+                 FROM work_item w
+                WHERE w.subject_type = 'lease_version' AND w.subject_id = v.id::text
+                ORDER BY w.id DESC LIMIT 1
+           ), true)
            AND t.field = ANY(:fields)
          ORDER BY v.version DESC
-    """), {"lease": lease_id, "ok": list(CONFIRMED_STATES), "fields": list(FIELDS)}).mappings()
+    """), {"lease": lease_id, "ok": list(CONFIRMED_STATES),
+             "mod_ok": list(POSTED_MODIFICATION_STATES),
+             "fields": list(FIELDS)}).mappings()
     terms: Dict[str, Term] = {}
     for r in rows:
         if r["field"] in terms:
