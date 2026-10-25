@@ -13,6 +13,11 @@ looking in the mailbox for why. It never pays and never signs off: a person
 approves, under role checks, and every action is written to a hash-chained
 audit trail.
 
+**Try it live:** https://lease-desk-ten.vercel.app. Sign in as
+`priya.raghunathan@northbaypt.example`, password `demo` (the controller), and
+open the July hold on LEASE-01. The web app is on Vercel; the API, worker,
+Postgres and the Fetch.ai agents run on Azure.
+
 ## The moment
 
 > **$443,255.70 was missing from the balance sheet.** CLINIC-01's lease was
@@ -189,7 +194,11 @@ investigation and remeasurement, approvals through the gateway, the
 hash-chained audit, policies, disputes, obligations, the web app, the ASI:One
 agents and the SpacetimeDB mirror.
 
-**Not yet:** a hosted deployment (Azure, in progress), extraction scored on
+**Hosted:** the web app on Vercel (https://lease-desk-ten.vercel.app), the
+API, worker, Postgres and agents on Azure Container Apps; see
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+**Not yet:** extraction scored on
 the real SEC exhibits (the schema needs optional fields first, so a lease that
 is silent on a term isn't forced to answer), finance-lease classification,
 and variable or percentage rent.
