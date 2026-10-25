@@ -25,6 +25,19 @@ export function ConfidenceMeter({ value }: { value: number }) {
  * One piece of evidence: the quoted sentence first, then who said it and how
  * much that counts (the trust ladder, rank 1 at the top).
  */
+/** An email address breaks after its "@" when the line is too short, never in the middle of a word. */
+function breakable(text: string) {
+  const at = text.indexOf("@");
+  if (at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at + 1)}
+      <wbr />
+      {text.slice(at + 1)}
+    </>
+  );
+}
+
 export function EvidenceCard({
   evidence,
   confidence,
@@ -58,8 +71,8 @@ export function EvidenceCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="eyebrow">Evidence{rootCause ? ` · ${rootCauseLabel(rootCause)}` : ""}</div>
-          <div className="mt-0.5 truncate text-sm font-medium text-ink" title={evidence.source}>
-            {evidence.source}
+          <div className="mt-0.5 break-words text-sm font-medium leading-snug text-ink" title={evidence.source}>
+            {breakable(evidence.source)}
           </div>
           <div className="text-xs text-ink-muted">
             {[evidence.date ? day(evidence.date) : null, evidence.page != null ? `p.${evidence.page}` : "email"].filter(Boolean).join(" · ")}

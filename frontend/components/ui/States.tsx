@@ -7,9 +7,10 @@ export function Skeleton({ className }: { className?: string }) {
 }
 
 /** Placeholder rows shaped like the content they stand in for. */
-export function LoadingBlock({ rows = 4, label = "Loading" }: { rows?: number; label?: string }) {
+export function LoadingBlock({ rows = 4, label = "Loading", className }: { rows?: number; label?: string; className?: string }) {
   return (
-    <div role="status" aria-label={label} className="space-y-3 py-1">
+    // `className` sets the height the loaded content will take, so nothing below it jumps
+    <div role="status" aria-label={label} className={cn("space-y-3 py-1", className)}>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="flex items-center gap-4">
           <Skeleton className="h-4 w-1/4" />

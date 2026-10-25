@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const DAY = 86_400_000;
-const LABEL_W = 250;
+const LABEL_W = 300; // wide enough for "Serramonte Hand Therapy, Suite 115" at 14px
 
 export interface RunwayProps {
   leases: LeaseSummary[];

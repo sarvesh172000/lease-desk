@@ -149,7 +149,7 @@ function Rail({ pathname }: { pathname: string }) {
         </span>
         <span className={cn("flex flex-col leading-tight", compact && "sr-only")}>
           <span className="text-[0.95rem] font-semibold tracking-tight text-ink">Lease Desk</span>
-          <span className="text-2xs text-ink-muted">Northbay Physical Therapy</span>
+          <span className="truncate text-2xs text-ink-muted">Northbay Physical Therapy</span>
         </span>
       </Link>
 

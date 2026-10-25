@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { ShieldCheck, ShieldOff } from "lucide-react";
-import { useApiHealth, useAudit, useDataSource } from "@/lib/hooks";
+import { useApiHealth, useAuditWhen, useDataSource, useSignedIn } from "@/lib/hooks";
 import { actorKind, attemptLabel } from "@/lib/labels";
 import { useProof, type ProofRefusal } from "@/lib/proof";
 import type { AuditEvent } from "@/lib/types";
@@ -39,7 +39,8 @@ export function BeatTrust() {
   const reduce = useReducedMotion();
   const source = useDataSource();
   const health = useApiHealth();
-  const audit = useAudit();
+  const signedIn = useSignedIn();
+  const audit = useAuditWhen(source === "api" && signedIn);
   const proof = useProof();
   const live = figureSource({ source, reachable: health.reachable, liveOk: audit.isSuccess, asOf: audit.data?.events.at(-1)?.at ?? null });
   const limits = proof.data?.limits ?? null;

@@ -210,7 +210,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
                 <div className="font-semibold">
                   Checker proposes <span className={ex.proposal === "hold" ? "text-bad" : "text-ok"}>{ex.proposal ?? "—"}</span>
                 </div>
-                <div className="line-clamp-2 text-sm text-ink-soft" title={ex.reason}>
+                <div className="line-clamp-3 text-sm text-ink-soft" title={ex.reason}>
                   {ex.reason}
                 </div>
               </>

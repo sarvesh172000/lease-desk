@@ -1,0 +1,317 @@
+{
+  "base": "http://localhost:3002",
+  "theme": "dark",
+  "reducedMotion": false,
+  "pathMs": 200209,
+  "console": [],
+  "network": [
+    {
+      "step": "setup",
+      "status": "failed",
+      "url": "net::ERR_UNSAFE_PORT"
+    }
+  ],
+  "steps": [
+    {
+      "name": "welcome",
+      "did": true,
+      "readyMs": 111,
+      "total": 522,
+      "cls": 0,
+      "url": "/welcome",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "login",
+      "did": true,
+      "readyMs": 107,
+      "total": 109,
+      "cls": 0.021,
+      "url": "/login",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.021,
+          "t": 17,
+          "who": [
+            "div.w-full.max-w-[420px]"
+          ],
+          "moved": [
+            -115
+          ]
+        }
+      ]
+    },
+    {
+      "name": "today",
+      "did": true,
+      "readyMs": 103,
+      "total": 106,
+      "cls": 0,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "money",
+      "did": true,
+      "readyMs": 413,
+      "total": 413,
+      "cls": 0.212,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.039,
+          "t": 53,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div[balance-assertion].mt-3.flex.items-center",
+            "span.flex.h-7.w-7"
+          ],
+          "moved": [
+            0,
+            776,
+            0
+          ]
+        },
+        {
+          "v": 0.029,
+          "t": 69,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.138,
+          "t": 281,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "investigate",
+      "did": false,
+      "readyMs": null,
+      "total": 30081,
+      "cls": 0,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "why",
+      "did": true,
+      "readyMs": null,
+      "total": 30090,
+      "cls": 0,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "evidence-pack",
+      "did": true,
+      "readyMs": 1,
+      "total": 2,
+      "cls": 0,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "switch-dana",
+      "did": true,
+      "readyMs": 12,
+      "total": 545,
+      "cls": 0.001,
+      "url": "/exceptions/exc_01_jul_amendment",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "dana-today",
+      "did": true,
+      "readyMs": 9,
+      "total": 10,
+      "cls": 0.11,
+      "url": "/",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.038,
+          "t": 15,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col"
+          ],
+          "moved": [
+            0,
+            17
+          ]
+        },
+        {
+          "v": 0.03,
+          "t": 32,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span.relative.flex-1"
+          ],
+          "moved": [
+            0,
+            17,
+            9
+          ]
+        },
+        {
+          "v": 0.017,
+          "t": 52,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[2 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.023,
+          "t": 153,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span[2 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            17,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "jan-hold",
+      "did": false,
+      "readyMs": null,
+      "total": 15045,
+      "cls": 0,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "uphold",
+      "did": false,
+      "readyMs": null,
+      "total": 20676,
+      "cls": 0,
+      "url": "/",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "disputes",
+      "did": true,
+      "readyMs": null,
+      "total": 15034,
+      "cls": 0,
+      "url": "/disputes",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "dispute-letter",
+      "did": false,
+      "readyMs": null,
+      "total": 15035,
+      "cls": 0,
+      "url": "/disputes",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "audit",
+      "did": true,
+      "readyMs": 181,
+      "total": 183,
+      "cls": 0,
+      "url": "/audit",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "month",
+      "did": true,
+      "readyMs": null,
+      "total": 15039,
+      "cls": 0,
+      "url": "/month",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "leases",
+      "did": true,
+      "readyMs": 7,
+      "total": 8,
+      "cls": 0,
+      "url": "/leases",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "lease-detail",
+      "did": true,
+      "readyMs": null,
+      "total": 15026,
+      "cls": 0,
+      "url": "/leases/LEASE-01",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "cold-today",
+      "cold": true,
+      "readyMs": 116,
+      "total": 123,
+      "nav": {
+        "dcl": 16,
+        "load": 44,
+        "ttfb": 4
+      },
+      "url": "/"
+    },
+    {
+      "name": "cold-money",
+      "cold": true,
+      "readyMs": 433,
+      "total": 480,
+      "nav": {
+        "dcl": 48,
+        "load": 80,
+        "ttfb": 40
+      },
+      "url": "/exceptions/exc_01_jul_amendment"
+    }
+  ]
+}

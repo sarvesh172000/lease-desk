@@ -119,10 +119,13 @@ function Dispute({ d }: { d: DisputeDetail }) {
         <Card className="overflow-hidden">
           <CardHeader
             eyebrow={`To ${d.notice_to.name}`}
-            title={`Attn ${d.notice_to.attn} · ${d.notice_to.email}`}
+            title={`Attn ${d.notice_to.attn}`}
             actions={
-              <span className="flex items-center gap-1 text-xs text-ink-muted">
-                <Mail aria-hidden className="h-3.5 w-3.5" /> {d.notice_to.address}
+              <span className="flex flex-col items-end text-right text-xs text-ink-muted">
+                <span className="flex items-center gap-1">
+                  <Mail aria-hidden className="h-3.5 w-3.5" /> {d.notice_to.email}
+                </span>
+                <span>{d.notice_to.address}</span>
               </span>
             }
           />

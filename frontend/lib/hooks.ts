@@ -145,6 +145,25 @@ export function useAudit(leaseId?: string) {
   return useQuery({ queryKey: ["audit", leaseId ?? null], queryFn: () => getAudit(leaseId) });
 }
 
+/**
+ * The same queries, asked only when a session exists: the welcome page shows live
+ * figures to whoever is signed in and never sends a stranger's call to a 401.
+ */
+export function useSummaryWhen(enabled: boolean) {
+  return useQuery({ queryKey: ["summary"], queryFn: getSummary, enabled });
+}
+export function useAuditWhen(enabled: boolean) {
+  return useQuery({ queryKey: ["audit", null], queryFn: () => getAudit(), enabled });
+}
+export function useExceptionsWhen(enabled: boolean) {
+  return useQuery({ queryKey: ["exceptions"], queryFn: getExceptions, enabled });
+}
+/** Whether someone is signed in, as far as the API has said so far. */
+export function useSignedIn(): boolean {
+  const me = useMe();
+  return me.isSuccess && me.data != null;
+}
+
 export function useDocumentPages(docId?: string | null) {
   return useQuery({
     queryKey: ["document-pages", docId],

@@ -60,7 +60,7 @@ export default function TodayPage() {
       ) : role === "auditor" ? (
         <AuditorHero />
       ) : exceptions.isLoading ? (
-        <LoadingBlock rows={2} label="Loading today's item" />
+        <LoadingBlock rows={2} label="Loading today's item" className="min-h-[11rem] rounded-md border border-line bg-surface p-6" />
       ) : hero ? (
         <HeroCard ex={hero} lease={heroLease} eyebrow={role === "regional_manager" ? "Your region · needs a decision" : "Needs you first"} />
       ) : exceptions.isSuccess ? (
@@ -82,7 +82,7 @@ export default function TodayPage() {
           />
           {exceptions.isLoading ? (
             <CardBody>
-              <LoadingBlock rows={3} label="Loading exceptions" />
+              <LoadingBlock rows={3} label="Loading exceptions" className="min-h-[19rem]" />
             </CardBody>
           ) : exceptions.isError ? (
             <CardBody>
@@ -130,7 +130,7 @@ function ApHero({ asOf }: { asOf: string | null }) {
       />
       <CardBody>
         {!period || month.isLoading ? (
-          <LoadingBlock rows={2} label="Loading the batch" />
+          <LoadingBlock rows={2} label="Loading the batch" className="min-h-[7rem]" />
         ) : notLive ? (
           <EmptyState title="Batch readiness needs the live API.">The offline demo has no month run to report on.</EmptyState>
         ) : month.isError ? (
@@ -193,7 +193,7 @@ function QuestionsPanel() {
       />
       <CardBody>
         {q.isLoading ? (
-          <LoadingBlock rows={2} label="Loading questions" />
+          <LoadingBlock rows={2} label="Loading questions" className="min-h-[7rem]" />
         ) : q.isError ? (
           <ErrorState title="Questions unavailable" error={q.error} onRetry={() => q.refetch()} />
         ) : !q.data?.questions.length ? (
@@ -240,7 +240,7 @@ function RefusedPanel() {
       />
       <CardBody>
         {audit.isLoading ? (
-          <LoadingBlock rows={2} />
+          <LoadingBlock rows={2} label="Loading activity" className="min-h-[14rem]" />
         ) : !refused.length ? (
           <EmptyState title="Nothing refused yet.">Every attempt so far was within its role.</EmptyState>
         ) : (

@@ -47,7 +47,9 @@ const config: Config = {
         serif: ["Georgia", "Times New Roman", "serif"],
       },
       fontSize: {
-        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+        // nothing on a projector below 13px: both small sizes land there, 2xs keeps its tracking for eyebrows
+        "2xs": ["0.8125rem", { lineHeight: "1.125rem" }],
+        xs: ["0.8125rem", { lineHeight: "1.125rem" }],
         "display": ["clamp(2.75rem, 7vw, 5.5rem)", { lineHeight: "0.95", letterSpacing: "-0.035em" }],
         "headline": ["clamp(1.75rem, 3.4vw, 2.75rem)", { lineHeight: "1.1", letterSpacing: "-0.02em" }],
       },

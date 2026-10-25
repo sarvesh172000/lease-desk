@@ -13,7 +13,7 @@
 import { afterCrack } from "@/lib/chain";
 import { Html } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { StripProps } from "./ChainStrip";
 
@@ -27,7 +27,7 @@ function token(name: string, fallback: string): string {
 
 const short = (h?: string | null) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "—");
 
-function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedAt }: StripProps & { crackStartedAt: number | null }) {
+function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedAt, labels }: StripProps & { crackStartedAt: number | null; labels: HTMLDivElement }) {
   const group = useRef<THREE.Group>(null);
   const { viewport } = useThree();
   const selIdx = useMemo(() => (selectedSeq == null ? events.length - 1 : events.findIndex((e) => e.seq === selectedSeq)), [events, selectedSeq]);
@@ -135,7 +135,7 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
         </mesh>
       ) : null}
       {sel ? (
-        <Html position={[selIdx * GAP, 1.05, 0.6]} center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
+        <Html portal={{ current: labels }} position={[selIdx * GAP, 1.05, 0.6]} center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
           <div className="whitespace-nowrap rounded-xs border border-line bg-surface/95 px-2 py-1 font-mono text-2xs text-ink shadow-raised">
             <span className="text-ink-muted">#{sel.seq}</span> {sel.actor_name ?? sel.actor_id} · {sel.action}
             {!sel.allowed ? <span className="ml-1.5 font-semibold text-bad">REFUSED</span> : null}
@@ -143,7 +143,7 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
         </Html>
       ) : null}
       {sel && prev ? (
-        <Html position={[(selIdx - 0.5) * GAP, -0.42, 0.3]} center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
+        <Html portal={{ current: labels }} position={[(selIdx - 0.5) * GAP, -0.42, 0.3]} center zIndexRange={[5, 0]} style={{ pointerEvents: "none" }}>
           <div className="whitespace-nowrap rounded-xs border border-line bg-surface/95 px-2 py-0.5 font-mono text-2xs text-ink-muted shadow-raised">
             #{prev.seq} hash <span className="text-ink">{short(prev.hash)}</span> → #{sel.seq} prev_hash <span className={sel.prev_hash === prev.hash ? "text-ok" : "text-bad"}>{short(sel.prev_hash)}</span>
           </div>
@@ -162,12 +162,17 @@ function Clear() {
 }
 
 export default function ChainStrip3D(props: StripProps & { crackStartedAt: number | null }) {
+  const [labels, setLabels] = useState<HTMLDivElement | null>(null);
   return (
-    <Canvas className="!absolute inset-0" dpr={[1, 2]} camera={{ position: [0, 1.1, 5.2], fov: 32, near: 0.1, far: 60 }} gl={{ antialias: true, alpha: true }} aria-hidden>
-      <Clear />
-      <ambientLight intensity={1.5} />
-      <directionalLight position={[2, 4, 5]} intensity={1.1} />
-      <Strip {...props} />
-    </Canvas>
+    <>
+      {/* the labels portal into a div of ours, so leaving the page removes them with it rather than racing the canvas */}
+      <div ref={setLabels} className="pointer-events-none absolute inset-0 z-[5]" aria-hidden />
+      <Canvas className="!absolute inset-0" dpr={[1, 2]} camera={{ position: [0, 1.1, 5.2], fov: 32, near: 0.1, far: 60 }} gl={{ antialias: true, alpha: true }} aria-hidden>
+        <Clear />
+        <ambientLight intensity={1.5} />
+        <directionalLight position={[2, 4, 5]} intensity={1.1} />
+        {labels ? <Strip {...props} labels={labels} /> : null}
+      </Canvas>
+    </>
   );
 }

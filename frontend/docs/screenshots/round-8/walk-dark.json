@@ -1,0 +1,487 @@
+{
+  "base": "http://localhost:3000",
+  "theme": "dark",
+  "reducedMotion": false,
+  "pathMs": 54338,
+  "console": [],
+  "network": [
+    {
+      "step": "setup",
+      "status": 401,
+      "url": "/api/auth/me"
+    },
+    {
+      "step": "welcome",
+      "status": 401,
+      "url": "/api/auth/me"
+    }
+  ],
+  "steps": [
+    {
+      "name": "welcome",
+      "did": true,
+      "readyMs": 131,
+      "total": 540,
+      "cls": 0,
+      "url": "/welcome",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "login",
+      "did": true,
+      "readyMs": 107,
+      "total": 108,
+      "cls": 0.019,
+      "url": "/login",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.019,
+          "t": 21,
+          "who": [
+            "div.w-full.max-w-[420px]"
+          ],
+          "moved": [
+            -115
+          ]
+        }
+      ]
+    },
+    {
+      "name": "today",
+      "did": true,
+      "readyMs": 105,
+      "total": 107,
+      "cls": 0.094,
+      "url": "/",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.085,
+          "t": 105,
+          "who": [
+            "?",
+            "?",
+            "td.py-2.px-2"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "money",
+      "did": true,
+      "readyMs": 409,
+      "total": 410,
+      "cls": 0.228,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.034,
+          "t": 33,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.143,
+          "t": 49,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.044,
+          "t": 237,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[data-source].rounded-xs.border.px-1",
+            "span.flex.h-7.w-7"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "investigate",
+      "did": true,
+      "readyMs": 7498,
+      "total": 7513,
+      "cls": 0.024,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.019,
+          "t": 3249,
+          "who": [
+            "div.grid.grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px].gap-4",
+            "div.relative.col-span-2.grid",
+            "div[Confidence 100%].flex.items-center.gap-2.5"
+          ],
+          "moved": [
+            -37,
+            -37,
+            -19
+          ]
+        }
+      ]
+    },
+    {
+      "name": "why",
+      "did": true,
+      "readyMs": 104,
+      "total": 112,
+      "cls": 0,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "evidence-pack",
+      "did": true,
+      "readyMs": 2,
+      "total": 5,
+      "cls": 0,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "switch-dana",
+      "did": true,
+      "readyMs": 106,
+      "total": 633,
+      "cls": 0.004,
+      "url": "/exceptions/exc_18",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "dana-today",
+      "did": true,
+      "readyMs": 108,
+      "total": 111,
+      "cls": 0.11,
+      "url": "/",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.037,
+          "t": 35,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col"
+          ],
+          "moved": [
+            0,
+            17
+          ]
+        },
+        {
+          "v": 0.03,
+          "t": 51,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span.relative.flex-1"
+          ],
+          "moved": [
+            0,
+            17,
+            9
+          ]
+        },
+        {
+          "v": 0.026,
+          "t": 90,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[6 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.011,
+          "t": 150,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[6 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "jan-hold",
+      "did": true,
+      "readyMs": 102,
+      "total": 103,
+      "cls": 0.182,
+      "url": "/exceptions/exc_6",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.034,
+          "t": 34,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.097,
+          "t": 51,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.018,
+          "t": 67,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.016,
+          "t": 109,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.01,
+          "t": 203,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span.flex.h-7.w-7",
+            "span[data-source].rounded-xs.border.px-1"
+          ],
+          "moved": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "uphold",
+      "did": true,
+      "readyMs": 103,
+      "total": 710,
+      "cls": 0.071,
+      "url": "/exceptions/exc_6",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.071,
+          "t": 679,
+          "who": [
+            "div.grid.grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px].gap-4",
+            "div.relative.col-span-2.grid",
+            "div.grid.grid-cols-[1fr_1fr_1fr_1.5fr].overflow-hidden"
+          ],
+          "moved": [
+            6,
+            6,
+            6
+          ]
+        }
+      ]
+    },
+    {
+      "name": "disputes",
+      "did": true,
+      "readyMs": 108,
+      "total": 108,
+      "cls": 0.111,
+      "url": "/disputes",
+      "overflow": 0,
+      "shifts": [
+        {
+          "v": 0.038,
+          "t": 12,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col"
+          ],
+          "moved": [
+            0,
+            17
+          ]
+        },
+        {
+          "v": 0.029,
+          "t": 29,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "div.mt-auto.flex.flex-col",
+            "span.relative.flex-1"
+          ],
+          "moved": [
+            0,
+            17,
+            9
+          ]
+        },
+        {
+          "v": 0.017,
+          "t": 53,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[5 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        },
+        {
+          "v": 0.015,
+          "t": 90,
+          "who": [
+            "div.flex.min-w-0.flex-1",
+            "span[5 open].num.rounded-xs.bg-warn-soft"
+          ],
+          "moved": [
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dispute-letter",
+      "did": true,
+      "readyMs": 104,
+      "total": 105,
+      "cls": 0,
+      "url": "/disputes/DSP-000006",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "audit",
+      "did": true,
+      "readyMs": 31,
+      "total": 32,
+      "cls": 0,
+      "url": "/audit",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "month",
+      "did": true,
+      "readyMs": 108,
+      "total": 109,
+      "cls": 0,
+      "url": "/month",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "leases",
+      "did": true,
+      "readyMs": 7,
+      "total": 8,
+      "cls": 0,
+      "url": "/leases",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "lease-detail",
+      "did": true,
+      "readyMs": 103,
+      "total": 104,
+      "cls": 0,
+      "url": "/leases/LEASE-01",
+      "overflow": 0,
+      "shifts": []
+    },
+    {
+      "name": "cold-today",
+      "cold": true,
+      "readyMs": 122,
+      "total": 129,
+      "nav": {
+        "dcl": 11,
+        "load": 38,
+        "ttfb": 4
+      },
+      "url": "/"
+    },
+    {
+      "name": "cold-money",
+      "cold": true,
+      "readyMs": 119,
+      "total": 165,
+      "nav": {
+        "dcl": 47,
+        "load": 79,
+        "ttfb": 39
+      },
+      "url": "/exceptions/exc_7"
+    }
+  ]
+}
