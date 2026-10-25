@@ -252,7 +252,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
               overlay={
                 showStack ? (
                   <DocumentStack
-                    mode={phase === "found" ? "found" : "searching"}
+                    mode={phase === "found" ? (run.get("found") ? "found" : "none") : "searching"}
                     total={totalFromMessage(run.get("searching")?.message)}
                     textures={stackTextures(ex)}
                     foundLabel={run.get("found")?.source ?? run.get("found")?.doc_id}

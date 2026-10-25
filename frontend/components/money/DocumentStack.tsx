@@ -6,8 +6,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 export interface StackProps {
-  /** searching: the stack fans out; found: the explaining document lifts out. */
-  mode: "searching" | "found";
+  /** searching: the stack fans out; found: the explaining document lifts out; none: nothing did, the cards settle. */
+  mode: "searching" | "found" | "none";
   /** How many documents the agent says it is searching (from the stream's message). */
   total: number | null;
   /** The found document's source, e.g. the sender. */
@@ -54,11 +54,12 @@ export function DocumentStack(props: StackProps) {
   useEffect(() => setGl(webglAvailable()), []);
   const { onLanded, mode } = props;
 
-  // reduced motion and the 2D stack land on a timer; the 3D one reports itself
+  // reduced motion and the 2D stack land on a timer; the 3D one reports itself.
+  // Nothing found: the finding holds the stage a moment, then the lease clause returns.
   const use3D = !reduce && gl === true;
   useEffect(() => {
-    if (mode !== "found" || use3D) return;
-    const t = setTimeout(() => onLanded?.(), reduce ? 300 : 1100);
+    if (mode === "searching" || (mode === "found" && use3D)) return;
+    const t = setTimeout(() => onLanded?.(), reduce ? 300 : mode === "none" ? 1800 : 1100);
     return () => clearTimeout(t);
   }, [mode, use3D, reduce, onLanded]);
 
@@ -78,6 +79,10 @@ export function DocumentStack(props: StackProps) {
               <>
                 Searching{" "}
                 {props.total != null ? <Ticker total={props.total} reduce={!!reduce} /> : "the"} documents…
+              </>
+            ) : mode === "none" ? (
+              <>
+                <span className="font-semibold text-ink">No document changes the lease.</span> The charge is unsupported; the hold stands.
               </>
             ) : (
               <>
@@ -122,12 +127,14 @@ function Stack2D({ mode, foundLabel, reduce, textures }: StackProps & { reduce: 
             ? found
               ? { x: 0, y: -18, rotate: 0, opacity: 1, scale: 1.18, zIndex: 50 }
               : { ...fanned, opacity: 0.18, scale: 0.94 }
-            : fanned;
+            : mode === "none"
+              ? { ...fanned, x: spread * 1.6, opacity: 0.3, scale: 0.9 }
+              : fanned;
         return (
           <motion.div
             key={id}
             initial={reduce ? { opacity: 0 } : { x: 0, y: 0, rotate: 0, opacity: 0 }}
-            animate={reduce ? { opacity: mode === "found" && !found ? 0.18 : 1 } : target}
+            animate={reduce ? { opacity: mode === "found" && !found ? 0.18 : mode === "none" ? 0.3 : 1 } : target}
             transition={{ duration: reduce ? 0.3 : 0.6, delay: reduce ? 0 : mode === "searching" ? i * 0.04 : 0, ease: [0.2, 0.8, 0.2, 1] }}
             style={{ zIndex: found && mode === "found" ? 50 : i }}
             className={cn(
