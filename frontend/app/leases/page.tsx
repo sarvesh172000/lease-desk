@@ -62,7 +62,7 @@ export default function LeasesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="eyebrow">Portfolio</div>
           <h1 className="text-2xl font-semibold">

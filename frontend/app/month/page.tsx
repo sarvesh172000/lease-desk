@@ -67,7 +67,7 @@ function MonthRun() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="eyebrow">Work · {s?.entity_name ?? "Northbay Physical Therapy"}</div>
           <h1 className="text-2xl font-semibold">Month run{period ? ` · ${monthLong(period)}` : ""}</h1>
@@ -102,7 +102,7 @@ function MonthRun() {
           <p className="text-sm text-ink-soft">{s.headline}</p>
 
           {/* the pipeline */}
-          <ol className="grid grid-cols-7 gap-2" aria-label="Pipeline">
+          <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7" aria-label="Pipeline">
             {STAGES.map((st, i) => {
               const m = s.metrics[st.metric];
               const value = typeof m.value === "boolean" ? (m.value ? "Yes" : "No") : m.value;
@@ -140,7 +140,7 @@ function MonthRun() {
             })}
           </ol>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-5">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <Card>
               <CardHeader
                 eyebrow="Drill-down"

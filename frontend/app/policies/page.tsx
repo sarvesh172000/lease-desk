@@ -82,7 +82,7 @@ export default function PoliciesPage() {
           <EmptyState title={`Nothing ${policyStatusLabel(status).toLowerCase()}.`}>Pick another status.</EmptyState>
         </Card>
       ) : (
-        <ul className="grid grid-cols-2 gap-3" data-testid="policy-list">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-2" data-testid="policy-list">
           {rows.map((p) => (
             <li key={p.id}>
               <Link href={`/policies/${p.id}`} className="block h-full rounded-md border border-line bg-surface p-4 shadow-raised transition-colors hover:border-line-strong" data-testid="policy-card">

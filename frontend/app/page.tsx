@@ -45,14 +45,14 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="eyebrow">
             {humanize(role)} · as of {asOf ? monthLong(asOf) : "…"}
           </div>
           <h1 className="text-2xl font-semibold">Today</h1>
         </div>
-        <p className="max-w-md text-right text-sm text-ink-muted">The model reads, the code calculates. Every figure below comes from the engine.</p>
+        <p className="max-w-md text-sm text-ink-muted md:text-right">The model reads, the code calculates. Every figure below comes from the engine.</p>
       </div>
 
       {role === "ap_clerk" ? (
@@ -69,7 +69,7 @@ export default function TodayPage() {
 
       <Tiles summary={summary.data} loading={summary.isLoading} error={summary.isError} leasesNeedingAttention={leases.data ? leasesWithIssues : undefined} />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <Card>
           <CardHeader
             eyebrow={role === "regional_manager" ? `Queue · ${me.data?.region_id ?? "your region"}` : "Queue"}

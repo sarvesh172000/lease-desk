@@ -77,7 +77,7 @@ export function DocumentFan({
   const reduce = useReducedMotion();
   const forward = state === "invoice" ? "invoice" : state === "email" ? "email" : null;
   return (
-    <div className={cn("relative mx-auto h-[560px] w-[520px] max-w-full", className)} style={{ perspective: 1400, perspectiveOrigin: "42% 45%" }} data-testid="document-fan" data-state={state}>
+    <div className={cn("relative mx-auto h-[560px] w-[520px] max-w-full max-sm:[zoom:0.64]", className)} style={{ perspective: 1400, perspectiveOrigin: "42% 45%" }} data-testid="document-fan" data-state={state}>
       <div className="absolute inset-0" style={{ transformStyle: "preserve-3d" }}>
         {pages.map((p) => {
           const pose = POSES[state][p.key];

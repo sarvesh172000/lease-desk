@@ -140,7 +140,8 @@ await test("R02", "Deep link, signed out", async () => {
 if (LOCAL) {
   await test("R03", "Sign-in form, wrong password", async () => {
     await go("/login");
-    await waitFor(q('input[type="email"]'));
+    // the persona list comes from the API, so it is there once React owns the form
+    await waitFor(q('[data-testid="personas"] button'));
     await type('input[type="email"]', "priya.raghunathan@northbaypt.example");
     await type('input[type="password"]', "not-the-password");
     await clickText("form button", "Sign in");
@@ -344,7 +345,7 @@ await test("R20", "Phone width (375 px)", async () => {
   }
   await viewport(1440, 900);
   await signInAs("Priya");
-});
+}, { allow: [401] }); // it signs out halfway, and the open page's last calls answer 401
 
 // --- mutating cases: a fresh local desk only ----------------------------------------
 if (MUTATE) {

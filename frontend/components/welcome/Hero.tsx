@@ -19,7 +19,7 @@ export function Hero() {
 
   return (
     <section className="relative mx-auto w-full max-w-6xl px-6 pb-16 pt-14 md:pt-20">
-      <div className="grid gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,6fr)] lg:gap-10">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,6fr)] lg:gap-10">
         <div>
           <Reveal>
             <div className="font-mono text-2xs uppercase tracking-[0.14em] text-accent">

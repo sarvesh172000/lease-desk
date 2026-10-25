@@ -173,7 +173,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
   return (
     <div className="space-y-4">
       {/* header: what, where, the decision */}
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0">
           <BackLink />
           <h1 className="mt-1 text-2xl font-semibold leading-tight">
@@ -196,11 +196,11 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
       </div>
 
       {/* the calculation */}
-      <div className="grid grid-cols-[1fr_1fr_1fr_1.5fr] overflow-hidden rounded-md border border-line bg-surface shadow-raised">
+      <div className="grid grid-cols-1 overflow-hidden rounded-md sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.5fr] border border-line bg-surface shadow-raised">
         <Figure label="Lease supports" value={money(ex.expected)} />
         <Figure label="Billed" value={money(ex.actual)} />
         <Figure label="Variance" value={signedMoney(ex.delta)} tone={ex.delta === 0 ? undefined : "bad"} />
-        <div className="flex items-center justify-between gap-3 border-l border-line px-5 py-3">
+        <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 sm:border-t-0 lg:border-l">
           <div className="min-w-0">
             <div className="eyebrow">Explanation</div>
             {inv && reached(phase, "found") ? (
@@ -224,8 +224,8 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
       </div>
 
       {/* the two documents and the story */}
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px] gap-4">
-        <div ref={docsRef} className="relative col-span-2 grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px]">
+        <div ref={docsRef} className="relative grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
           <DocumentViewer
             eyebrow="Billed · landlord invoice"
             title={ex.invoice_line ? `${ex.invoice_line.description} · ${money(ex.invoice_line.amount)}` : "Invoice"}
@@ -342,7 +342,7 @@ function MoneyScreen({ ex }: { ex: ExceptionDetail }) {
       </div>
 
       {/* below the fold: the schedule in full, and what approving does */}
-      <div className="grid grid-cols-2 gap-4 pt-2">
+      <div className="grid grid-cols-1 gap-4 pt-2 lg:grid-cols-2">
         <RemeasurementDetail ex={ex} show={reached(phase, "remeasured")} />
         <Card>
           <CardHeader eyebrow="On approval" title="What posts, and what stays held" />
@@ -457,7 +457,7 @@ function RemeasurementDetail({ ex, show }: { ex: ExceptionDetail; show: boolean 
 
 function Figure({ label, value, tone }: { label: string; value: string; tone?: "bad" }) {
   return (
-    <div className="border-l border-line px-5 py-3 first:border-l-0">
+    <div className="border-t border-line px-5 py-3 first:border-t-0 lg:border-l lg:border-t-0 lg:first:border-l-0">
       <div className="eyebrow">{label}</div>
       <div className={cn("num mt-1 text-[1.6rem] font-semibold leading-tight", tone === "bad" && "text-bad")}>{value}</div>
     </div>
@@ -470,7 +470,7 @@ function MoneyScreenSkeleton() {
       <Skeleton className="h-4 w-28" />
       <Skeleton className="h-8 w-[28rem]" />
       <Skeleton className="h-20 w-full" />
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px] gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_340px]">
         <Skeleton className="h-[519px]" />
         <Skeleton className="h-[519px]" />
         <Skeleton className="h-[519px]" />
