@@ -123,7 +123,7 @@ await step("dispute-letter", () => clickSel('[data-testid="disputes-table"] a[hr
 await step("audit", () => clickSel('a[href="/audit"]'), `${q('[data-testid="chain-banner"]')} && ${q('[data-testid="audit-row"]')}`, { settle: 3000 });
 await step("month", () => clickSel('a[href="/month"]'), `${q('[data-testid="tiles"], [data-testid="batch-panel"], [data-testid="queue-table"]')}`, { settle: 2500 });
 await step("leases", () => clickSel('a[href="/leases"]'), q('[data-testid="runway-row"]'), { settle: 3000 });
-await step("lease-detail", () => evalJs(`(() => { const r = [...document.querySelectorAll('[data-testid="runway-row"]')].find((e) => e.textContent.includes("LEASE-01")); if (!r) return false; r.click(); return true; })()`), q('[data-testid="term-quote"]'), { settle: 3000 });
+await step("lease-detail", () => evalJs(`(() => { const r = [...document.querySelectorAll('[data-testid="runway-row"]')].find((e) => e.textContent.includes("LEASE-01")); if (!r) return false; const a = r.querySelector('a[href^="/leases/"]'); if (!a) return false; a.click(); return true; })()`), q('[data-testid="term-quote"]'), { settle: 3000 });
 const pathMs = Math.round(performance.now() - pathStart);
 const cold = async (name, path, ready) => {
   if (!want(name)) return;
