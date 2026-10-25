@@ -22,7 +22,8 @@ Three things shape this:
 
 ## On an Azure for Students subscription (what the live deployment needed)
 
-The live deployment (resource group `leasedesk-rg`; API at
+The live deployment (web app at https://lease-desk-ten.vercel.app; resource
+group `leasedesk-rg`; API at
 `https://leasedesk-api.thankfulhill-bf35cf6d.northcentralus.azurecontainerapps.io`)
 ran on *Azure for Students*, which differs from the steps below in four places:
 
@@ -193,6 +194,19 @@ the same seeds give the same addresses and the same Agentverse mailboxes.
    ```bash
    az containerapp update -g $RG -n leasedesk-api --set-env-vars LEASEDESK_CORS_ORIGINS=https://<your-app>.vercel.app
    ```
+
+   On an express environment the running replica keeps its old environment
+   (no revision suffixes, and `revision restart` failed). Scale to two
+   replicas, check the new one answers a preflight, then scale back to one;
+   the older replica is the one removed:
+
+   ```bash
+   az containerapp update -g $RG -n leasedesk-api --min-replicas 2 --max-replicas 2
+   az containerapp update -g $RG -n leasedesk-api --min-replicas 1 --max-replicas 1
+   ```
+
+   The browser goes through the `/api` proxy, so CORS only matters for
+   anything that calls the API directly.
 
 ## 5. Check
 
