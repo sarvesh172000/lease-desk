@@ -175,7 +175,7 @@ session probe on /welcome and /login), which is the API saying "no session", not
 scripts/reset-desk.sh                     # fresh desk, both months, three refused attempts
 docker compose stop web                   # the API's CORS list is only :3000
 npm run build && npx next start -p 3000
-DISPUTES_HOOK="zsh scripts/disputes-sweep.sh" API_URL=http://localhost:8000 \
+DISPUTES_HOOK="zsh scripts/sweep.sh disputes" API_URL=http://localhost:8000 \
   node scripts/rehearsal-walk.mjs http://localhost:3000 docs/screenshots/round-8 dark 0 "" all
 node scripts/rehearsal-walk.mjs http://localhost:3000 out light 0 "" all          # light
 node scripts/rehearsal-walk.mjs http://localhost:3000 out dark 1 "-reduced" all   # reduced motion

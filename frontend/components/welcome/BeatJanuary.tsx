@@ -90,7 +90,7 @@ export function BeatJanuary() {
                 })}
               </ol>
               {ev ? (
-                <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:grid-cols-4">
+                <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-line pt-4 min-[1400px]:grid-cols-4">
                   <Figure label="Checked" value={<CountUp value={ev.charges_checked} decimals={0} />} />
                   <Figure label="Held" value={<CountUp value={ev.held} decimals={0} />} tone="bad" />
                   <Figure label="Held, in dollars" value={<CountUp value={ev.dollars_flagged} prefix="$" />} />
@@ -107,7 +107,7 @@ export function BeatJanuary() {
                   <span className="eyebrow">The desk right now</span>
                   <SourceTag live>{sourceLabel(live)}</SourceTag>
                 </div>
-                <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 min-[1400px]:grid-cols-4">
                   <Figure label="Active leases" value={<span className="num">{summary.data.active_leases}</span>} />
                   <Figure label="Open exceptions" value={<span className="num">{summary.data.open_exceptions}</span>} />
                   <Figure label="Held" value={<span className="num">{money(summary.data.held_total)}</span>} tone="bad" />
@@ -126,7 +126,7 @@ function Figure({ label, value, tone }: { label: string; value: React.ReactNode;
   return (
     <div>
       <dt className="text-2xs font-semibold uppercase tracking-[0.1em] text-ink-faint">{label}</dt>
-      <dd className={cn("mt-1 text-2xl font-semibold tracking-tight", tone === "bad" && "text-bad", tone === "ok" && "text-ok")}>{value}</dd>
+      <dd className={cn("num mt-1 whitespace-nowrap text-xl font-semibold tracking-tight", tone === "bad" && "text-bad", tone === "ok" && "text-ok")}>{value}</dd>
     </div>
   );
 }
