@@ -24,6 +24,16 @@ from sqlalchemy.engine import Connection
 GATEWAY_ACTOR = "system:gateway"
 
 ANY_KIND = "*"
+MODIFICATION_KIND = "LEASE_MODIFICATION"
+
+# A lease modification is proposed by the investigation agent, decided only
+# by a controller, and posted only by the gateway. In particular, APPROVED
+# cannot be closed around a failed gateway attempt.
+MODIFICATION_ACTIONS = {
+    "agent": {"create", "propose"},
+    "controller": {"approve", "reject", "hold", "resume"},
+    "system": {"post"},
+}
 
 # role -> work item kind -> actions. ANY_KIND applies to every kind. A role
 # or action that is not here is refused. 'create' is not a transition, but
@@ -83,7 +93,10 @@ def can(actor: Actor, action: str, item: Mapping) -> Tuple[bool, str]:
     if kinds is None:
         return False, "unknown role %r" % actor.role
     kind = item.get("kind")
-    allowed = kinds.get(ANY_KIND, set()) | kinds.get(kind, set())
+    if kind == MODIFICATION_KIND:
+        allowed = MODIFICATION_ACTIONS.get(actor.role, set())
+    else:
+        allowed = kinds.get(ANY_KIND, set()) | kinds.get(kind, set())
     if action not in allowed:
         return False, "role %s may not %s a %s item" % (actor.role, action, kind or "work")
 

@@ -181,6 +181,14 @@ def transition(conn: Connection, actor: Actor, item_id: Any, action: str, *,
     if to is None:
         raise IllegalTransition("cannot %s an item in %s (item %s)" % (action, state, item["id"]))
 
+    initial_modification_proposal = (
+        item.get("kind") == "LEASE_MODIFICATION" and state == "NEW"
+        and action == "propose" and actor.id == "agent:investigation"
+    )
+    if item.get("kind") == "LEASE_MODIFICATION" and patch \
+            and not initial_modification_proposal:
+        raise ValueError("a lease modification proposal is immutable after its initial propose")
+
     diff: Dict[str, Any] = {"from": state, "to": to}
     if action == "ask":
         diff["question"] = _new_question(conn, patch, reason)

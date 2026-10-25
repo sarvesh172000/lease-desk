@@ -41,7 +41,7 @@ from .deps import get_engine
 
 router = APIRouter(prefix="/api", tags=["leases"])
 
-ITEM_KIND = "LEASE_ABSTRACTION"
+VERSION_ITEM_KINDS = ("LEASE_ABSTRACTION", "LEASE_MODIFICATION")
 
 
 class ExtractedBy(BaseModel):
@@ -92,12 +92,12 @@ def lease_versions(lease_id: str, actor: SessionActor = Depends(current_actor),
             raise HTTPException(404, "no lease %r" % lease_id)
         versions = conn.execute(text("""
             SELECT v.id, v.lease_id, v.version, v.effective_from, v.confirmed_by, v.confirmed_at,
-                   w.id AS item_id, w.state AS item_state
+                   w.id AS item_id, w.state AS item_state, w.kind AS item_kind
               FROM lease_version v
-              LEFT JOIN work_item w ON w.kind = :kind AND w.subject_type = 'lease_version'
+              LEFT JOIN work_item w ON w.kind = ANY(:kinds) AND w.subject_type = 'lease_version'
                                    AND w.subject_id = v.id::text
              WHERE v.lease_id = :id ORDER BY v.version
-        """), {"id": lease_id, "kind": ITEM_KIND}).mappings().all()
+        """), {"id": lease_id, "kinds": list(VERSION_ITEM_KINDS)}).mappings().all()
         terms: Dict[int, List[Term]] = {}
         if versions:
             for t in conn.execute(text("""
@@ -127,7 +127,7 @@ def lease_versions(lease_id: str, actor: SessionActor = Depends(current_actor),
     return [LeaseVersion(
         lease_id=v["lease_id"], version=v["version"], lease_version_id=v["id"],
         effective_from=v["effective_from"],
-        confirmed=is_confirmed(v["confirmed_by"], v["item_state"]),
+        confirmed=is_confirmed(v["confirmed_by"], v["item_state"], v["item_kind"]),
         confirmed_by=v["confirmed_by"], confirmed_at=v["confirmed_at"],
         work_item=items.get(v["id"]), terms=terms.get(v["id"], []))
         for v in versions]

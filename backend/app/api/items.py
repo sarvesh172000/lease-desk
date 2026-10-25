@@ -47,7 +47,7 @@ from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import SessionActor, current_actor
 from ..jobs.queue import enqueue
-from ..work import charges, gateway
+from ..work import charges, gateway, modifications
 from ..work.events import events_for
 from ..work.roles import Actor
 from ..work.transitions import (
@@ -155,7 +155,7 @@ class Posting(BaseModel):
 class ActionResult(BaseModel):
     state: str
     item: Dict[str, Any]
-    posting: Optional[Posting] = None   # only after approving a postable charge check
+    posting: Optional[Posting] = None   # only after approving an item the gateway can post
 
 
 # --- scope ------------------------------------------------------------------------
@@ -275,9 +275,18 @@ def perform(eng: Engine, gateway_engine: Engine, actor: SessionActor, item_id: i
     with eng.connect() as conn:
         try:
             with conn.begin():
-                if action == "approve" and _is_charge_check(conn, item_id):
+                kind = _item_kind(conn, item_id)
+                if action == "approve" and kind == gateway.CHARGE_CHECK:
                     row = charges.approve_charge(conn, work_actor(actor), item_id,
                                                  resolution=_resolution(patch), reason=reason)
+                elif kind == modifications.MODIFICATION_KIND:
+                    row = transition(conn, work_actor(actor), item_id, action,
+                                     reason=reason, patch=patch)
+                    if action == "approve":
+                        # Confirmation and its retryable follow-up are one
+                        # commit. The job waits until the independent gateway
+                        # transaction moves APPROVED to POSTED.
+                        modifications.schedule_recheck(conn, row["id"])
                 else:
                     row = transition(conn, work_actor(actor), item_id, action,
                                      reason=reason, patch=patch)
@@ -315,10 +324,9 @@ def _learn_from_answer(conn: Connection, item_id: int) -> None:
                 idempotency_key="policy_learn:question:%d" % question_id)
 
 
-def _is_charge_check(conn: Connection, item_id: int) -> bool:
-    kind = conn.execute(text("SELECT kind FROM work_item WHERE id = :id"),
+def _item_kind(conn: Connection, item_id: int) -> Optional[str]:
+    return conn.execute(text("SELECT kind FROM work_item WHERE id = :id"),
                         {"id": item_id}).scalar()
-    return kind == gateway.CHARGE_CHECK
 
 
 def _resolution(patch: Optional[Mapping]) -> Optional[str]:
@@ -336,14 +344,23 @@ def _resolution(patch: Optional[Mapping]) -> Optional[str]:
 
 
 def _postable(row: Mapping) -> bool:
-    return (row["state"] == "APPROVED" and row["kind"] == gateway.CHARGE_CHECK
-            and row["subject_type"] == "landlord_charge")
+    if row["state"] != "APPROVED":
+        return False
+    return ((row["kind"] == gateway.CHARGE_CHECK
+             and row["subject_type"] == "landlord_charge")
+            or (row["kind"] == modifications.MODIFICATION_KIND
+                and row["subject_type"] == "lease_version"))
 
 
 def _post(gateway_engine: Engine, item_id: int) -> Posting:
     try:
         with gateway_engine.begin() as conn:
-            entry_id = gateway.post_approved_charge(conn, item_id)
+            kind = conn.execute(text("SELECT kind FROM work_item WHERE id = :id"),
+                                {"id": item_id}).scalar_one()
+            if kind == modifications.MODIFICATION_KIND:
+                entry_id = gateway.post_approved_modification(conn, item_id)
+            else:
+                entry_id = gateway.post_approved_charge(conn, item_id)
             done = conn.execute(text("""
                 SELECT e.evidence FROM audit_event e
                  WHERE e.subject_type = 'work_item' AND e.subject_id = :sid AND e.allowed
@@ -356,7 +373,7 @@ def _post(gateway_engine: Engine, item_id: int) -> Posting:
     disputed = _float(done.get("disputed_amount"))
     if entry_id is None:
         return Posting(status="closed", amount=0.0, disputed=disputed)
-    if amount is None:
+    if amount is None and kind == gateway.CHARGE_CHECK:
         amount = _float(_entry_amount(gateway_engine, entry_id))
     return Posting(status="posted", journal_entry_id=entry_id, amount=amount,
                    disputed=disputed if disputed is not None else 0.0)

@@ -128,9 +128,11 @@ def _policies_key(conn: Connection, entity_id: str, month: date) -> Optional[str
 
 
 def _recheck_key(conn: Connection, entity_id: str, month: date) -> Optional[str]:
-    """The key of one more checking job, when the month's latest checking job
-    finished with charges waiting on leases and the set of confirmed versions
-    has changed since. None otherwise (including while a check is pending)."""
+    """Recheck once whenever the month's effective confirmed-version set changes.
+
+    This covers both leases that were initially unconfirmed and a later
+    amendment confirmed after the month was already checked.
+    """
     from .lease_versions import confirmed_rules
 
     last = conn.execute(text("""
@@ -140,9 +142,7 @@ def _recheck_key(conn: Connection, entity_id: str, month: date) -> Optional[str]
     """), {"e": entity_id, "p": month.isoformat()}).first()
     if last is None or last.status != "done" or not last.result:
         return None
-    if not last.result.get("waiting"):
-        return None
-    now = confirmed_rules(conn, entity_id).fingerprint
+    now = confirmed_rules(conn, entity_id, as_of=month).fingerprint
     if now == last.result.get("confirmed"):
         return None
     return "%s@%s" % (job_key(entity_id, month, "checking"), now)
@@ -192,11 +192,14 @@ def check_period(conn: Connection, entity_id: str, period: Any) -> Dict[str, Any
 
     month = parse_period(period)
     charges = load_charges(conn, entity_id, month)
-    confirmed = confirmed_rules(conn, entity_id)
+    confirmed = confirmed_rules(conn, entity_id, as_of=month)
     ready = [c for c in charges if c.lease_id in confirmed.rules]
     waiting = [c for c in charges if c.lease_id not in confirmed.rules]
     findings = check_month(ready, confirmed.rules, month)
-    counts: Dict[str, Any] = record_findings(conn, findings, month, versions=confirmed.versions)
+    counts: Dict[str, Any] = record_findings(
+        conn, findings, month, versions=confirmed.versions,
+        version_chains=confirmed.version_chains,
+    )
     waiting_leases = sorted({c.lease_id for c in waiting})
     counts.update(charges=len(charges), checked=len(ready), findings=len(findings),
                   holds=sum(1 for f in findings if f.is_hold), waiting=len(waiting),
@@ -208,18 +211,19 @@ def check_period(conn: Connection, entity_id: str, period: Any) -> Dict[str, Any
 
 # ------------------------------------------------------ findings -> work
 
-def record_findings(conn: Connection, findings: Iterable, period: Any,
-                    versions: Optional[Mapping[str, int]] = None) -> Dict[str, int]:
-    """Turn each checker finding into a proposed CHARGE_CHECK work item.
+def record_findings(
+        conn: Connection, findings: Iterable, period: Any,
+        versions: Optional[Mapping[str, int]] = None,
+        version_chains: Optional[Mapping[str, Tuple[int, ...]]] = None,
+) -> Dict[str, int]:
+    """Create findings or revise an open finding for a changed lease chain.
 
-    One item per finding, about the landlord charge it judged
-    (`subject_type = 'landlord_charge'`, `subject_id` = the database id):
-    `create_item` then `transition(..., 'propose')` with the checker's
-    proposal (`approve` or `hold`), reason and evidence, as `agent:checker`.
-    A charge that already has an item is skipped, so this is safe to repeat
-    (create_item is idempotent on its own as well). Returns created/skipped
-    counts. `versions` (lease_id -> confirmed lease_version id) is cited in
-    each item's evidence as `lease_version_id`.
+    A new charge is created and proposed as before. If the same charge already
+    has a PROPOSED item but cites an older ordered standing version chain, the
+    checker uses the legal PROPOSED -> PROPOSED transition to replace its
+    calculation and resolver fields. Finalized items are never rewritten. All
+    investigation-origin sources and modification links survive the revision
+    and are part of its auditable evidence patch.
     """
     findings = list(findings)
     month = parse_period(period)
@@ -235,39 +239,111 @@ def record_findings(conn: Connection, findings: Iterable, period: Any,
                               % ", ".join(unknown))
     existing = _existing_items(conn, [ids[f.charge.charge_id] for f in findings])
     scope = _clinic_scope(conn, {f.charge.clinic_id for f in findings})
-    book = PolicyBook(conn)     # approved policies; none approved changes nothing
+    book = PolicyBook(conn)
 
-    created = skipped = cited = 0
+    created = revised = skipped = cited = 0
     for f in findings:
         charge_id = ids[f.charge.charge_id]
-        if charge_id in existing:
-            skipped += 1
-            continue
         clinic = scope.get(f.charge.clinic_id, {})
-        item = create_item(
-            conn, actor, kind=ITEM_KIND, subject_type=SUBJECT, subject_id=charge_id,
-            entity_id=clinic.get("entity_id"), region_id=clinic.get("region_id"),
-            clinic_id=f.charge.clinic_id, period=month, title=_title(f),
-            amount=round(f.billed, 2))
-        # An approved policy decides first (work/policies.py) and is cited;
-        # then the resolver adds sources, trust decision, confidence (lifted
-        # when a policy covers the case) and route (work/resolver.py).
+        lease_id = f.charge.lease_id
+        version_id = (versions or {}).get(lease_id)
+        version_chain = _current_version_chain(
+            version_id, (version_chains or {}).get(lease_id)
+        )
         proposal, reason, ev, ref = book.decide(
             charge_id=charge_id, period=month, charge_type=f.charge.charge_type,
-            amount=round(f.billed, 2), lease_id=f.charge.lease_id, clinic_id=f.charge.clinic_id,
+            amount=round(f.billed, 2), lease_id=lease_id, clinic_id=f.charge.clinic_id,
             description=f.charge.description, supported=round(f.supported, 2),
             checker_rule=f.rule, proposal=f.proposal, reason=f.reason,
-            evidence=evidence(f, ids, (versions or {}).get(f.charge.lease_id)))
-        ev.update(resolver.resolve(conn, ev, kind=ITEM_KIND, region_id=clinic.get("region_id"),
-                                   entity_id=clinic.get("entity_id"),
-                                   policy=_policy_match(ref, proposal, reason)))
+            evidence=evidence(f, ids, version_id, version_chain))
+
+        prior = existing.get(charge_id)
+        previous_evidence = dict(prior.get("evidence") or {}) if prior else {}
+        if prior is not None:
+            same_chain = _evidence_version_chain(previous_evidence) == tuple(
+                str(value) for value in version_chain
+            )
+            if prior["state"] != "PROPOSED" or version_id is None or same_chain:
+                skipped += 1
+                continue
+            for key in ("investigation", "modification"):
+                if key in previous_evidence:
+                    ev[key] = previous_evidence[key]
+
+        extra_sources = _carried_investigation_sources(previous_evidence)
+        ev.update(resolver.resolve(
+            conn, ev, kind=ITEM_KIND, region_id=clinic.get("region_id"),
+            entity_id=clinic.get("entity_id"), extra_sources=extra_sources,
+            policy=_policy_match(ref, proposal, reason)))
+
+        if prior is None:
+            item = create_item(
+                conn, actor, kind=ITEM_KIND, subject_type=SUBJECT, subject_id=charge_id,
+                entity_id=clinic.get("entity_id"), region_id=clinic.get("region_id"),
+                clinic_id=f.charge.clinic_id, period=month, title=_title(f),
+                amount=round(f.billed, 2))
+            created += 1
+        else:
+            item = prior
+            revised += 1
         transition(conn, actor, item["id"], "propose", reason=reason, policy_ref=ref,
-                   patch={"proposal": proposal, "reason": reason, "evidence": ev})
+                   patch={"title": _title(f), "amount": round(f.billed, 2),
+                          "proposal": proposal, "reason": reason, "evidence": ev})
         resolver.ask_if_needed(conn, actor, item["id"], ev)
-        existing.add(charge_id)
-        created += 1
+        existing[charge_id] = item
         cited += ref is not None
-    return {"created": created, "skipped": skipped, "cited": cited}
+    return {"created": created, "revised": revised, "skipped": skipped, "cited": cited}
+
+
+def _current_version_chain(
+        version_id: Optional[int], chain: Optional[Iterable[int]],
+) -> Tuple[int, ...]:
+    values = tuple(chain or ())
+    if values:
+        return values
+    return () if version_id is None else (version_id,)
+
+
+def _evidence_version_chain(evidence: Mapping[str, Any]) -> Tuple[str, ...]:
+    values = evidence.get("lease_version_ids")
+    if isinstance(values, list) and values:
+        return tuple(str(value) for value in values)
+    version_id = evidence.get("lease_version_id")
+    return () if version_id is None else (str(version_id),)
+
+
+def _carried_investigation_sources(evidence: Mapping[str, Any]) -> List[resolver.Source]:
+    """Carry recorded investigation sources, not stale checker base sources."""
+    investigation = evidence.get("investigation")
+    if not isinstance(investigation, Mapping):
+        return []
+    references = investigation.get("evidence")
+    if not isinstance(references, list):
+        return []
+    source_ids = {
+        str(source_id)
+        for reference in references
+        if isinstance(reference, Mapping)
+        for source_id in (reference.get("doc_id") or reference.get("source_id"),)
+        if source_id
+    }
+    sources = evidence.get("sources")
+    if not source_ids or not isinstance(sources, list):
+        return []
+
+    generated_kinds = {"lease", "invoice", "payment_history"}
+    carried = []
+    seen = set()
+    for source in sources:
+        if not isinstance(source, Mapping):
+            continue
+        source_id = source.get("source_id")
+        key = str(source_id) if source_id else ""
+        if key not in source_ids or key in seen or source.get("kind") in generated_kinds:
+            continue
+        carried.append(resolver.Source.from_dict(source))
+        seen.add(key)
+    return carried
 
 
 _POLICY_REF = re.compile(r"^policy:(?P<id>[^@]+)@v(?P<version>\d+)$")
@@ -283,8 +359,10 @@ def _policy_match(ref: Optional[str], proposal: str, reason: str):
                                 then=proposal, reason=reason)
 
 
-def evidence(finding, ids: Mapping[str, str],
-             lease_version_id: Optional[int] = None) -> Dict[str, Any]:
+def evidence(
+        finding, ids: Mapping[str, str], lease_version_id: Optional[int] = None,
+        lease_version_ids: Optional[Iterable[int]] = None,
+) -> Dict[str, Any]:
     """What a person needs to judge the proposal, as plain JSON, in the shape
     the read API documents (api/exceptions.py): lease_id, charge_id (the
     landlord_charge id), charge_ids, charge_type, billed, supported, then the
@@ -295,6 +373,7 @@ def evidence(finding, ids: Mapping[str, str],
     charge = finding.charge
     charge_id = ids[charge.charge_id]
     related = [ids.get(r, r) for r in finding.related]
+    version_chain = _current_version_chain(lease_version_id, lease_version_ids)
     return {
         "lease_id": charge.lease_id,
         "charge_id": charge_id,
@@ -311,6 +390,7 @@ def evidence(finding, ids: Mapping[str, str],
         "invoice_id": charge.invoice_id,
         "related": related,
         "lease_version_id": lease_version_id,
+        "lease_version_ids": list(version_chain),
     }
 
 
@@ -322,11 +402,12 @@ def _title(finding) -> str:
         c.clinic_id, c.period.strftime("%b %Y"), c.charge_type, "{:,.2f}".format(finding.billed))
 
 
-def _existing_items(conn: Connection, charge_ids: List[str]) -> set:
-    return set(conn.execute(text("""
-        SELECT subject_id FROM work_item
+def _existing_items(conn: Connection, charge_ids: List[str]) -> Dict[str, Mapping[str, Any]]:
+    rows = conn.execute(text("""
+        SELECT id, state, subject_id, evidence FROM work_item
          WHERE kind = :k AND subject_type = :t AND subject_id = ANY (CAST(:ids AS text[]))
-    """), {"k": ITEM_KIND, "t": SUBJECT, "ids": charge_ids}).scalars())
+    """), {"k": ITEM_KIND, "t": SUBJECT, "ids": charge_ids}).mappings().all()
+    return {row["subject_id"]: row for row in rows}
 
 
 def _clinic_scope(conn: Connection, clinic_ids) -> Dict[str, Dict[str, Optional[str]]]:

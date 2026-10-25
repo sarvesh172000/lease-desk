@@ -376,7 +376,7 @@ def test_an_invoice_with_hidden_white_text_changes_nothing(checked, company, mon
     # still holds the overbilled rent, exactly as it does without the text.
     lease_id = next(t.lease_id for t in leases if t.clinic_id == invoice.clinic_id)
     with checked["lease_reader"].connect() as conn:
-        rules = confirmed_rules(conn, ENTITY).rules
+        rules = confirmed_rules(conn, ENTITY, as_of=JAN).rules
 
     def findings(parsed):
         charges = [Charge("%s-%d" % (invoice.invoice_id, n), invoice.invoice_id, lease_id,

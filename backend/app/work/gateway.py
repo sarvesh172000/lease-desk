@@ -46,16 +46,22 @@ from sqlalchemy.engine import Connection
 
 from ..ledger import posting
 from ..ledger.posting import PeriodClosed, PostingError  # noqa: F401  re-exported
-from . import charges
+from . import charges, modifications
 from .events import append_event
 from .roles import GATEWAY_ACTOR, ensure_gateway_actor, load_actor
 from .transitions import transition
 
 AP_CLERK = "ap_clerk"
 CHARGE_CHECK = "CHARGE_CHECK"
+LEASE_MODIFICATION = modifications.MODIFICATION_KIND
 RELEASABLE_STATES = ("APPROVED", "POSTED")
 ACCOUNTS_PAYABLE = "Accounts payable"
 MAX_SEND_ATTEMPTS = 3
+
+_MODIFICATION_ACCOUNTS = {
+    "Lease liability": "Lease liability, non-current",
+    "Rent expense": "Lease cost",
+}
 
 
 class GatewayError(Exception):
@@ -159,6 +165,111 @@ def post_approved_charge(conn: Connection, item_id: int) -> Optional[int]:
         post_evidence=extra)
 
 
+def post_approved_modification(conn: Connection, item_id: int) -> int:
+    """Post a controller-approved lease remeasurement exactly once.
+
+    The accounting proposal comes from the investigation agent's immutable
+    ``propose`` event immediately preceding the controller approval. The
+    projected ``work_item.evidence`` is deliberately ignored: even a caller
+    with direct database access cannot swap the reviewed version or lines
+    before the gateway runs.
+    """
+    item = _item(conn, item_id)
+    if item["kind"] != LEASE_MODIFICATION or item["subject_type"] != "lease_version":
+        raise GatewayError("work item %s is a %s on %s, not a lease modification"
+                           % (item_id, item["kind"], item["subject_type"]))
+    evidence = _approved_modification_evidence(conn, item_id)
+    try:
+        version_id = int(item["subject_id"])
+        proposed_version_id = evidence.get("lease_version_id")
+        if isinstance(proposed_version_id, bool):
+            raise ValueError
+        proposed_version_id = int(proposed_version_id)
+    except (TypeError, ValueError):
+        raise GatewayError("lease modification %s has an invalid lease version" % item_id) from None
+    if proposed_version_id != version_id:
+        raise GatewayError("lease modification %s does not cite lease version %s"
+                           % (item_id, version_id))
+    if evidence.get("balanced") is not True:
+        raise GatewayError("lease modification %s was not proposed as balanced" % item_id)
+    raw_lines = evidence.get("entries")
+    if not isinstance(raw_lines, list):
+        raise GatewayError("lease modification %s has no proposed entries" % item_id)
+    lines = []
+    for raw in raw_lines:
+        if not isinstance(raw, Mapping):
+            raise GatewayError("lease modification %s has a malformed proposed entry" % item_id)
+        account = _MODIFICATION_ACCOUNTS.get(raw.get("account"), raw.get("account"))
+        lines.append(dict(raw, account=account, clinic_id=item.get("clinic_id")))
+    entity_id = item.get("entity_id")
+    if not entity_id:
+        raise GatewayError("lease modification %s has no entity" % item_id)
+    lease_id = evidence.get("lease_id")
+    try:
+        closed_through = date.fromisoformat(evidence["books_closed_through"])
+        expected_chain = tuple(int(value) for value in evidence["standing_version_chain"])
+    except (KeyError, TypeError, ValueError):
+        raise GatewayError(
+            "lease modification %s has no valid standing-chain precondition" % item_id) from None
+    current_chain = modifications.standing_version_chain(
+        conn, lease_id, exclude_version_id=version_id, through=closed_through)
+    if current_chain != expected_chain:
+        raise GatewayError(
+            "lease modification %s was proposed over versions %s, but %s now stand; "
+            "the proposal must be regenerated and approved again"
+            % (item_id, expected_chain, current_chain))
+    try:
+        period = modifications.first_open_period(conn, entity_id, after=closed_through)
+    except modifications.ModificationError as exc:
+        raise GatewayError(str(exc)) from None
+    proposed_period = item.get("period")
+    if not isinstance(proposed_period, date):
+        raise GatewayError("lease modification %s has no proposed accounting period" % item_id)
+    key = "lease_modification:%d:remeasurement" % version_id
+    _refuse_a_second_entry(conn, item_id, key)
+    return post_journal(
+        conn, item_id, lines, key, entity_id=entity_id, date=period, period=period,
+        memo="Lease %s v%s remeasurement" % (evidence.get("lease_id", ""),
+                                               evidence.get("version", "")),
+        entry_type="lease_remeasurement",
+        post_evidence={"lease_version_id": version_id,
+                       "source_charge_item_id": evidence.get("source_charge_item_id"),
+                       "proposed_adjustment_period": proposed_period.isoformat(),
+                       "adjustment_period": period.isoformat(),
+                       "reperioded": period != proposed_period})
+
+
+def _approved_modification_evidence(conn: Connection, item_id: int) -> Mapping:
+    """The immutable proposal a controller's latest approval signed off."""
+    row = conn.execute(text("""
+        SELECT proposal.seq AS proposal_seq,
+               proposal.diff->'set'->'evidence' AS proposal_evidence
+          FROM audit_event approval
+          JOIN actor approver ON approver.id = approval.actor_id
+          JOIN LATERAL (
+              SELECT proposed.seq, proposed.diff
+                FROM audit_event proposed
+               WHERE proposed.subject_type = 'work_item'
+                 AND proposed.subject_id = approval.subject_id
+                 AND proposed.action = 'propose' AND proposed.allowed
+                 AND proposed.actor_id = :investigation_actor
+                 AND proposed.seq < approval.seq
+                 AND jsonb_typeof(proposed.diff->'set'->'evidence') = 'object'
+               ORDER BY proposed.seq DESC LIMIT 1
+          ) proposal ON true
+         WHERE approval.subject_type = 'work_item' AND approval.subject_id = :sid
+           AND approval.action = 'approve' AND approval.allowed
+           AND approver.role = 'controller'
+         ORDER BY approval.seq DESC LIMIT 1
+    """), {"sid": str(item_id), "investigation_actor": "agent:investigation"}).mappings().first()
+    evidence = (row or {}).get("proposal_evidence")
+    if not isinstance(evidence, Mapping):
+        raise GatewayError(
+            "lease modification %s has no controller-approved investigation proposal on record"
+            % item_id)
+    return evidence
+
+
 _MEMO_NOTE = {"supported": " (undisputed portion; disputed amount held)",
               "pay_as_billed": " (paid as billed over a hold, controller override)"}
 
@@ -231,27 +342,42 @@ class PostedItem:
 
 
 def post_approved(conn: Connection, entity_id: str, period: date) -> List[PostedItem]:
-    """Post every APPROVED CHARGE_CHECK item of one entity and period, in id
-    order, inside the caller's transaction (a `lease_gateway` connection).
+    """Post every gateway-postable APPROVED item for an entity and period.
 
-    Idempotent: POSTED items are no longer APPROVED, so a second call finds
-    nothing, and post_approved_charge() itself returns the original entry for
-    a key that already posted. Held, proposed and rejected items are never
-    touched. Returns what this call did, item by item: an upheld hold with
-    nothing to post comes back with journal_entry_id None (it was closed).
+    Charge checks and lease modifications are selected in stable item order.
+    Each specialized poster remains independently idempotent, so this sweep
+    is also the retry path after an API-side immediate posting attempt fails.
     """
     _require_text(entity_id, "entity_id")
     if not isinstance(period, date) or period.day != 1:
         raise GatewayError("period must be the first of a month, got %r" % (period,))
-    ids = conn.execute(text("""
-        SELECT w.id FROM work_item w
-          JOIN landlord_charge c ON c.id = w.subject_id
-          JOIN clinic k ON k.id = c.clinic_id
-         WHERE w.kind = :kind AND w.subject_type = 'landlord_charge' AND w.state = 'APPROVED'
-           AND c.period = :period AND coalesce(w.entity_id, k.entity_id) = :entity
-         ORDER BY w.id
-    """), {"kind": CHARGE_CHECK, "period": period, "entity": entity_id}).scalars().all()
-    return [PostedItem(item_id, post_approved_charge(conn, item_id)) for item_id in ids]
+    rows = conn.execute(text("""
+        SELECT candidate.id, candidate.kind
+          FROM (
+                SELECT w.id, w.kind
+                  FROM work_item w
+                  JOIN landlord_charge c ON c.id = w.subject_id
+                  JOIN clinic k ON k.id = c.clinic_id
+                 WHERE w.kind = :charge_kind
+                   AND w.subject_type = 'landlord_charge' AND w.state = 'APPROVED'
+                   AND c.period = :period
+                   AND coalesce(w.entity_id, k.entity_id) = :entity
+                UNION ALL
+                SELECT w.id, w.kind
+                  FROM work_item w
+                 WHERE w.kind = :modification_kind
+                   AND w.subject_type = 'lease_version' AND w.state = 'APPROVED'
+                   AND w.period <= :period AND w.entity_id = :entity
+          ) candidate
+         ORDER BY candidate.id
+    """), {"charge_kind": CHARGE_CHECK, "modification_kind": LEASE_MODIFICATION,
+             "period": period, "entity": entity_id}).mappings().all()
+    return [PostedItem(
+        row["id"],
+        post_approved_modification(conn, row["id"])
+        if row["kind"] == LEASE_MODIFICATION
+        else post_approved_charge(conn, row["id"]),
+    ) for row in rows]
 
 
 def _replay(earlier: Mapping, item_id: int, key: str) -> int:
@@ -265,8 +391,8 @@ def _item(conn: Connection, item_id: int, lock: bool = False) -> Mapping:
     if isinstance(item_id, bool) or not isinstance(item_id, int):
         raise GatewayError("work item id must be an integer, got %r" % (item_id,))
     row = conn.execute(text(
-        "SELECT id, kind, state, subject_type, subject_id, entity_id, period, proposal, evidence "
-        "FROM work_item WHERE id = :id" + (" FOR UPDATE" if lock else "")),
+        "SELECT id, kind, state, subject_type, subject_id, entity_id, clinic_id, period, "
+        "proposal, evidence FROM work_item WHERE id = :id" + (" FOR UPDATE" if lock else "")),
         {"id": item_id}).mappings().first()
     if row is None:
         raise GatewayError("no work item %s" % item_id)
@@ -854,7 +980,7 @@ def main(argv=None) -> int:
     from ..db.engine import engine
     from ..jobs.monthly import MonthlyRunError, parse_period
 
-    parser = argparse.ArgumentParser(description="Post a period's approved charge checks")
+    parser = argparse.ArgumentParser(description="Post a period's approved gateway items")
     parser.add_argument("--period", required=True, help="YYYY-MM")
     parser.add_argument("--entity", action="append",
                         help="entity id (repeatable); default: every entity")
@@ -877,17 +1003,20 @@ def main(argv=None) -> int:
             with eng.begin() as conn:
                 posted = post_approved(conn, entity_id, month)
                 states = conn.execute(text("""
-                    SELECT state, count(*) FROM work_item
-                     WHERE kind = :kind AND entity_id = :e AND period = :p
-                     GROUP BY state ORDER BY state
-                """), {"kind": CHARGE_CHECK, "e": entity_id, "p": month}).all()
+                    SELECT kind, state, count(*) FROM work_item
+                     WHERE kind IN (:charge_kind, :modification_kind)
+                       AND entity_id = :e AND period = :p
+                     GROUP BY kind, state ORDER BY kind, state
+                """), {"charge_kind": CHARGE_CHECK,
+                         "modification_kind": LEASE_MODIFICATION,
+                         "e": entity_id, "p": month}).all()
             label = "%s %s" % (entity_id, month.strftime("%Y-%m"))
             print("  %s  posted %d item(s)%s" % (label, len(posted), "".join(
                 "  #%d->entry %d" % (p.work_item_id, p.journal_entry_id)
                 if p.journal_entry_id is not None else "  #%d->closed (hold upheld, nothing owed)"
                 % p.work_item_id for p in posted)))
             print("  %s  items by state: %s" % (
-                label, ", ".join("%s=%d" % tuple(r) for r in states) or "none"))
+                label, ", ".join("%s/%s=%d" % tuple(r) for r in states) or "none"))
     except (GatewayError, PostingError) as exc:
         print("post: %s" % exc, file=sys.stderr)
         return 1

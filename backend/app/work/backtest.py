@@ -192,11 +192,12 @@ def _checker_facts(conn: Connection, rows, items) -> Dict[str, Tuple]:
         if r["id"] not in items:
             todo[(r["entity_id"], r["period"])].append(r)
     out: Dict[str, Tuple] = {}
-    rules_by_entity: Dict[str, Any] = {}
+    rules_by_period: Dict[Tuple[str, date], Any] = {}
     for (entity, period), month in sorted(todo.items()):
-        if entity not in rules_by_entity:
-            rules_by_entity[entity] = confirmed_rules(conn, entity).rules
-        rules = rules_by_entity[entity]
+        key = (entity, period)
+        if key not in rules_by_period:
+            rules_by_period[key] = confirmed_rules(conn, entity, as_of=period).rules
+        rules = rules_by_period[key]
         charges = [Charge(charge_id=r["source_id"], invoice_id=r["invoice_id"],
                           lease_id=r["lease_id"], clinic_id=r["clinic_id"], period=period,
                           charge_type=r["charge_type"], suite=r["suite"] or "",

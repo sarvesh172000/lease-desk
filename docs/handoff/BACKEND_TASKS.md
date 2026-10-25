@@ -21,6 +21,12 @@ with tests (1,569 passing).
 | S3 | Open. |
 | S4 | Open. Note: extraction on the real EDGAR exhibits can't be scored fairly yet: every `AbstractedLease` field is required, so a lease that is silent on a term is forced to answer. Optional fields first. |
 
+## Status, 24 Oct evening (investigation workflow)
+
+| Work | State |
+|---|---|
+| Investigation on record | **Done on `fix/investigation-on-record`.** `POST /api/exceptions/{id}/investigate` now records the canonical result through `transition()` as `agent:investigation`, refreshes resolver sources/decision/confidence/route, creates an unconfirmed full-snapshot `lease_version` plus controller-only `LEASE_MODIFICATION`, and preserves replay identity. Controller approval cannot patch the reviewed proposal; it commits a durable `modification_recheck` job, while only the gateway posts the immutable event-backed balanced entry. A pending modification stays inactive until `POSTED`, then the effective month rechecks against v2. Concurrent runs keep one canonical winner, stale results do not persist, non-rent amendments do not invent monetary authority, and `why` uses readable names and leading-minus money. Validation: integrated focused DB suite **195 passed**; required full DB suite passed with **1,095 platform tests**; `ruff check .`, `git diff --check`, and the single Alembic head (`0008_investigation_actor`) passed. One idempotent data migration provisions the investigation actor for upgraded databases; no API response shape changed. |
+
 ## Who does what
 
 | # | Task | Owner | Size |

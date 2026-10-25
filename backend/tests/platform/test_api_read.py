@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.api.deps import get_data_dir, get_engine
+from app.api.deps import get_agent_engine, get_data_dir, get_engine
 from app.auth.deps import SessionActor, current_actor
 from app.main import create_app
 from app.records.seed import seed
@@ -49,6 +49,7 @@ READER = SessionActor(id="PER-CTRL", name="Priya Raghunathan", role="controller"
 def make_client(engines, data_dir) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_engine] = lambda: engines["lease_api"]
+    app.dependency_overrides[get_agent_engine] = lambda: engines["lease_agent"]
     app.dependency_overrides[current_actor] = lambda: READER
     app.dependency_overrides[get_data_dir] = lambda: Path(data_dir)
     return TestClient(app)
@@ -234,6 +235,38 @@ def test_unconfirmed_version_is_not_the_default_but_confirmed_one_is(client, see
     assert client.get("/api/leases/LEASE-01/schedule").json()["version"] == 1
     july = client.get("/api/leases", params={"as_of": "2026-07-01"}).json()[0]
     assert (july["monthly_rent"], july["end"]) == (17400.00, "2031-12-31")
+
+
+def test_active_schedule_excludes_inactive_and_future_predecessor_versions(generated):
+    from app.api.leases import Version, active_version, build_schedule
+
+    payload = json.loads((Path(generated) / "leases" / "lease-01.json").read_text())
+    pending_rent = Version(
+        2, date(2026, 7, 1), False, dict(SECOND_AMENDMENT),
+        frozenset(SECOND_AMENDMENT),
+    )
+    posted_extension = Version(
+        3, date(2026, 7, 1), True,
+        {"base_rent_monthly": 18_500.00, "expiration": "2031-12-31",
+         "escalation_kind": "fixed_percent", "escalation_amount": 0.03},
+        frozenset({"expiration"}),
+    )
+    when = date(2026, 8, 1)
+    assert active_version([pending_rent, posted_extension], when) == 3
+    schedule, lease = build_schedule(
+        payload, [pending_rent, posted_extension], 3, as_of=when)
+    assert schedule.period_for(date(2026, 7, 1)).payment == 19_626.65
+    assert schedule.period_for(date(2027, 1, 1)).payment == 20_215.45
+    assert lease.end == date(2031, 12, 31)
+
+    future_rent = Version(
+        2, date(2027, 7, 1), True, dict(SECOND_AMENDMENT),
+        frozenset(SECOND_AMENDMENT),
+    )
+    assert active_version([future_rent, posted_extension], when) == 3
+    future_safe, _ = build_schedule(
+        payload, [future_rent, posted_extension], 3, as_of=when)
+    assert future_safe.period_for(date(2026, 7, 1)).payment == 19_626.65
 
 
 def test_term_value_may_be_wrapped(client, seeded):

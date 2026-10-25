@@ -257,16 +257,21 @@ def onboard(conn: Connection, entity_id: str, *, year: int = YEAR) -> Dict[str, 
     lines: Dict[Tuple, int] = defaultdict(int)
     for r in rows:
         lines[(r["invoice_id"], r["charge_type"], r["lease_id"])] += 1
-    rules = confirmed_rules(conn, entity_id).rules
-
+    rules_by_period: Dict[date, Mapping[str, Any]] = {}
+    confirmed_leases = set()
     decisions = []
     for r in rows:
+        period = r["period"]
+        rules = rules_by_period.get(period)
+        if rules is None:
+            rules = confirmed_rules(conn, entity_id, as_of=period).rules
+            rules_by_period[period] = rules
+            confirmed_leases.update(rules)
         key = (r["invoice_id"], r["charge_type"], r["lease_id"])
         pays = paid_by_line.get(key, [])
         if lines[key] > 1:          # two lines of one type on one invoice: match by amount
             pays = [p for p in pays if abs(p.amount - r["amount"]) < CENT][:1]
         paid = sum((p.amount for p in pays), Decimal("0"))
-        period = r["period"]
         prev = date(period.year - (period.month == 1), (period.month - 2) % 12 + 1, 1)
         prior = paid_by_month.get((r["lease_id"], r["charge_type"], prev))
         rule = rules.get(r["lease_id"])
@@ -288,9 +293,9 @@ def onboard(conn: Connection, entity_id: str, *, year: int = YEAR) -> Dict[str, 
 
     paid_anyway = [_brief(d) for d in decisions if d["paid_in_full"] and d["over_lease"]]
     out: Dict[str, Any] = {"entity_id": entity_id, "year": year, "scanned": len(decisions),
-                           "leases_confirmed": sorted(rules), "proposed": [], "skipped": [],
-                           "paid_anyway": paid_anyway}
-    if not rules:
+                           "leases_confirmed": sorted(confirmed_leases), "proposed": [],
+                           "skipped": [], "paid_anyway": paid_anyway}
+    if not confirmed_leases:
         out["skipped"].append({"name": None, "reason": (
             "no confirmed leases for %s: mistakes paid anyway cannot be told from habits, and "
             "the changed-amount habit cannot be checked against the lease" % entity_id)})
@@ -304,7 +309,7 @@ def onboard(conn: Connection, entity_id: str, *, year: int = YEAR) -> Dict[str, 
 
     changed: Dict[str, List[Dict]] = defaultdict(list)
     for d in decisions:
-        if rules and d["changed"] and d["supported"] is not None and d["paid_in_full"]:
+        if d["changed"] and d["supported"] is not None and d["paid_in_full"]:
             changed[d["charge_type"]].append(d)
     for charge_type, group in sorted(changed.items()):
         _offer(conn, out, entity_id, _changed_candidate(entity_id, charge_type, group, year))

@@ -30,7 +30,7 @@ are the latest *confirmed* version in effect on that date.
 
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -39,6 +39,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 from ..auth.deps import current_actor
+from ..jobs.lease_versions import is_confirmed
 from .deps import get_business_date, get_data_dir, get_engine
 from .exceptions import open_exceptions
 from .schemas import LeaseSummary, Schedule, ScheduleRow
@@ -59,6 +60,7 @@ class Version:
     effective_from: Optional[date]    # None for v1: commencement, from the terms
     confirmed: bool
     terms: Dict[str, object]
+    changed_terms: frozenset[str]
 
 
 # --- routes ------------------------------------------------------------------------
@@ -88,7 +90,8 @@ def portfolio(eng: Engine, data_dir: Path, when: date) -> List[LeaseSummary]:
         if payload is not None:
             later = versions.get(row["id"], [])
             try:
-                schedule, lease = build_schedule(payload, later, active_version(later, when))
+                schedule, lease = build_schedule(
+                    payload, later, active_version(later, when), as_of=when)
             except TermsError:
                 schedule = None     # the schedule endpoint says why; here, nulls
             if schedule is not None:
@@ -126,6 +129,7 @@ def lease_schedule(
         raise HTTPException(404, "no terms on file for %s" % lease_id)
 
     numbers = [1] + [v.number for v in later]
+    preview = version is not None
     active = active_version(later, business_date)
     if version is None:
         version = active
@@ -133,7 +137,11 @@ def lease_schedule(
         raise HTTPException(404, "%s has no version %d (it has %s)"
                             % (lease_id, version, ", ".join(map(str, numbers))))
     try:
-        schedule, lease = build_schedule(payload, later, version)
+        schedule, lease = build_schedule(
+            payload, later, version,
+            as_of=None if preview else business_date,
+            preview=preview,
+        )
     except TermsError as exc:
         raise HTTPException(422, str(exc)) from None
 
@@ -176,9 +184,22 @@ def register_terms(data_dir: Path, lease_id: str) -> Optional[dict]:
 def _versions_by_lease(conn: Connection, lease_id: Optional[str] = None) -> Dict[str, List[Version]]:
     """Versions after the first, with their terms, oldest first."""
     rows = conn.execute(text("""
-        SELECT v.lease_id, v.version, v.effective_from, v.confirmed_by IS NOT NULL AS confirmed,
+        SELECT v.lease_id, v.version, v.effective_from, v.confirmed_by,
+               w.state AS item_state, w.kind AS item_kind,
+               CASE WHEN w.kind = 'LEASE_MODIFICATION' THEN (
+                   SELECT proposed.diff->'set'->'evidence'->'changed_terms'
+                     FROM audit_event proposed
+                    WHERE proposed.subject_type = 'work_item'
+                      AND proposed.subject_id = w.id::text
+                      AND proposed.action = 'propose' AND proposed.allowed
+                      AND proposed.actor_id = 'agent:investigation'
+                    ORDER BY proposed.seq DESC LIMIT 1
+               ) ELSE w.evidence->'changed_terms' END AS changed_terms,
                t.field, t.value
           FROM lease_version v
+          LEFT JOIN work_item w ON w.subject_type = 'lease_version'
+                               AND w.subject_id = v.id::text
+                               AND w.kind IN ('LEASE_ABSTRACTION', 'LEASE_MODIFICATION')
           LEFT JOIN lease_term t ON t.lease_version_id = v.id
          WHERE v.version > 1 AND (CAST(:lease AS text) IS NULL OR v.lease_id = :lease)
          ORDER BY v.lease_id, v.version
@@ -186,7 +207,13 @@ def _versions_by_lease(conn: Connection, lease_id: Optional[str] = None) -> Dict
     grouped: Dict[str, Dict[int, Version]] = {}
     for r in rows:
         versions = grouped.setdefault(r["lease_id"], {})
-        v = versions.get(r["version"]) or Version(r["version"], r["effective_from"], r["confirmed"], {})
+        raw_changed = r["changed_terms"]
+        changed = (frozenset(raw_changed) if isinstance(raw_changed, dict)
+                   else frozenset(AMENDMENT_FIELDS))
+        v = versions.get(r["version"]) or Version(
+            r["version"], r["effective_from"],
+            is_confirmed(r["confirmed_by"], r["item_state"], r["item_kind"]), {},
+            changed)
         if r["field"] is not None:
             value = r["value"]
             v.terms[r["field"]] = value["value"] if isinstance(value, dict) and "value" in value else value
@@ -195,13 +222,21 @@ def _versions_by_lease(conn: Connection, lease_id: Optional[str] = None) -> Dict
 
 
 def active_version(later: List[Version], when: date) -> int:
-    """The latest confirmed version already in effect on `when`."""
-    live = [v.number for v in later if v.confirmed and v.effective_from <= when]
-    return max(live, default=1)
+    """The last standing version effective on ``when`` in valid-time order."""
+    live = [v for v in later if v.confirmed and v.effective_from <= when]
+    chosen = max(live, key=lambda v: (v.effective_from, v.number), default=None)
+    return chosen.number if chosen is not None else 1
 
 
-def build_schedule(payload: dict, later: List[Version], version: int):
-    """The engine's schedule for one version, and the engine's lease for it."""
+def build_schedule(payload: dict, later: List[Version], version: int, *,
+                   as_of: Optional[date] = None, preview: bool = False):
+    """Build an active schedule or one explicit version preview.
+
+    Active schedules compose only gateway-posted versions effective by
+    ``as_of``, ordered by valid time. A preview also includes its named draft,
+    but never leaks another pending, rejected, future, or later-numbered draft
+    into the result.
+    """
     from leasedesk.models import from_dict
     from leasedesk.remeasure import remeasure
     from leasedesk.schedule import build
@@ -213,13 +248,29 @@ def build_schedule(payload: dict, later: List[Version], version: int):
     if version == 1:
         return build(base), base
 
+    target = next((candidate for candidate in later if candidate.number == version), None)
+    if target is None:
+        raise TermsError("lease has no version %d" % version)
+    if preview:
+        selected = [
+            candidate for candidate in later
+            if candidate.number < target.number and candidate.confirmed
+            and candidate.effective_from <= target.effective_from
+        ]
+        selected.append(target)
+    else:
+        cutoff = as_of or target.effective_from
+        selected = [candidate for candidate in later
+                    if candidate.confirmed and candidate.effective_from <= cutoff]
+    selected.sort(key=lambda candidate: (candidate.effective_from, candidate.number))
+    if not selected:
+        return build(base), base
+
     current = dict(payload, amendments=[])
-    for v in later:
-        if v.number > version:
-            break
-        current = _amend(current, v)
+    for candidate in selected:
+        current = _amend(current, candidate)
     lease = from_dict(current)
-    effective = max(a.effective for a in lease.amendments)
+    effective = selected[-1].effective_from
     return remeasure(lease, effective=effective, through=effective).new, lease.as_of(effective)
 
 
@@ -235,15 +286,21 @@ def _amend(payload: dict, v: Version) -> dict:
     from ..engine.remeasurement import _steps as revised_steps
 
     t = v.terms
+    changed = v.changed_terms
     try:
         amendment = ProposedAmendment(
             effective=v.effective_from,
-            new_base_rent=float(t["base_rent_monthly"]) if t.get("base_rent_monthly") is not None else None,
-            new_expiration=date.fromisoformat(t["expiration"]) if t.get("expiration") else None,
+            new_base_rent=(float(t["base_rent_monthly"])
+                           if "base_rent_monthly" in changed
+                           and t.get("base_rent_monthly") is not None else None),
+            new_expiration=(date.fromisoformat(t["expiration"])
+                            if "expiration" in changed and t.get("expiration") else None),
             escalation_kind=str(t.get("escalation_kind") or "fixed_percent"),
             escalation_amount=float(t.get("escalation_amount") or 0.0),
         )
-        discount = float(t["discount_rate"]) if t.get("discount_rate") is not None else None
+        discount = (float(t["discount_rate"])
+                    if "discount_rate" in changed and t.get("discount_rate") is not None
+                    else None)
     except (TypeError, ValueError) as exc:
         raise TermsError("version %d has a term the engine cannot read: %s" % (v.number, exc)) from None
     if amendment.escalation_kind not in ("fixed_percent", "fixed_step"):
@@ -260,11 +317,21 @@ def _amend(payload: dict, v: Version) -> dict:
     if end < amendment.effective:
         raise TermsError("version %d expires %s, before it takes effect %s"
                          % (v.number, end, amendment.effective))
-    rent = amendment.new_base_rent
-    if rent is None:
-        rent = standing.rent_for(amendment.effective)
-    steps = revised_steps(amendment.effective, end, rent,
-                          amendment.escalation_kind, amendment.escalation_amount)
+    rent_terms_changed = bool(changed & {
+        "base_rent_monthly", "escalation_kind", "escalation_amount",
+    })
+    if rent_terms_changed:
+        rent = amendment.new_base_rent
+        if rent is None:
+            rent = standing.rent_for(amendment.effective)
+        steps = revised_steps(amendment.effective, end, rent,
+                              amendment.escalation_kind, amendment.escalation_amount)
+    elif end != standing.end:
+        steps = _preserved_rent_tail(
+            standing, amendment.effective, end,
+            amendment.escalation_kind, amendment.escalation_amount)
+    else:
+        steps = []
     entry = {
         "amendment_id": "%s-v%d" % (payload["lease_id"], v.number),
         "effective": amendment.effective.isoformat(),
@@ -276,3 +343,53 @@ def _amend(payload: dict, v: Version) -> dict:
     if discount is not None:
         entry["new_discount_rate"] = discount
     return dict(payload, amendments=list(payload.get("amendments", [])) + [entry])
+
+
+def _preserved_rent_tail(standing, effective: date, end: date,
+                         kind: str, amount: float) -> List[dict]:
+    """Rent from ``effective`` onward without resetting its anniversary.
+
+    Expiration-only amendments keep every existing step boundary. When they
+    extend beyond the old term, the last regime continues to its natural
+    anniversary before the next contractual escalation.
+    """
+    tail = []
+    for step in standing.steps:
+        start = max(step.start, effective)
+        stop = min(step.end, end)
+        if start <= stop:
+            tail.append(_rent_step(start, stop, step.monthly_rent))
+    if end <= standing.end:
+        return tail
+    if not standing.steps:
+        return tail
+
+    last = max(standing.steps, key=lambda step: step.end)
+    cursor = standing.end + timedelta(days=1)
+    rent = round(float(last.monthly_rent), 2)
+    natural_stop = _add_months(last.start, 12) - timedelta(days=1)
+    if cursor <= natural_stop:
+        stop = min(natural_stop, end)
+        tail.append(_rent_step(cursor, stop, rent))
+        cursor = stop + timedelta(days=1)
+    while cursor <= end:
+        rent = rent * (1 + amount) if kind == "fixed_percent" else rent + amount
+        rent = round(rent, 2)
+        stop = min(_add_months(cursor, 12) - timedelta(days=1), end)
+        tail.append(_rent_step(cursor, stop, rent))
+        cursor = stop + timedelta(days=1)
+    return tail
+
+
+def _rent_step(start: date, end: date, rent: float) -> dict:
+    return {"start": start.isoformat(), "end": end.isoformat(),
+            "monthly_rent": round(float(rent), 2)}
+
+
+def _add_months(value: date, months: int) -> date:
+    month = value.month - 1 + months
+    year = value.year + month // 12
+    month = month % 12 + 1
+    next_month = date(year + (month == 12), month % 12 + 1, 1)
+    last = (next_month - timedelta(days=1)).day
+    return date(year, month, min(value.day, last))

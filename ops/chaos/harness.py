@@ -309,7 +309,7 @@ def last_finding_charge(engines: Mapping[str, Engine]) -> str:
 
     with engines["lease_agent"].connect() as conn:
         charges = load_charges(conn, ENTITY, JAN)
-        confirmed = confirmed_rules(conn, ENTITY)
+        confirmed = confirmed_rules(conn, ENTITY, as_of=JAN)
         ready = [c for c in charges if c.lease_id in confirmed.rules]
         findings = check_month(ready, confirmed.rules, JAN)
         if not findings:
@@ -460,11 +460,24 @@ class _Maps:
         return str(subject_id)
 
     def fingerprint(self, value: str) -> str:
-        """A confirmed-set fingerprint ('3,4,5') or a key ending in one."""
+        """Normalize legacy and ordered-chain confirmed-set fingerprints."""
         head, sep, tail = value.rpartition("@") if "@" in value else ("", "", value)
-        parts = tail.split(",")
-        if parts and all(p.isdigit() for p in parts):
-            tail = ",".join(sorted(str(self.lease_version.get(int(p), p)) for p in parts))
+        try:
+            chains = json.loads(tail)
+        except (TypeError, json.JSONDecodeError):
+            chains = None
+        if isinstance(chains, dict) and all(isinstance(chain, list)
+                                            for chain in chains.values()):
+            tail = json.dumps({
+                lease_id: [self.lease_version.get(_int(version_id), version_id)
+                           for version_id in chain]
+                for lease_id, chain in sorted(chains.items())
+            }, separators=(",", ":"))
+        else:
+            parts = tail.split(",")
+            if parts and all(p.isdigit() for p in parts):
+                tail = ",".join(sorted(
+                    str(self.lease_version.get(int(p), p)) for p in parts))
         return head + sep + tail
 
 
@@ -496,6 +509,8 @@ def _norm(value: Any, maps: _Maps, key: Optional[str] = None, parent: Optional[M
     if isinstance(value, list):
         if key == "work_item_ids":
             return [maps.work_item.get(_int(v), v) for v in value]
+        if key == "lease_version_ids":
+            return [maps.lease_version.get(_int(v), v) for v in value]
         if key == "depends_on":
             return sorted(maps.job.get(_int(v), v) for v in value)
         return [_norm(v, maps, key, parent) for v in value]
