@@ -27,9 +27,10 @@ COPY deploy/setup-demo.sh deploy/setup-demo.sh
 COPY data/reference reference
 ENV LEASEDESK_LLM_REPLAY_DIR=/app/reference/llm_cache \
     LEASEDESK_REFERENCE_DIR=/app/reference \
-    LEASEDESK_LLM_CACHE_DIR=/tmp/leasedesk-llm-cache
+    LEASEDESK_LLM_CACHE_DIR=/home/app/.cache/llm
 # (The cache default is relative to the working directory, which the app user
-# cannot write; Compose points it at a mounted ./.cache instead.)
+# cannot write; this is the app user's own home, not a world-writable /tmp.
+# Compose points it at a mounted ./.cache instead.)
 
 RUN useradd --create-home --uid 10001 app && mkdir -p /app/data && chown app /app/data
 USER app

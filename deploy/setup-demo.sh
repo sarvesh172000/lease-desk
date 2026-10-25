@@ -10,6 +10,8 @@
 # (BAKE_DEMO_DATA=1) byte for byte.
 set -eu
 cd /app/backend
+# The generator's scratch output, in the app user's own home (not /tmp).
+WORK="$HOME/demo-setup"
 
 run_month() {
   python -m app.jobs.monthly --period "$1"
@@ -19,15 +21,15 @@ run_month() {
 python -m app.db.ensure_database
 python -m alembic upgrade head
 
-python -m datagen.build --out /tmp/demo-2026-01 --month 2026-01 > /dev/null
-python -m app.records.seed --data /tmp/demo-2026-01
+python -m datagen.build --out "$WORK/2026-01" --month 2026-01 > /dev/null
+python -m app.records.seed --data "$WORK/2026-01"
 python -m app.auth.passwords set-dev-passwords
 run_month 2026-01
 python -m app.work.confirm_leases --as PER-RM-BAY
 run_month 2026-01
 
-python -m datagen.build --out /tmp/demo-2026-07 --month 2026-07 > /dev/null
-python -m app.records.seed --data /tmp/demo-2026-07
+python -m datagen.build --out "$WORK/2026-07" --month 2026-07 > /dev/null
+python -m app.records.seed --data "$WORK/2026-07"
 run_month 2026-07
 python -m app.jobs.clock set 2026-07-01
 
