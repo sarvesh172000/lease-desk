@@ -35,6 +35,47 @@ function token(name: string, fallback: string): string {
 
 const short = (h?: string | null) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "—");
 
+interface Palette {
+  accent: THREE.Color;
+  bad: THREE.Color;
+  line: THREE.Color;
+  ink: THREE.Color;
+  muted: THREE.Color;
+}
+
+/** Past the crack, a block turns broken: at once, or, while a simulated crack
+ * plays, outward from its block, each later block within ~0.9 s. */
+function isCracked(seq: number, i: number, crackSeq: number | null, crackIdx: number, startedAt: number | null): boolean {
+  if (!afterCrack(seq, crackSeq)) return false;
+  if (startedAt == null) return true;
+  const age = (performance.now() - startedAt) / 1000;
+  return age > Math.min(0.9, (i - crackIdx) * 0.035);
+}
+
+/** Red when refused or past the crack, teal when sealed. */
+function blockColor(allowed: boolean, cracked: boolean, c: Palette): THREE.Color {
+  return !allowed || cracked ? c.bad : c.accent;
+}
+
+/** Faded when the filters leave it out, half-hollow past the crack, else solid. */
+function blockOpacity(dim: boolean, cracked: boolean, allowed: boolean): number {
+  if (dim) return 0.12;
+  if (cracked && allowed) return 0.45;
+  return 0.95;
+}
+
+/** The selected block breathes; a refused one glows; the rest barely. */
+function blockGlow(selected: boolean, allowed: boolean, now: number): number {
+  if (selected) return 0.35 + Math.sin(now * 3) * 0.08;
+  return allowed ? 0.12 : 0.45;
+}
+
+/** A link past the crack is red; the two into and out of the selection are bright. */
+function linkColor(cracked: boolean, nearSelection: boolean, c: Palette): THREE.Color {
+  if (cracked) return c.bad;
+  return nearSelection ? c.ink : c.line;
+}
+
 /** The block a label points at: the selection, or the newest when none. */
 function selectedIndex(events: StripProps["events"], selectedSeq: number | null): number {
   return selectedSeq == null ? events.length - 1 : events.findIndex((e) => e.seq === selectedSeq);
@@ -103,19 +144,12 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
       m.position.z += (z - m.position.z) * EASE;
       m.scale.x += (s - m.scale.x) * EASE;
       m.scale.y += (s - m.scale.y) * EASE;
-      // the crack plays outward from its block: each later block turns within ~0.9 s
-      const after = afterCrack(e.seq, crackSeq);
-      let cracked = after;
-      if (after && crackStartedAt != null) {
-        const age = (performance.now() - crackStartedAt) / 1000;
-        cracked = age > Math.min(0.9, (i - crackIdx) * 0.035);
-      }
-      const dim = visible && !visible.has(e.seq);
-      const color = !e.allowed ? colors.bad : cracked ? colors.bad : colors.accent;
-      mat.color.lerp(color, 0.2);
+      const cracked = isCracked(e.seq, i, crackSeq, crackIdx, crackStartedAt);
+      const dim = visible != null && !visible.has(e.seq);
+      mat.color.lerp(blockColor(e.allowed, cracked, colors), 0.2);
       mat.wireframe = cracked && e.allowed;
-      mat.opacity += ((dim ? 0.12 : cracked && e.allowed ? 0.45 : 0.95) - mat.opacity) * 0.2;
-      mat.emissiveIntensity = sel ? 0.35 + Math.sin(now * 3) * 0.08 : !e.allowed ? 0.45 : 0.12;
+      mat.opacity += (blockOpacity(dim, cracked, e.allowed) - mat.opacity) * 0.2;
+      mat.emissiveIntensity = blockGlow(sel, e.allowed, now);
     });
     // the labels follow the glide: the event above its block, the link below the bar into it
     g.updateMatrixWorld();
@@ -130,7 +164,11 @@ function Strip({ events, selectedSeq, onSelect, crackSeq, visible, crackStartedA
         i === 0 ? null : (
           <mesh key={`l${e.seq}`} position={[(i - 0.5) * GAP, 0.02, 0]}>
             <boxGeometry args={[GAP - 0.3, 0.035, 0.035]} />
-            <meshBasicMaterial color={afterCrack(e.seq, crackSeq) ? colors.bad : i === selIdx || i - 1 === selIdx ? colors.ink : colors.line} transparent opacity={afterCrack(e.seq, crackSeq) ? 0.5 : 1} />
+            <meshBasicMaterial
+              color={linkColor(afterCrack(e.seq, crackSeq), i === selIdx || i - 1 === selIdx, colors)}
+              transparent
+              opacity={afterCrack(e.seq, crackSeq) ? 0.5 : 1}
+            />
           </mesh>
         ),
       )}
