@@ -89,7 +89,7 @@ export function DocumentViewer({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {toolbar}
-          {docId ? <span className="rounded bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-muted">p.{pageNo}</span> : null}
+          {docId && page != null ? <span className="rounded bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-muted">p.{pageNo}</span> : null}
         </div>
       </header>
       <div style={{ height }} className="relative min-h-0" data-viewer>

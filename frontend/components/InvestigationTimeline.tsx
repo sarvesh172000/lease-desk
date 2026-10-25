@@ -70,7 +70,7 @@ function recordedDetail(stage: Stage, inv: Investigation): ReactNode {
       return ev ? (
         <span>
           <span className="font-medium text-ink">{ev.source}</span>
-          <span className="text-ink-muted"> · p.{ev.page}</span> · confidence <span className="num font-semibold">{pct(inv.confidence)}</span>
+          {ev.page != null ? <span className="text-ink-muted"> · p.{ev.page}</span> : null} · confidence <span className="num font-semibold">{pct(inv.confidence)}</span>
         </span>
       ) : (
         <span className="text-ink-muted">Nothing on record explains the variance.</span>

@@ -6,7 +6,7 @@
  * redesign can replace any screen without touching how data is fetched.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import {
   approveDisputeLetter,
@@ -15,6 +15,7 @@ import {
   getDisputes,
   getObligations,
   recordDisputeReply,
+  releaseBatch,
   approveException,
   askWhy,
   backtestPolicy,
@@ -53,7 +54,7 @@ import {
 } from "./api";
 import type {
   DisputeDetail,
-  DisputeReply, ActionResult, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, WhyAnswer } from "./types";
+  DisputeReply, ActionResult, BatchRelease, DemoResetResult, BacktestRun, EvidencePackSubject, ItemAction, MonthMetricName, WhyAnswer } from "./types";
 
 export function useDataSource(): DataSource {
   return useSyncExternalStore(subscribeDataSource, getDataSource, () => getDataSource());
@@ -96,7 +97,12 @@ export function useException(exceptionId: string) {
 
 /** What this person may press on this exception, from can() on the server. */
 export function useAllowedActions(exceptionId: string) {
-  return useQuery({ queryKey: ["allowed-actions", exceptionId], queryFn: () => getAllowedActions(exceptionId) });
+  return useQuery({
+    queryKey: ["allowed-actions", exceptionId],
+    queryFn: () => getAllowedActions(exceptionId),
+    // no item, no question: never GET /api/items//allowed-actions
+    enabled: exceptionId !== "",
+  });
 }
 
 export function useSchedule(leaseId: string, version?: number, enabled = true) {
@@ -111,6 +117,13 @@ export function useSchedule(leaseId: string, version?: number, enabled = true) {
 /** A lease's versions with their cited terms and confirmation state. */
 export function useLeaseVersions(leaseId: string) {
   return useQuery({ queryKey: ["lease-versions", leaseId], queryFn: () => getLeaseVersions(leaseId), retry: false });
+}
+
+/** The versions of several leases at once (the runway's ghost extensions), each under its own key. */
+export function useLeaseVersionsMany(leaseIds: string[]) {
+  return useQueries({
+    queries: leaseIds.map((id) => ({ queryKey: ["lease-versions", id], queryFn: () => getLeaseVersions(id), retry: false, staleTime: 60_000 })),
+  });
 }
 
 /** Confirm a lease version by approving its LEASE_ABSTRACTION item; refetches what it changes. */
@@ -175,8 +188,15 @@ export function usePayAsBilled(exceptionId: string) {
 }
 
 /** The month's run summary for the guided stepper; every number has a drill-down. */
+const isPeriod = (p: string) => /^\d{4}-\d{2}(-01)?$/.test(p);
+
 export function useMonthSummary(period: string, entity?: string) {
-  return useQuery({ queryKey: ["month-summary", period, entity ?? ""], queryFn: () => getMonthSummary(period, entity) });
+  return useQuery({
+    queryKey: ["month-summary", period, entity ?? ""],
+    queryFn: () => getMonthSummary(period, entity),
+    // the business clock arrives from /api/summary first; until then there is nothing to ask for
+    enabled: isPeriod(period),
+  });
 }
 
 /** The rows behind one number of the month summary (enabled once a metric is picked). */
@@ -184,7 +204,18 @@ export function useMonthSummaryItems(period: string, metric: MonthMetricName | n
   return useQuery({
     queryKey: ["month-summary-items", period, metric, entity ?? ""],
     queryFn: () => getMonthSummaryItems(period, metric!, entity),
-    enabled: !!metric,
+    enabled: !!metric && isPeriod(period),
+  });
+}
+
+/** The AP clerk releases the month's batch; the month, the queue and the audit trail refetch. */
+export function useReleaseBatch(period: string, entityId?: string | null) {
+  const qc = useQueryClient();
+  return useMutation<BatchRelease, Error, void>({
+    mutationFn: () => releaseBatch(period, entityId),
+    onSettled: () => {
+      for (const k of ["month-summary", "month-summary-items", "charge-checks", "exceptions", "summary", "audit"]) void qc.invalidateQueries({ queryKey: [k] });
+    },
   });
 }
 
