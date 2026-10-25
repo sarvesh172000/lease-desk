@@ -3,7 +3,8 @@
 # demo-data` does on a laptop: create the database, migrate (schema, triggers
 # and the four roles, as the owner), seed January, set the dev passwords, run
 # January, confirm the five leases as the Bay Area manager and run it again,
-# then July (CLINIC-01's amendment takes effect), and set the business clock.
+# then July (CLINIC-01's amendment takes effect), set the business clock, and
+# read the leases' deadlines (obligations).
 #
 # Every step is idempotent, so running it again changes nothing. The generator
 # is deterministic, so what it seeds matches the documents baked into the image
@@ -33,5 +34,9 @@ python -m datagen.build --out "$WORK/2026-07" --month 2026-07 > /dev/null
 python -m app.records.seed --data "$WORK/2026-07"
 run_month 2026-07
 python -m app.jobs.clock set 2026-07-01
+# The deadlines the confirmed leases set (renewal notices, CAM audit windows),
+# and the dispute sweep: the worker's sweeps, run once here so a fresh desk
+# shows them without anyone running frontend/scripts/sweep.sh by hand.
+python -m app.jobs.obligations --disputes
 
 echo "demo database ready"

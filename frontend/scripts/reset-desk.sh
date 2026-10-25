@@ -14,4 +14,6 @@ make run-month M=2026-01 > /dev/null 2>&1
 make run-month M=2026-07 > /dev/null 2>&1
 PYTHONPATH=backend .venv/bin/python -m app.jobs.clock set 2026-07-01
 make prove-limits 2>&1 | grep -E "refused by|verify_chain"
+# the leases' deadlines as of the business date, last, so no earlier id moves
+PYTHONPATH=backend .venv/bin/python -m app.jobs.obligations --disputes > /dev/null
 echo "desk ready"
