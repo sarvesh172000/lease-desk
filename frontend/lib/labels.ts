@@ -1,3 +1,4 @@
+import type { Actor } from "./types";
 /**
  * Readable names for the API's keys, in one place, so every screen says
  * "CAM estimate" and "Daly City, Suite 210" rather than `cam_estimate` and
@@ -224,4 +225,39 @@ const POLICY_ACTION_LABEL: Record<string, string> = { approve: "Approve", hold: 
 export function policyActionLabel(action: string | null | undefined): string {
   if (!action) return "No action";
   return POLICY_ACTION_LABEL[action] ?? chargeLabel(action);
+}
+
+const CHECKER_RULE_LABEL: Record<string, string> = {
+  amount: "the amount against the schedule",
+  operating_expense: "the operating expense estimate against the lease",
+  duplicate: "a duplicate invoice",
+  escalation: "the escalation step",
+  premises: "the premises the lease demises",
+};
+
+/** amount → "the amount against the schedule"; the checker's rule names as phrases. */
+export function checkerRuleLabel(rule: string): string {
+  return CHECKER_RULE_LABEL[rule] ?? rule.replace(/[_-]+/g, " ");
+}
+
+/**
+ * A landlord's name from an id, when something on screen has told us it
+ * (a dispute's landlord_name, a policy's own description); the id otherwise.
+ */
+export function landlordName(id: string | null | undefined, names: Record<string, string>): string {
+  if (!id) return "any landlord";
+  return names[id] ?? id;
+}
+
+/** "Pay base rent from Pacific Crest Properties LLC as billed …" → { "LL-PACIFIC": "Pacific Crest Properties LLC" } */
+export function landlordNamesFromDescription(landlordId: string | null | undefined, description: string | null | undefined): Record<string, string> {
+  if (!landlordId || !description) return {};
+  // the name runs up to its legal suffix; "Properties" and "Partners" are part of names, not suffixes
+  const m = /\bfrom ([A-Z][^,.]*?(?:LLC|L\.P\.|LP|Inc\.?|Ltd\.?|Trust|Company|Co\.))/.exec(description);
+  return m ? { [landlordId]: m[1].trim() } : {};
+}
+
+/** Agents and the gateway are actors in the audit trail, never people you can sign in as. */
+export function isPerson(a: Actor): boolean {
+  return a.role !== "system" && a.role !== "agent" && !a.id.startsWith("system:") && !a.id.startsWith("agent:");
 }

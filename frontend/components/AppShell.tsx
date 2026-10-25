@@ -4,6 +4,7 @@ import { demoSwitch, logout } from "@/lib/api";
 import { humanize, period } from "@/lib/format";
 import { useApiHealth, useDataSource, useDemoActors, useExceptions, useMe, useSummary } from "@/lib/hooks";
 import { useLiveConnection, type LiveState } from "@/lib/live";
+import { isPerson } from "@/lib/labels";
 import type { Actor } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
@@ -376,10 +377,6 @@ function ContextPicker() {
     </Menu.Root>
   );
 }
-
-/** Agents and the gateway are actors in the audit trail, never people you can become. */
-const isPerson = (a: Actor) =>
-  a.role !== "system" && a.role !== "agent" && !a.id.startsWith("system:") && !a.id.startsWith("agent:");
 
 const initials = (name: string) =>
   name
