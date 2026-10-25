@@ -166,6 +166,13 @@ _PAIR_FILLER = frozenset("""
     lease desk northbay asi one asi1 for here now
 """.split())
 
+# ASI:One puts the addressee in front of the text when a chat @mentions the
+# agent ("@agent1q... pair KYP3-MSMC", or the display name). The mention says
+# who the message is for, not what it asks, so it is set aside before parsing.
+_MENTION_RE = re.compile(
+    r"^(?:@(?:agent1[0-9a-z]{20,}|northbay[ \t]+lease[ \t]+desk|[A-Za-z0-9_.\-]+)[ \t,:]*)+",
+    re.IGNORECASE)
+
 # Where the one-time code is in the web app.
 CONNECT_CHAT = "your name (top right) → *Connect chat*"
 _REVIEW_RE = re.compile(r"^(?:review|show|open)%s%s[ \t]*[.?!]?$" % (_WS, _ITEM), re.IGNORECASE)
@@ -246,7 +253,7 @@ def _loose_pair_code(raw: str) -> Optional[str]:
 
 def parse(text: Optional[str]) -> Command:
     """One chat message -> one Command. Never raises."""
-    raw = (text or "").strip()
+    raw = _MENTION_RE.sub("", (text or "").strip()).strip()
     if not raw:
         return Command("help")
     if len(raw) > MAX_TEXT + 100:

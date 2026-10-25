@@ -80,6 +80,27 @@ def test_the_reworded_reading_never_guesses_a_code(text):
     assert _loose_pair_code(text) is None
 
 
+ADDRESS = "@agent1qg2tetdj6qf5wnf744mvvtz66rzfrmvqkx5dcejzpg78q3prt9aa58j2g0g"
+
+
+@pytest.mark.parametrize("text,name,arg", [
+    (ADDRESS + " pair KYP3-MSMC", "pair", "KYP3-MSMC"),
+    ("@Northbay Lease Desk pair KYP3-MSMC", "pair", "KYP3-MSMC"),
+    (ADDRESS + " help", "help", None),
+    (ADDRESS, "help", None),
+    ("@Lease_Desk: inbox", "inbox", None),
+    (ADDRESS + " approve #12 looks right", "act", "looks right"),
+])
+def test_a_leading_mention_is_set_aside(text, name, arg):
+    """ASI:One puts the @mention in front when a chat addresses the agent."""
+    c = parse(text)
+    assert (c.name, c.text) == (name, arg)
+
+
+def test_a_mention_inside_the_text_is_still_text():
+    assert parse("email@x.com").name == "unknown"
+
+
 def test_unpair_is_not_read_as_pairing():
     assert parse("unpair").name == "unpair"
 
