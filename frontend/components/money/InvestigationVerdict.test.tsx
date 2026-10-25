@@ -9,11 +9,19 @@ const base: Investigation = {
 };
 
 describe("InvestigationVerdict", () => {
-  it("prints no score when nothing explains the variance", () => {
+  it("leads with the conclusion and prints no score when nothing explains the variance", () => {
     render(<InvestigationVerdict investigation={base} />);
-    expect(screen.getByText("No document changes the lease · the hold stands")).toBeInTheDocument();
+    expect(screen.getByText("Hold stands")).toBeInTheDocument();
+    expect(screen.getByText("Investigated · no document changes the lease")).toBeInTheDocument();
+    expect(screen.queryByText(/Unexplained/)).toBeNull();
     expect(screen.queryByText(/sure of the explanation/)).toBeNull();
     expect(explanationScore(base)).toBeNull();
+  });
+
+  it("names the root cause instead once a controller has paid the charge as billed", () => {
+    render(<InvestigationVerdict investigation={base} resolution="pay_as_billed" />);
+    expect(screen.queryByText("Hold stands")).toBeNull();
+    expect(screen.getByText("Unexplained")).toBeInTheDocument();
   });
 
   it("prints the investigation's own score when a document explains it", () => {
@@ -21,5 +29,6 @@ describe("InvestigationVerdict", () => {
     render(<InvestigationVerdict investigation={found} />);
     expect(screen.getByText("Explains the variance")).toBeInTheDocument();
     expect(screen.getByText(/95% sure of the explanation/)).toBeInTheDocument();
+    expect(screen.queryByText("Hold stands")).toBeNull();
   });
 });

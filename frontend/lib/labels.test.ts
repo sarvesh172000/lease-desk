@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionLabel, actorKind, attemptLabel, chargeLabel, checkerRuleLabel, landlordName, landlordNamesFromDescription, policyTitle, disputeStatusLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, TRUST_RANKS } from "./labels";
+import { actionLabel, actorKind, attemptLabel, chargeLabel, checkerRuleLabel, landlordName, landlordNamesFromDescription, policyTitle, disputeStatusLabel, clinicLabel, monthLong, placeLabel, rootCauseLabel, supportsNote, TRUST_RANKS } from "./labels";
 
 describe("labels", () => {
   it("names charge types in words", () => {
@@ -86,5 +86,11 @@ describe("labels", () => {
   it("phrases the checker's rules", () => {
     expect(checkerRuleLabel("amount")).toBe("the amount against the schedule");
     expect(checkerRuleLabel("premises")).toBe("the premises the lease demises");
+  });
+
+  it("explains a duplicate's $0.00 under the figure and stays quiet for other rules", () => {
+    expect(supportsNote("duplicate")).toBe("Billed twice this month · one installment is due");
+    expect(supportsNote("amount")).toBeNull();
+    expect(supportsNote(null)).toBeNull();
   });
 });

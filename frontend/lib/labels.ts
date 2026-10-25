@@ -241,6 +241,15 @@ export function checkerRuleLabel(rule: string): string {
 }
 
 /**
+ * Why the lease supports what it does, under the figure, for the rules where the bare number misleads:
+ * a duplicate's $0.00 is not "the lease says nothing", it is "this month's installment was billed already".
+ * Null for every other rule: the figure speaks for itself.
+ */
+export function supportsNote(rule: string | null | undefined): string | null {
+  return rule === "duplicate" ? "Billed twice this month · one installment is due" : null;
+}
+
+/**
  * A landlord's name from an id, when something on screen has told us it
  * (a dispute's landlord_name, a policy's own description); the id otherwise.
  */
